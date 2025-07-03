@@ -5,6 +5,17 @@ use Bitrix\Main\Localization\Loc;
 Loc::loadMessages(__FILE__);
 ?>
 
+<form method="get" id="branch-select-form" style="margin-bottom: 20px;">
+    <label for="branch_id"><b>Выберите филиал:</b></label>
+    <select name="branch_id" id="branch_id" onchange="document.getElementById('branch-select-form').submit();">
+        <?php foreach ($arResult['BRANCHES'] as $branch): ?>
+            <option value="<?= $branch['ID'] ?>" <?= ($arResult['SELECTED_BRANCH_ID'] == $branch['ID'] ? 'selected' : '') ?>>
+                <?= htmlspecialchars($branch['NAME']) ?>
+            </option>
+        <?php endforeach; ?>
+    </select>
+</form>
+
 <div class="artmax-calendar">
     <?php if (!empty($arResult['ERROR'])): ?>
         <div class="artmax-calendar-error">

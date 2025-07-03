@@ -23,9 +23,18 @@ class ArtmaxCalendarComponent extends CBitrixComponent
             'SHOW_FORM' => $this->arParams['SHOW_FORM'] ?? 'Y',
         ]);
 
+        // Получаем список филиалов
+        $branchObj = new \Artmax\Calendar\Branch();
+        $branches = $branchObj->getBranches();
+        $this->arResult['BRANCHES'] = $branches;
+
+        // Получаем выбранный филиал
+        $branchId = isset($_GET['branch_id']) ? (int)$_GET['branch_id'] : ($branches[0]['ID'] ?? null);
+        $this->arResult['SELECTED_BRANCH_ID'] = $branchId;
+
         if ($this->startResultCache()) {
             $this->processRequest();
-            $this->getEvents();
+            $this->getEvents($branchId);
             $this->includeComponentTemplate();
         }
     }
@@ -86,12 +95,15 @@ class ArtmaxCalendarComponent extends CBitrixComponent
         }
     }
 
-    private function getEvents()
+    private function getEvents($branchId = null)
     {
-        $calendar = new Calendar();
+        $calendar = new \Artmax\Calendar\Calendar();
         $userId = $GLOBALS['USER']->GetID();
-        
-        $this->arResult['EVENTS'] = $calendar->getUserEvents($userId, $this->arParams['EVENTS_COUNT']);
+        if ($branchId) {
+            $this->arResult['EVENTS'] = $calendar->getEventsByBranch($branchId, null, null, $userId);
+        } else {
+            $this->arResult['EVENTS'] = [];
+        }
         $this->arResult['USER_ID'] = $userId;
     }
 } 

@@ -74,7 +74,6 @@ class artmax_calendar extends CModule
 
     public function InstallEvents()
     {
-        // Регистрация обработчиков событий
         $eventManager = \Bitrix\Main\EventManager::getInstance();
         $eventManager->registerEventHandler(
             'main',
@@ -83,11 +82,17 @@ class artmax_calendar extends CModule
             'Artmax\\Calendar\\EventHandlers',
             'onPageStart'
         );
+        $eventManager->registerEventHandler(
+            'main',
+            'OnEpilog',
+            $this->MODULE_ID,
+            'Artmax\\Calendar\\EventHandlers',
+            'onEpilog'
+        );
     }
 
     public function UnInstallEvents()
     {
-        // Удаление обработчиков событий
         $eventManager = \Bitrix\Main\EventManager::getInstance();
         $eventManager->unRegisterEventHandler(
             'main',
@@ -96,61 +101,149 @@ class artmax_calendar extends CModule
             'Artmax\\Calendar\\EventHandlers',
             'onPageStart'
         );
+        $eventManager->unRegisterEventHandler(
+            'main',
+            'OnEpilog',
+            $this->MODULE_ID,
+            'Artmax\\Calendar\\EventHandlers',
+            'onEpilog'
+        );
     }
 
     public function InstallFiles()
     {
-        // Копирование файлов модуля
-        CopyDirFiles(
-            __DIR__ . '/admin/',
-            $_SERVER['DOCUMENT_ROOT'] . '/bitrix/admin/',
-            true,
-            true
-        );
+        // Создаём папки, если их нет
+        $this->createDirectories();
         
-        CopyDirFiles(
-            __DIR__ . '/components/',
-            $_SERVER['DOCUMENT_ROOT'] . '/bitrix/components/',
-            true,
-            true
+        $this->createAdminLinks(
+            $_SERVER["DOCUMENT_ROOT"]."/local/modules/".$this->MODULE_ID."/install/admin/",
+            $_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/".$this->MODULE_ID."/admin/",
+            $this->MODULE_ID . '_'
         );
+
+        // Копируем компоненты
+        $componentsFrom = $_SERVER['DOCUMENT_ROOT'] . '/local/modules/' . $this->MODULE_ID . '/install/components/';
+        $componentsTo = $_SERVER['DOCUMENT_ROOT'] . '/local/components/';
+        if (is_dir($componentsFrom)) {
+            CopyDirFiles($componentsFrom, $componentsTo, true, true);
+            file_put_contents($_SERVER["DOCUMENT_ROOT"]."/copy_error.log", "Компоненты скопированы из $componentsFrom в $componentsTo\n", FILE_APPEND);
+        } else {
+            file_put_contents($_SERVER["DOCUMENT_ROOT"]."/copy_error.log", "Папка компонентов не найдена: $componentsFrom\n", FILE_APPEND);
+        }
+
+        // Копируем JS
+        $jsFrom = $_SERVER['DOCUMENT_ROOT'] . '/local/modules/' . $this->MODULE_ID . '/install/js/';
+        $jsTo = $_SERVER['DOCUMENT_ROOT'] . '/local/js/';
+        if (is_dir($jsFrom)) {
+            CopyDirFiles($jsFrom, $jsTo, true, true);
+            file_put_contents($_SERVER["DOCUMENT_ROOT"]."/copy_error.log", "JS скопированы из $jsFrom в $jsTo\n", FILE_APPEND);
+        } else {
+            file_put_contents($_SERVER["DOCUMENT_ROOT"]."/copy_error.log", "Папка JS не найдена: $jsFrom\n", FILE_APPEND);
+        }
         
-        CopyDirFiles(
-            __DIR__ . '/js/',
-            $_SERVER['DOCUMENT_ROOT'] . '/bitrix/js/',
-            true,
-            true
-        );
-        
-        CopyDirFiles(
-            __DIR__ . '/css/',
-            $_SERVER['DOCUMENT_ROOT'] . '/bitrix/css/',
-            true,
-            true
-        );
+        // Копируем CSS
+        $cssFrom = $_SERVER['DOCUMENT_ROOT'] . '/local/modules/' . $this->MODULE_ID . '/install/css/';
+        $cssTo = $_SERVER['DOCUMENT_ROOT'] . '/local/css/';
+        if (is_dir($cssFrom)) {
+            CopyDirFiles($cssFrom, $cssTo, true, true);
+            file_put_contents($_SERVER["DOCUMENT_ROOT"]."/copy_error.log", "CSS скопированы из $cssFrom в $cssTo\n", FILE_APPEND);
+        } else {
+            file_put_contents($_SERVER["DOCUMENT_ROOT"]."/copy_error.log", "Папка CSS не найдена: $cssFrom\n", FILE_APPEND);
+        }
+        // Копирование js-расширения для меню профиля пользователя
+        $extensionFrom = $_SERVER['DOCUMENT_ROOT'] . '/local/modules/' . $this->MODULE_ID . '/install/js/artmax-calendar/add_menu_item/';
+        $targetDir = $_SERVER['DOCUMENT_ROOT'] . '/local/js/artmax-calendar/add_menu_item/';
+        if (is_dir($extensionFrom)) {
+            if (!is_dir($targetDir)) {
+                mkdir($targetDir, 0775, true);
+            }
+            CopyDirFiles($extensionFrom, $targetDir, true, true);
+            file_put_contents($_SERVER["DOCUMENT_ROOT"]."/copy_error.log", "JS-расширение скопировано из $extensionFrom в $targetDir\n", FILE_APPEND);
+        } else {
+            file_put_contents($_SERVER["DOCUMENT_ROOT"]."/copy_error.log", "Папка JS-расширения не найдена: $extensionFrom\n", FILE_APPEND);
+        }
     }
 
     public function UnInstallFiles()
     {
-        // Удаление файлов модуля
-        DeleteDirFiles(
-            __DIR__ . '/admin/',
-            $_SERVER['DOCUMENT_ROOT'] . '/bitrix/admin/'
+        $this->removeAdminLinks(
+            $_SERVER["DOCUMENT_ROOT"]."/local/modules/".$this->MODULE_ID."/install/admin/",
+            $_SERVER["DOCUMENT_ROOT"]."/bitrix/admin/",
+            $this->MODULE_ID . '_'
         );
-        
-        DeleteDirFiles(
-            __DIR__ . '/components/',
-            $_SERVER['DOCUMENT_ROOT'] . '/bitrix/components/'
-        );
-        
-        DeleteDirFiles(
-            __DIR__ . '/js/',
-            $_SERVER['DOCUMENT_ROOT'] . '/bitrix/js/'
-        );
-        
-        DeleteDirFiles(
-            __DIR__ . '/css/',
-            $_SERVER['DOCUMENT_ROOT'] . '/bitrix/css/'
-        );
+
+        // Удаляем компоненты полностью
+        DeleteDirFilesEx('/local/components/artmax/');
+
+        // Удаляем кастомное расширение
+        DeleteDirFilesEx('/local/js/artmax-calendar/add_menu_item/');
+        // Удаляем js полностью
+        DeleteDirFilesEx('/local/js/artmax-calendar/');
+        // Удаляем css полностью
+        DeleteDirFilesEx('/local/css/artmax.calendar/');
+
+    }
+
+    private function createAdminLinks($fromDir, $toDir, $prefix = '', $exclude = ['.', '..', 'menu.php'])
+    {
+        if (is_dir($fromDir)) {
+            if ($dir = opendir($fromDir)) {
+                while (false !== $item = readdir($dir)) {
+                    if (in_array($item, $exclude)) continue;
+                    $linkFile = $toDir . $prefix . $item;
+                    $linkContent = '<?php require($_SERVER["DOCUMENT_ROOT"] . "/local/modules/' . $this->MODULE_ID . '/install/admin/' . $item . '"); ?>';
+                    $result = file_put_contents($linkFile, $linkContent);
+                    if ($result === false) {
+                        file_put_contents($_SERVER["DOCUMENT_ROOT"]."/copy_error.log", "Не удалось создать $linkFile\n", FILE_APPEND);
+                    } else {
+                        file_put_contents($_SERVER["DOCUMENT_ROOT"]."/copy_error.log", "Создан линк: $linkFile\n", FILE_APPEND);
+                    }
+                }
+                closedir($dir);
+            } else {
+                file_put_contents($_SERVER["DOCUMENT_ROOT"]."/copy_error.log", "Не удалось открыть папку $fromDir\n", FILE_APPEND);
+            }
+        } else {
+            file_put_contents($_SERVER["DOCUMENT_ROOT"]."/copy_error.log", "Папка $fromDir не найдена\n", FILE_APPEND);
+        }
+    }
+
+    private function removeAdminLinks($fromDir, $toDir, $prefix = '', $exclude = ['.', '..', 'menu.php'])
+    {
+        if (is_dir($fromDir)) {
+            if ($dir = opendir($fromDir)) {
+                while (false !== $item = readdir($dir)) {
+                    if (in_array($item, $exclude)) continue;
+                    $linkFile = $toDir . $prefix . $item;
+                    if (file_exists($linkFile)) {
+                        if (!unlink($linkFile)) {
+                            file_put_contents($_SERVER["DOCUMENT_ROOT"]."/copy_error.log", "Не удалось удалить $linkFile\n", FILE_APPEND);
+                        }
+                    }
+                }
+                closedir($dir);
+            } else {
+                file_put_contents($_SERVER["DOCUMENT_ROOT"]."/copy_error.log", "Не удалось открыть папку $fromDir\n", FILE_APPEND);
+            }
+        } else {
+            file_put_contents($_SERVER["DOCUMENT_ROOT"]."/copy_error.log", "Папка $fromDir не найдена\n", FILE_APPEND);
+        }
+    }
+
+    private function createDirectories()
+    {
+        $directories = [
+            $_SERVER['DOCUMENT_ROOT'] . '/local/components/',
+            $_SERVER['DOCUMENT_ROOT'] . '/local/js/',
+            $_SERVER['DOCUMENT_ROOT'] . '/local/css/',
+        ];
+
+        foreach ($directories as $dir) {
+            if (!is_dir($dir)) {
+                if (!mkdir($dir, 0775, true)) {
+                    file_put_contents($_SERVER["DOCUMENT_ROOT"]."/copy_error.log", "Не удалось создать папку $dir\n", FILE_APPEND);
+                }
+            }
+        }
     }
 } 

@@ -15,8 +15,8 @@ class EventHandlers
 
         // Подключение CSS и JS файлов
         $asset = \Bitrix\Main\Page\Asset::getInstance();
-        $asset->addCss('/bitrix/css/artmax.calendar/style.css');
-        $asset->addJs('/bitrix/js/artmax.calendar/script.js');
+        $asset->addCss('/local/css/artmax.calendar/style.css');
+        $asset->addJs('/local/js/artmax.calendar/script.js');
     }
 
     public static function onBeforeEventAdd(&$arFields)
@@ -40,5 +40,16 @@ class EventHandlers
                 'DESCRIPTION' => 'Добавлено новое событие: ' . $arFields['TITLE']
             ]);
         }
+    }
+
+    public static function onEpilog()
+    {
+        /*$request = \Bitrix\Main\Context::getCurrent()->getRequest();
+        if ($request->isAjaxRequest()) return;
+        $requestPage = $request->getRequestedPage();
+        if (preg_match('@/company/personal/user/[0-9]+/@i', $requestPage)) {
+            \Bitrix\Main\UI\Extension::load('artmax-calendar.add_menu_item');
+        }*/
+        \Bitrix\Main\UI\Extension::load('artmax-calendar.add_menu_item');
     }
 } 

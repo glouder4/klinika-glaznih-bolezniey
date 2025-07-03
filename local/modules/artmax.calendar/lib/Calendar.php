@@ -144,4 +144,29 @@ class Calendar
 
         return $row['count'] == 0;
     }
+
+    /**
+     * Получить события по филиалу
+     */
+    public function getEventsByBranch($branchId, $dateFrom = null, $dateTo = null, $userId = null)
+    {
+        $sql = "SELECT * FROM artmax_calendar_events WHERE BRANCH_ID = ?";
+        $params = [$branchId];
+        if ($dateFrom) {
+            $sql .= " AND DATE_FROM >= ?";
+            $params[] = $dateFrom;
+        }
+        if ($dateTo) {
+            $sql .= " AND DATE_TO <= ?";
+            $params[] = $dateTo;
+        }
+        if ($userId) {
+            $sql .= " AND USER_ID = ?";
+            $params[] = $userId;
+        }
+        $sql .= " ORDER BY DATE_FROM ASC";
+        $stmt = $this->connection->prepare($sql);
+        $result = $stmt->execute($params);
+        return $result->fetchAll();
+    }
 } 
