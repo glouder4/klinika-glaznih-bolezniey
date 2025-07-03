@@ -1,5 +1,4 @@
 <?php
-
 function pre($o) {
     global $USER;
 
@@ -19,3 +18,4 @@ function pre($o) {
     </div>
     <?
 }
+

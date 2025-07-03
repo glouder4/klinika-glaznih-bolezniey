@@ -6,8 +6,8 @@ use Bitrix\Main\Localization\Loc;
 Loc::loadMessages(__FILE__);
 
 $arComponentDescription = [
-    'NAME' => Loc::getMessage('ARTMAX_CALENDAR_COMPONENT_NAME'),
-    'DESCRIPTION' => Loc::getMessage('ARTMAX_CALENDAR_COMPONENT_DESCRIPTION'),
+    'NAME' => 'Календарь ArtMax',
+    'DESCRIPTION' => 'Компонент для отображения и управления событиями календаря по филиалам',
     'ICON' => '/images/icon.gif',
     'CACHE_PATH' => 'Y',
     'SORT' => 10,
@@ -16,7 +16,7 @@ $arComponentDescription = [
         'NAME' => 'ArtMax',
         'CHILD' => [
             'ID' => 'calendar',
-            'NAME' => Loc::getMessage('ARTMAX_CALENDAR_COMPONENT_PATH_NAME'),
+            'NAME' => 'Календарь',
         ],
     ],
 ]; 

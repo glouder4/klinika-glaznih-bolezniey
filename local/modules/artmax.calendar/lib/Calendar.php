@@ -17,16 +17,15 @@ class Calendar
     /**
      * Добавить новое событие
      */
-    public function addEvent($title, $description, $dateFrom, $dateTo, $userId)
+    public function addEvent($title, $description, $dateFrom, $dateTo, $userId, $branchId = 1)
     {
         $sql = "
             INSERT INTO artmax_calendar_events 
-            (TITLE, DESCRIPTION, DATE_FROM, DATE_TO, USER_ID) 
-            VALUES (?, ?, ?, ?, ?)
+            (TITLE, DESCRIPTION, DATE_FROM, DATE_TO, USER_ID, BRANCH_ID, CREATED_AT) 
+            VALUES (?, ?, ?, ?, ?, ?, NOW())
         ";
 
-        $stmt = $this->connection->prepare($sql);
-        $result = $stmt->execute([$title, $description, $dateFrom, $dateTo, $userId]);
+        $result = $this->connection->query($sql, [$title, $description, $dateFrom, $dateTo, $userId, $branchId]);
 
         if ($result) {
             return $this->connection->getInsertedId();
@@ -54,8 +53,7 @@ class Calendar
 
         $sql .= " ORDER BY DATE_FROM ASC";
 
-        $stmt = $this->connection->prepare($sql);
-        $result = $stmt->execute($params);
+        $result = $this->connection->query($sql, $params);
 
         return $result->fetchAll();
     }
@@ -66,8 +64,7 @@ class Calendar
     public function getEvent($id)
     {
         $sql = "SELECT * FROM artmax_calendar_events WHERE ID = ?";
-        $stmt = $this->connection->prepare($sql);
-        $result = $stmt->execute([$id]);
+        $result = $this->connection->query($sql, [$id]);
 
         return $result->fetch();
     }
@@ -83,8 +80,7 @@ class Calendar
             WHERE ID = ?
         ";
 
-        $stmt = $this->connection->prepare($sql);
-        return $stmt->execute([$title, $description, $dateFrom, $dateTo, $id]);
+        return $this->connection->query($sql, [$title, $description, $dateFrom, $dateTo, $id]);
     }
 
     /**
@@ -93,8 +89,7 @@ class Calendar
     public function deleteEvent($id)
     {
         $sql = "DELETE FROM artmax_calendar_events WHERE ID = ?";
-        $stmt = $this->connection->prepare($sql);
-        return $stmt->execute([$id]);
+        return $this->connection->query($sql, [$id]);
     }
 
     /**
@@ -109,8 +104,7 @@ class Calendar
             LIMIT ?
         ";
 
-        $stmt = $this->connection->prepare($sql);
-        $result = $stmt->execute([$userId, $limit]);
+        $result = $this->connection->query($sql, [$userId, $limit]);
 
         return $result->fetchAll();
     }
@@ -138,8 +132,7 @@ class Calendar
             $params[] = $excludeId;
         }
 
-        $stmt = $this->connection->prepare($sql);
-        $result = $stmt->execute($params);
+        $result = $this->connection->query($sql, $params);
         $row = $result->fetch();
 
         return $row['count'] == 0;
@@ -165,8 +158,41 @@ class Calendar
             $params[] = $userId;
         }
         $sql .= " ORDER BY DATE_FROM ASC";
-        $stmt = $this->connection->prepare($sql);
-        $result = $stmt->execute($params);
+        $result = $this->connection->query($sql, $params);
         return $result->fetchAll();
+    }
+
+    /**
+     * Получить все события
+     */
+    public function getAllEvents($limit = 100)
+    {
+        $sql = "
+            SELECT e.*, b.NAME as BRANCH_NAME 
+            FROM artmax_calendar_events e
+            LEFT JOIN artmax_calendar_branches b ON e.BRANCH_ID = b.ID
+            ORDER BY e.DATE_FROM DESC 
+            LIMIT ?
+        ";
+
+        $result = $this->connection->query($sql, [$limit]);
+        return $result->fetchAll();
+    }
+
+    /**
+     * Получить статистику событий
+     */
+    public function getEventsStats()
+    {
+        $sql = "
+            SELECT 
+                COUNT(*) as total_events,
+                COUNT(DISTINCT USER_ID) as unique_users,
+                COUNT(DISTINCT BRANCH_ID) as branches_used
+            FROM artmax_calendar_events
+        ";
+
+        $result = $this->connection->query($sql);
+        return $result->fetch();
     }
 } 

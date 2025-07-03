@@ -5,95 +5,80 @@ use Bitrix\Main\Localization\Loc;
 Loc::loadMessages(__FILE__);
 ?>
 
-<form method="get" id="branch-select-form" style="margin-bottom: 20px;">
-    <label for="branch_id"><b>Выберите филиал:</b></label>
-    <select name="branch_id" id="branch_id" onchange="document.getElementById('branch-select-form').submit();">
-        <?php foreach ($arResult['BRANCHES'] as $branch): ?>
-            <option value="<?= $branch['ID'] ?>" <?= ($arResult['SELECTED_BRANCH_ID'] == $branch['ID'] ? 'selected' : '') ?>>
-                <?= htmlspecialchars($branch['NAME']) ?>
-            </option>
-        <?php endforeach; ?>
-    </select>
-</form>
-
 <div class="artmax-calendar">
-    <?php if (!empty($arResult['ERROR'])): ?>
-        <div class="artmax-calendar-error">
-            <?= htmlspecialchars($arResult['ERROR']) ?>
-        </div>
-    <?php endif; ?>
+    <div class="calendar-header">
+        <h1>Календарь - <?= htmlspecialchars($arResult['BRANCH']['NAME']) ?></h1>
+        
+        <?php if (!empty($arResult['ALL_BRANCHES'])): ?>
+            <div class="branch-navigation">
+                <label for="branch-select">Выберите филиал:</label>
+                <select id="branch-select" onchange="changeBranch(this.value)">
+                    <?php foreach ($arResult['ALL_BRANCHES'] as $branch): ?>
+                        <option value="<?= $branch['ID'] ?>" <?= $branch['ID'] == $arResult['BRANCH']['ID'] ? 'selected' : '' ?>>
+                            <?= htmlspecialchars($branch['NAME']) ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+        <?php endif; ?>
+    </div>
 
-    <?php if (!empty($arResult['SUCCESS'])): ?>
-        <div class="artmax-calendar-success">
-            <?= htmlspecialchars($arResult['SUCCESS']) ?>
-        </div>
-    <?php endif; ?>
-
-    <?php if ($arParams['SHOW_FORM'] === 'Y'): ?>
-        <div class="artmax-calendar-form">
-            <h3>Добавить новое событие</h3>
-            <form method="post" action="">
+    <?php if ($arResult['SHOW_FORM'] && $arResult['CAN_ADD_EVENTS']): ?>
+        <div class="calendar-form">
+            <h3>Добавить событие</h3>
+            <form id="add-event-form">
                 <?= bitrix_sessid_post() ?>
-                <input type="hidden" name="action" value="add_event">
-                
                 <div class="form-group">
-                    <label for="title">Название события *:</label>
-                    <input type="text" name="title" id="title" required>
+                    <label for="event-title">Название события *</label>
+                    <input type="text" id="event-title" name="title" required>
                 </div>
                 
                 <div class="form-group">
-                    <label for="description">Описание:</label>
-                    <textarea name="description" id="description" rows="3"></textarea>
+                    <label for="event-description">Описание</label>
+                    <textarea id="event-description" name="description" rows="3"></textarea>
                 </div>
                 
                 <div class="form-group">
-                    <label for="date_from">Дата начала *:</label>
-                    <input type="datetime-local" name="date_from" id="date_from" required>
+                    <label for="event-date-from">Дата и время начала *</label>
+                    <input type="datetime-local" id="event-date-from" name="dateFrom" required>
                 </div>
                 
                 <div class="form-group">
-                    <label for="date_to">Дата окончания *:</label>
-                    <input type="datetime-local" name="date_to" id="date_to" required>
+                    <label for="event-date-to">Дата и время окончания *</label>
+                    <input type="datetime-local" id="event-date-to" name="dateTo" required>
                 </div>
                 
-                <div class="form-group">
-                    <button type="submit" class="btn btn-primary">Добавить событие</button>
-                </div>
+                <button type="submit" class="btn btn-primary">Добавить событие</button>
             </form>
         </div>
     <?php endif; ?>
 
-    <div class="artmax-calendar-events">
-        <h3>Мои события</h3>
+    <div class="calendar-events">
+        <h3>События</h3>
         
         <?php if (empty($arResult['EVENTS'])): ?>
-            <p>У вас пока нет событий.</p>
+            <p class="no-events">Событий пока нет</p>
         <?php else: ?>
             <div class="events-list">
                 <?php foreach ($arResult['EVENTS'] as $event): ?>
-                    <div class="event-item">
+                    <div class="event-item" data-event-id="<?= $event['ID'] ?>">
                         <div class="event-header">
                             <h4><?= htmlspecialchars($event['TITLE']) ?></h4>
-                            <form method="post" action="" style="display: inline;">
-                                <?= bitrix_sessid_post() ?>
-                                <input type="hidden" name="action" value="delete_event">
-                                <input type="hidden" name="event_id" value="<?= $event['ID'] ?>">
-                                <button type="submit" class="btn btn-danger btn-sm" 
-                                        onclick="return confirm('Удалить это событие?')">
-                                    Удалить
-                                </button>
-                            </form>
+                            <?php if ($event['USER_ID'] == $arResult['CURRENT_USER_ID']): ?>
+                                <button class="btn btn-danger btn-sm" onclick="deleteEvent(<?= $event['ID'] ?>)">Удалить</button>
+                            <?php endif; ?>
                         </div>
                         
                         <?php if (!empty($event['DESCRIPTION'])): ?>
-                            <div class="event-description">
-                                <?= nl2br(htmlspecialchars($event['DESCRIPTION'])) ?>
-                            </div>
+                            <p class="event-description"><?= htmlspecialchars($event['DESCRIPTION']) ?></p>
                         <?php endif; ?>
                         
-                        <div class="event-dates">
-                            <strong>Начало:</strong> <?= date('d.m.Y H:i', strtotime($event['DATE_FROM'])) ?><br>
-                            <strong>Окончание:</strong> <?= date('d.m.Y H:i', strtotime($event['DATE_TO'])) ?>
+                        <div class="event-details">
+                            <span class="event-time">
+                                <strong>Время:</strong> 
+                                <?= date('d.m.Y H:i', strtotime($event['DATE_FROM'])) ?> - 
+                                <?= date('d.m.Y H:i', strtotime($event['DATE_TO'])) ?>
+                            </span>
                         </div>
                     </div>
                 <?php endforeach; ?>
@@ -104,31 +89,35 @@ Loc::loadMessages(__FILE__);
 
 <style>
 .artmax-calendar {
-    max-width: 800px;
+    max-width: 1200px;
     margin: 0 auto;
     padding: 20px;
 }
 
-.artmax-calendar-error {
-    background-color: #f8d7da;
-    color: #721c24;
-    padding: 10px;
-    border: 1px solid #f5c6cb;
-    border-radius: 4px;
-    margin-bottom: 20px;
+.calendar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 30px;
+    padding-bottom: 20px;
+    border-bottom: 2px solid #eee;
 }
 
-.artmax-calendar-success {
-    background-color: #d4edda;
-    color: #155724;
-    padding: 10px;
-    border: 1px solid #c3e6cb;
-    border-radius: 4px;
-    margin-bottom: 20px;
+.branch-navigation {
+    display: flex;
+    align-items: center;
+    gap: 10px;
 }
 
-.artmax-calendar-form {
-    background-color: #f8f9fa;
+.branch-navigation select {
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+.calendar-form {
+    background: #f9f9f9;
     padding: 20px;
     border-radius: 8px;
     margin-bottom: 30px;
@@ -147,33 +136,34 @@ Loc::loadMessages(__FILE__);
 .form-group input,
 .form-group textarea {
     width: 100%;
-    padding: 8px;
+    padding: 8px 12px;
     border: 1px solid #ddd;
     border-radius: 4px;
-    box-sizing: border-box;
+    font-size: 14px;
 }
 
 .btn {
-    padding: 8px 16px;
+    padding: 10px 20px;
     border: none;
     border-radius: 4px;
     cursor: pointer;
+    font-size: 14px;
     text-decoration: none;
     display: inline-block;
 }
 
 .btn-primary {
-    background-color: #007bff;
+    background: #007cba;
     color: white;
 }
 
 .btn-danger {
-    background-color: #dc3545;
+    background: #dc3545;
     color: white;
 }
 
 .btn-sm {
-    padding: 4px 8px;
+    padding: 5px 10px;
     font-size: 12px;
 }
 
@@ -183,7 +173,7 @@ Loc::loadMessages(__FILE__);
 }
 
 .event-item {
-    background-color: white;
+    background: white;
     border: 1px solid #ddd;
     border-radius: 8px;
     padding: 15px;
@@ -203,13 +193,97 @@ Loc::loadMessages(__FILE__);
 }
 
 .event-description {
-    margin-bottom: 10px;
     color: #666;
-    line-height: 1.5;
+    margin-bottom: 10px;
 }
 
-.event-dates {
+.event-details {
     font-size: 14px;
     color: #888;
 }
-</style> 
+
+.no-events {
+    text-align: center;
+    color: #666;
+    font-style: italic;
+    padding: 40px;
+}
+
+@media (max-width: 768px) {
+    .calendar-header {
+        flex-direction: column;
+        gap: 15px;
+        align-items: flex-start;
+    }
+    
+    .event-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+    }
+}
+</style>
+
+<script>
+function changeBranch(branchId) {
+    // Перенаправляем на страницу с выбранным филиалом
+    window.location.href = '/artmax-calendar/' + branchId;
+}
+
+function deleteEvent(eventId) {
+    if (!confirm('Вы уверены, что хотите удалить это событие?')) {
+        return;
+    }
+    
+    BX.ajax.runComponentAction('artmax:calendar', 'deleteEvent', {
+        mode: 'class',
+        data: {
+            eventId: eventId
+        }
+    }).then(function(response) {
+        if (response.data.success) {
+            // Удаляем элемент из DOM
+            document.querySelector('[data-event-id="' + eventId + '"]').remove();
+            alert('Событие удалено');
+        } else {
+            alert('Ошибка: ' + response.data.error);
+        }
+    }).catch(function(response) {
+        alert('Ошибка: ' + response.errors[0].message);
+    });
+}
+
+// Обработка формы добавления события
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('add-event-form');
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData(form);
+            
+            BX.ajax.runComponentAction('artmax:calendar', 'addEvent', {
+                mode: 'class',
+                data: {
+                    title: formData.get('title'),
+                    description: formData.get('description'),
+                    dateFrom: formData.get('dateFrom'),
+                    dateTo: formData.get('dateTo'),
+                    branchId: <?= $arResult['BRANCH']['ID'] ?>
+                }
+            }).then(function(response) {
+                if (response.data.success) {
+                    alert('Событие добавлено');
+                    form.reset();
+                    // Перезагружаем страницу для отображения нового события
+                    location.reload();
+                } else {
+                    alert('Ошибка: ' + response.data.error);
+                }
+            }).catch(function(response) {
+                alert('Ошибка: ' + response.errors[0].message);
+            });
+        });
+    }
+});
+</script> 

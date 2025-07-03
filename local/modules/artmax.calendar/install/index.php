@@ -29,14 +29,15 @@ class artmax_calendar extends CModule
     {
         ModuleManager::registerModule($this->MODULE_ID);
         $this->InstallDB();
-        $this->InstallEvents();
         $this->InstallFiles();
+        $this->InstallEvents();
     }
 
     public function DoUninstall()
     {
-        $this->UnInstallFiles();
+
         $this->UnInstallEvents();
+        $this->UnInstallFiles();
         $this->UnInstallDB();
         ModuleManager::unRegisterModule($this->MODULE_ID);
     }
@@ -46,7 +47,8 @@ class artmax_calendar extends CModule
         // Создание таблиц базы данных
         $connection = \Bitrix\Main\Application::getConnection();
         
-        $sql = "
+        // Таблица событий
+        $sqlEvents = "
         CREATE TABLE IF NOT EXISTS artmax_calendar_events (
             ID int(11) NOT NULL AUTO_INCREMENT,
             TITLE varchar(255) NOT NULL,
@@ -54,15 +56,45 @@ class artmax_calendar extends CModule
             DATE_FROM datetime NOT NULL,
             DATE_TO datetime NOT NULL,
             USER_ID int(11) NOT NULL,
+            BRANCH_ID int(11) NOT NULL DEFAULT 1,
             CREATED_AT datetime DEFAULT CURRENT_TIMESTAMP,
             UPDATED_AT datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             PRIMARY KEY (ID),
             KEY USER_ID (USER_ID),
-            KEY DATE_FROM (DATE_FROM)
+            KEY DATE_FROM (DATE_FROM),
+            KEY BRANCH_ID (BRANCH_ID)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
         ";
         
-        $connection->query($sql);
+        // Таблица филиалов
+        $sqlBranches = "
+        CREATE TABLE IF NOT EXISTS artmax_calendar_branches (
+            ID int(11) NOT NULL AUTO_INCREMENT,
+            NAME varchar(255) NOT NULL,
+            ADDRESS text,
+            PHONE varchar(50),
+            EMAIL varchar(255),
+            CREATED_AT datetime DEFAULT CURRENT_TIMESTAMP,
+            UPDATED_AT datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (ID)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+        ";
+        
+        $connection->query($sqlEvents);
+        $connection->query($sqlBranches);
+        
+        // Добавляем тестовые филиалы, если таблица пустая
+        $result = $connection->query("SELECT COUNT(*) as cnt FROM artmax_calendar_branches");
+        $row = $result->fetch();
+        
+        if ($row['cnt'] == 0) {
+            $connection->query("
+                INSERT INTO artmax_calendar_branches (NAME, ADDRESS, PHONE, EMAIL) VALUES 
+                ('Главный офис', 'ул. Примерная, 1', '+7 (123) 456-78-90', 'main@example.com'),
+                ('Филиал №1', 'ул. Вторая, 15', '+7 (123) 456-78-91', 'branch1@example.com'),
+                ('Филиал №2', 'ул. Третья, 25', '+7 (123) 456-78-92', 'branch2@example.com')
+            ");
+        }
     }
 
     public function UnInstallDB()
@@ -70,6 +102,11 @@ class artmax_calendar extends CModule
         // Удаление таблиц базы данных
         $connection = \Bitrix\Main\Application::getConnection();
         $connection->query("DROP TABLE IF EXISTS artmax_calendar_events");
+        $connection->query("DROP TABLE IF EXISTS artmax_calendar_branches");
+        
+        // Удаляем настройки модуля
+        \Bitrix\Main\Config\Option::delete('artmax.calendar', ['name' => 'menu_item_id']);
+        \Bitrix\Main\Config\Option::delete('artmax.calendar', ['name' => 'custom_section_id']);
     }
 
     public function InstallEvents()
@@ -89,6 +126,12 @@ class artmax_calendar extends CModule
             'Artmax\\Calendar\\EventHandlers',
             'onEpilog'
         );
+
+        // Регистрируем события модуля
+        if (CModule::IncludeModule('artmax.calendar')) {
+            \Artmax\Calendar\EventHandlers::onModuleInstall();
+            \Artmax\Calendar\EventHandlers::createCustomSection();
+        }
     }
 
     public function UnInstallEvents()
@@ -108,6 +151,33 @@ class artmax_calendar extends CModule
             'Artmax\\Calendar\\EventHandlers',
             'onEpilog'
         );
+
+        // Отменяем регистрацию событий и удаляем настраиваемый раздел
+        if (CModule::IncludeModule('artmax.calendar')) {
+            try {
+                \Artmax\Calendar\EventHandlers::onModuleUninstall();
+            } catch (\Exception $e) {
+                // Логируем ошибку, но продолжаем удаление
+                \CEventLog::Add([
+                    'SEVERITY' => 'ERROR',
+                    'AUDIT_TYPE_ID' => 'ARTMAX_CALENDAR_UNINSTALL_EVENTS_ERROR',
+                    'MODULE_ID' => 'artmax.calendar',
+                    'DESCRIPTION' => 'Ошибка отмены регистрации событий: ' . $e->getMessage()
+                ]);
+            }
+            
+            try {
+                \Artmax\Calendar\EventHandlers::removeCustomSection();
+            } catch (\Exception $e) {
+                // Логируем ошибку, но продолжаем удаление
+                \CEventLog::Add([
+                    'SEVERITY' => 'ERROR',
+                    'AUDIT_TYPE_ID' => 'ARTMAX_CALENDAR_UNINSTALL_SECTION_ERROR',
+                    'MODULE_ID' => 'artmax.calendar',
+                    'DESCRIPTION' => 'Ошибка удаления настраиваемого раздела: ' . $e->getMessage()
+                ]);
+            }
+        }
     }
 
     public function InstallFiles()
@@ -162,6 +232,75 @@ class artmax_calendar extends CModule
         } else {
             file_put_contents($_SERVER["DOCUMENT_ROOT"]."/copy_error.log", "Папка JS-расширения не найдена: $extensionFrom\n", FILE_APPEND);
         }
+
+        // Копируем публичную страницу календаря в корень сайта
+        $calendarPageFrom = $_SERVER['DOCUMENT_ROOT'] . '/local/modules/' . $this->MODULE_ID . '/install/admin/artmax_calendar_view.php';
+        $calendarPageTo = $_SERVER['DOCUMENT_ROOT'] . '/artmax-calendar.php';
+        if (file_exists($calendarPageFrom)) {
+            CopyDirFiles($calendarPageFrom, $calendarPageTo, true, true);
+            file_put_contents($_SERVER["DOCUMENT_ROOT"]."/copy_error.log", "Страница календаря скопирована из $calendarPageFrom в $calendarPageTo\n", FILE_APPEND);
+        } else {
+            file_put_contents($_SERVER["DOCUMENT_ROOT"]."/copy_error.log", "Файл страницы календаря не найден: $calendarPageFrom\n", FILE_APPEND);
+        }
+
+        // Копируем .htaccess для ЧПУ
+        $htaccessFrom = $_SERVER['DOCUMENT_ROOT'] . '/local/modules/' . $this->MODULE_ID . '/install/.htaccess';
+        $htaccessTo = $_SERVER['DOCUMENT_ROOT'] . '/.htaccess';
+        if (file_exists($htaccessFrom)) {
+            // Добавляем правила в существующий .htaccess или создаем новый
+            $htaccessContent = file_get_contents($htaccessFrom);
+            if (file_exists($htaccessTo)) {
+                $existingContent = file_get_contents($htaccessTo);
+                if (strpos($existingContent, 'artmax-calendar') === false) {
+                    file_put_contents($htaccessTo, $existingContent . "\n\n# ArtMax Calendar Rules\n" . $htaccessContent, LOCK_EX);
+                    file_put_contents($_SERVER["DOCUMENT_ROOT"]."/copy_error.log", "Правила календаря добавлены в .htaccess\n", FILE_APPEND);
+                }
+            } else {
+                file_put_contents($htaccessTo, $htaccessContent, LOCK_EX);
+                file_put_contents($_SERVER["DOCUMENT_ROOT"]."/copy_error.log", "Создан новый .htaccess с правилами календаря\n", FILE_APPEND);
+            }
+        } else {
+            file_put_contents($_SERVER["DOCUMENT_ROOT"]."/copy_error.log", "Файл .htaccess не найден: $htaccessFrom\n", FILE_APPEND);
+        }
+
+        // Копируем .settings.php для провайдера
+        $settingsFrom = $_SERVER['DOCUMENT_ROOT'] . '/local/modules/' . $this->MODULE_ID . '/.settings.php';
+        if (file_exists($settingsFrom)) {
+            // Файл уже находится в правильном месте, просто проверяем
+            file_put_contents($_SERVER["DOCUMENT_ROOT"]."/copy_error.log", "Файл .settings.php найден: $settingsFrom\n", FILE_APPEND);
+        } else {
+            file_put_contents($_SERVER["DOCUMENT_ROOT"]."/copy_error.log", "Файл .settings.php не найден: $settingsFrom\n", FILE_APPEND);
+        }
+
+        // Копируем файл меню
+        $menuFrom = $_SERVER['DOCUMENT_ROOT'] . '/local/modules/' . $this->MODULE_ID . '/install/menu/artmax_calendar_menu.php';
+        $menuTo = $_SERVER['DOCUMENT_ROOT'] . '/bitrix/admin/artmax_calendar_menu.php';
+        if (file_exists($menuFrom)) {
+            CopyDirFiles($menuFrom, $menuTo, true, true);
+            file_put_contents($_SERVER["DOCUMENT_ROOT"]."/copy_error.log", "Файл меню скопирован из $menuFrom в $menuTo\n", FILE_APPEND);
+        } else {
+            file_put_contents($_SERVER["DOCUMENT_ROOT"]."/copy_error.log", "Файл меню не найден: $menuFrom\n", FILE_APPEND);
+        }
+
+        // Копируем файл регистрации провайдера
+        $registerFrom = $_SERVER['DOCUMENT_ROOT'] . '/local/modules/' . $this->MODULE_ID . '/install/admin/artmax_calendar_register.php';
+        $registerTo = $_SERVER['DOCUMENT_ROOT'] . '/bitrix/admin/artmax_calendar_register.php';
+        if (file_exists($registerFrom)) {
+            CopyDirFiles($registerFrom, $registerTo, true, true);
+            file_put_contents($_SERVER["DOCUMENT_ROOT"]."/copy_error.log", "Файл регистрации скопирован из $registerFrom в $registerTo\n", FILE_APPEND);
+        } else {
+            file_put_contents($_SERVER["DOCUMENT_ROOT"]."/copy_error.log", "Файл регистрации не найден: $registerFrom\n", FILE_APPEND);
+        }
+
+        // Копируем файл проверки классов
+        $classesFrom = $_SERVER['DOCUMENT_ROOT'] . '/local/modules/' . $this->MODULE_ID . '/install/admin/artmax_calendar_classes.php';
+        $classesTo = $_SERVER['DOCUMENT_ROOT'] . '/bitrix/admin/artmax_calendar_classes.php';
+        if (file_exists($classesFrom)) {
+            CopyDirFiles($classesFrom, $classesTo, true, true);
+            file_put_contents($_SERVER["DOCUMENT_ROOT"]."/copy_error.log", "Файл проверки классов скопирован из $classesFrom в $classesTo\n", FILE_APPEND);
+        } else {
+            file_put_contents($_SERVER["DOCUMENT_ROOT"]."/copy_error.log", "Файл проверки классов не найден: $classesFrom\n", FILE_APPEND);
+        }
     }
 
     public function UnInstallFiles()
@@ -181,6 +320,13 @@ class artmax_calendar extends CModule
         DeleteDirFilesEx('/local/js/artmax-calendar/');
         // Удаляем css полностью
         DeleteDirFilesEx('/local/css/artmax.calendar/');
+        
+        // Удаляем публичную страницу календаря
+        $calendarPage = $_SERVER['DOCUMENT_ROOT'] . '/artmax-calendar.php';
+        if (file_exists($calendarPage)) {
+            unlink($calendarPage);
+            file_put_contents($_SERVER["DOCUMENT_ROOT"]."/copy_error.log", "Страница календаря удалена: $calendarPage\n", FILE_APPEND);
+        }
 
     }
 
@@ -246,4 +392,6 @@ class artmax_calendar extends CModule
             }
         }
     }
+
+
 } 

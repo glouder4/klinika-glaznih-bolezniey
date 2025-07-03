@@ -6,11 +6,11 @@ export class AddMenuItem
 	{
 		console.log(options)
 		this.name = options.name;
-		this.menuId = options.menuId || 'custom_menu_item';
-		this.menuItemText = options.menuItemText || 'Новый пункт';
-		this.menuItemUrl = options.menuItemUrl || '#';
-		this.menuItemClass = options.menuItemClass || '';
-		this.menuItemIcon = options.menuItemIcon || 'icon_name';
+		this.menuId = options.menuId || 'artmax_calendar_menu';
+		this.menuItemText = options.menuItemText || 'Календарь ArtMax';
+		this.menuItemUrl = options.menuItemUrl || '/artmax-calendar/1';
+		this.menuItemClass = options.menuItemClass || 'artmax-calendar-menu-item';
+		this.menuItemIcon = options.menuItemIcon || 'calendar-icon';
 		this.menuItemTitle = options.menuItemTitle || this.menuItemText;
 		this.sidePanelEnabled = options.sidePanelEnabled !== false;
 
@@ -26,8 +26,8 @@ export class AddMenuItem
 				_this.setupSidePanel();
 			}
 			
-			// Добавляем пункт в меню
-			_this.addMenuItem();
+			// Добавляем пункт в меню профиля пользователя
+			_this.addToUserProfileMenu();
 		});
 	}
 
@@ -47,18 +47,56 @@ export class AddMenuItem
 		});
 	}
 
-	addMenuItem()
+	addToUserProfileMenu()
 	{
-		// BX.Main.menuManager.add({
-		// 	id: this.menuId,
-		// 	text: this.menuItemText,
-		// 	title: this.menuItemTitle,
-		// 	url: this.menuItemUrl,
-		// 	icon: this.menuItemIcon,
-		// 	className: this.menuItemClass
-		// });
+		// Ждем инициализации меню профиля пользователя
+		BX.addCustomEvent("BX.UI.EntityConfigurationManager:onInitialize", (editor, settings) => {
+			if (editor.getId() != "intranet-user-profile") {
+				return;
+			}
+
+			const entityId = editor._entityId;
+			const menuId = "#socialnetwork_profile_menu_user_" + entityId;
+			const menuNode = document.querySelector(menuId);
+
+			if (!BX.type.isDomNode(menuNode)) {
+				console.warn('Menu node not found:', menuId);
+				return;
+			}
+
+			console.log('Adding calendar menu item to profile menu');
+			this.createAndAddMenuItem(menuNode);
+		});
+	}
+
+	createAndAddMenuItem(menuContainer)
+	{
+		// Проверяем, не добавлен ли уже пункт меню
+		if (menuContainer.querySelector('.' + this.menuItemClass)) {
+			return;
+		}
+
+		const menuItem = document.createElement('li');
+		menuItem.className = 'socialnetwork-profile-menu-item ' + this.menuItemClass;
 		
-		console.log('Menu item added:', this.menuItemText);
+		const menuLink = document.createElement('a');
+		menuLink.href = this.menuItemUrl;
+		menuLink.textContent = this.menuItemText;
+		menuLink.title = this.menuItemTitle;
+		menuLink.className = 'socialnetwork-profile-menu-item-link';
+		
+		// Добавляем иконку если есть
+		if (this.menuItemIcon) {
+			const icon = document.createElement('i');
+			icon.className = this.menuItemIcon;
+			icon.style.marginRight = '5px';
+			menuLink.insertBefore(icon, menuLink.firstChild);
+		}
+		
+		menuItem.appendChild(menuLink);
+		menuContainer.appendChild(menuItem);
+		
+		console.log('Calendar menu item added successfully:', this.menuItemText);
 	}
 
 	setName(name)
@@ -112,13 +150,13 @@ export class AddMenuItem
 	}
 }
 
-// Пример использования
+// Автоматическая инициализация при загрузке
 const addMenuItem = new AddMenuItem({
 	name: 'CalendarMenuItem',
-	menuItemText: 'Календарь',
-	menuItemUrl: '/calendar/',
-	menuItemClass: 'calendar-menu-item',
+	menuItemText: 'Календарь ArtMax',
+	menuItemUrl: '/artmax-calendar/1',
+	menuItemClass: 'artmax-calendar-menu-item',
 	menuItemIcon: 'calendar-icon',
-	menuItemTitle: 'Управление календарем',
+	menuItemTitle: 'Управление календарем событий',
 	sidePanelEnabled: true
 });

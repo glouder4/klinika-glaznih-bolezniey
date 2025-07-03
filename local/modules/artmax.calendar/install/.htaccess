@@ -1,0 +1,7 @@
+RewriteEngine On
+
+# Правило для календаря с ID филиала
+RewriteRule ^artmax-calendar/([0-9]+)/?$ artmax-calendar.php?branch_id=$1 [L,QSA]
+
+# Правило для календаря без ID (перенаправление на выбор филиала)
+RewriteRule ^artmax-calendar/?$ artmax-calendar.php [L,QSA] 

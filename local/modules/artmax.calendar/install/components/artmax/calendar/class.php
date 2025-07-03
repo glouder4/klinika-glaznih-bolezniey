@@ -2,7 +2,6 @@
 if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true) die();
 
 use Bitrix\Main\Localization\Loc;
-use Artmax\Calendar\Calendar;
 
 Loc::loadMessages(__FILE__);
 
@@ -15,95 +14,138 @@ class ArtmaxCalendarComponent extends CBitrixComponent
             return;
         }
 
-        $this->arResult = [];
-        $this->arParams = array_merge($this->arParams, [
-            'CACHE_TYPE' => $this->arParams['CACHE_TYPE'] ?? 'A',
-            'CACHE_TIME' => $this->arParams['CACHE_TIME'] ?? 3600,
-            'EVENTS_COUNT' => $this->arParams['EVENTS_COUNT'] ?? 10,
-            'SHOW_FORM' => $this->arParams['SHOW_FORM'] ?? 'Y',
-        ]);
+        // Получаем параметры
+        $branchId = (int)($this->arParams['BRANCH_ID'] ?? 1);
+        $eventsCount = (int)($this->arParams['EVENTS_COUNT'] ?? 20);
+        $showForm = $this->arParams['SHOW_FORM'] === 'Y';
 
-        // Получаем список филиалов
+        // Получаем информацию о филиале
         $branchObj = new \Artmax\Calendar\Branch();
-        $branches = $branchObj->getBranches();
-        $this->arResult['BRANCHES'] = $branches;
+        $branch = $branchObj->getBranch($branchId);
 
-        // Получаем выбранный филиал
-        $branchId = isset($_GET['branch_id']) ? (int)$_GET['branch_id'] : ($branches[0]['ID'] ?? null);
-        $this->arResult['SELECTED_BRANCH_ID'] = $branchId;
-
-        if ($this->startResultCache()) {
-            $this->processRequest();
-            $this->getEvents($branchId);
-            $this->includeComponentTemplate();
-        }
-    }
-
-    private function processRequest()
-    {
-        if ($_SERVER['REQUEST_METHOD'] === 'POST' && check_bitrix_sessid()) {
-            $action = $_POST['action'] ?? '';
-            
-            if ($action === 'add_event') {
-                $this->addEvent();
-            } elseif ($action === 'delete_event') {
-                $this->deleteEvent();
-            }
-        }
-    }
-
-    private function addEvent()
-    {
-        $title = trim($_POST['title'] ?? '');
-        $description = trim($_POST['description'] ?? '');
-        $dateFrom = $_POST['date_from'] ?? '';
-        $dateTo = $_POST['date_to'] ?? '';
-        $userId = $GLOBALS['USER']->GetID();
-
-        if (empty($title) || empty($dateFrom) || empty($dateTo)) {
-            $this->arResult['ERROR'] = 'Все обязательные поля должны быть заполнены';
+        if (!$branch) {
+            ShowError('Филиал не найден');
             return;
         }
 
-        $calendar = new Calendar();
-        
-        if ($calendar->addEvent($title, $description, $dateFrom, $dateTo, $userId)) {
-            $this->arResult['SUCCESS'] = 'Событие успешно добавлено';
-        } else {
-            $this->arResult['ERROR'] = 'Ошибка при добавлении события';
-        }
+        // Получаем события для филиала
+        $calendarObj = new \Artmax\Calendar\Calendar();
+        $events = $calendarObj->getEventsByBranch($branchId, null, null, null, $eventsCount);
+
+        // Получаем список всех филиалов для навигации
+        $allBranches = $branchObj->getBranches();
+
+        // Формируем данные для шаблона
+        $this->arResult = [
+            'BRANCH' => $branch,
+            'EVENTS' => $events,
+            'ALL_BRANCHES' => $allBranches,
+            'SHOW_FORM' => $showForm,
+            'CURRENT_USER_ID' => $GLOBALS['USER']->GetID(),
+            'CAN_ADD_EVENTS' => $GLOBALS['USER']->IsAuthorized(),
+        ];
+
+        // Подключаем шаблон
+        $this->includeComponentTemplate();
     }
 
-    private function deleteEvent()
+    /**
+     * Обработка AJAX запросов
+     */
+    public function configureActions()
     {
-        $eventId = (int)($_POST['event_id'] ?? 0);
-        $userId = $GLOBALS['USER']->GetID();
+        return [
+            'addEvent' => [
+                'prefilters' => [],
+                'postfilters' => []
+            ],
+            'deleteEvent' => [
+                'prefilters' => [],
+                'postfilters' => []
+            ],
+            'getEvents' => [
+                'prefilters' => [],
+                'postfilters' => []
+            ]
+        ];
+    }
 
-        if ($eventId > 0) {
-            $calendar = new Calendar();
-            $event = $calendar->getEvent($eventId);
-            
-            if ($event && $event['USER_ID'] == $userId) {
-                if ($calendar->deleteEvent($eventId)) {
-                    $this->arResult['SUCCESS'] = 'Событие успешно удалено';
-                } else {
-                    $this->arResult['ERROR'] = 'Ошибка при удалении события';
-                }
-            } else {
-                $this->arResult['ERROR'] = 'Нет прав для удаления этого события';
+    /**
+     * Добавление события
+     */
+    public function addEventAction($title, $description, $dateFrom, $dateTo, $branchId)
+    {
+        if (!$GLOBALS['USER']->IsAuthorized()) {
+            return ['success' => false, 'error' => 'Необходима авторизация'];
+        }
+
+        try {
+            $calendarObj = new \Artmax\Calendar\Calendar();
+            $userId = $GLOBALS['USER']->GetID();
+
+            // Проверяем доступность времени
+            if (!$calendarObj->isTimeAvailable($dateFrom, $dateTo, $userId)) {
+                return ['success' => false, 'error' => 'Время уже занято'];
             }
+
+            $eventId = $calendarObj->addEvent($title, $description, $dateFrom, $dateTo, $userId, $branchId);
+
+            if ($eventId) {
+                return ['success' => true, 'eventId' => $eventId];
+            } else {
+                return ['success' => false, 'error' => 'Ошибка добавления события'];
+            }
+        } catch (\Exception $e) {
+            return ['success' => false, 'error' => $e->getMessage()];
         }
     }
 
-    private function getEvents($branchId = null)
+    /**
+     * Удаление события
+     */
+    public function deleteEventAction($eventId)
     {
-        $calendar = new \Artmax\Calendar\Calendar();
-        $userId = $GLOBALS['USER']->GetID();
-        if ($branchId) {
-            $this->arResult['EVENTS'] = $calendar->getEventsByBranch($branchId, null, null, $userId);
-        } else {
-            $this->arResult['EVENTS'] = [];
+        if (!$GLOBALS['USER']->IsAuthorized()) {
+            return ['success' => false, 'error' => 'Необходима авторизация'];
         }
-        $this->arResult['USER_ID'] = $userId;
+
+        try {
+            $calendarObj = new \Artmax\Calendar\Calendar();
+            $event = $calendarObj->getEvent($eventId);
+
+            if (!$event) {
+                return ['success' => false, 'error' => 'Событие не найдено'];
+            }
+
+            // Проверяем права на удаление (только автор события)
+            if ($event['USER_ID'] != $GLOBALS['USER']->GetID()) {
+                return ['success' => false, 'error' => 'Нет прав на удаление'];
+            }
+
+            $result = $calendarObj->deleteEvent($eventId);
+
+            if ($result) {
+                return ['success' => true];
+            } else {
+                return ['success' => false, 'error' => 'Ошибка удаления события'];
+            }
+        } catch (\Exception $e) {
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+
+    /**
+     * Получение событий
+     */
+    public function getEventsAction($branchId, $dateFrom = null, $dateTo = null)
+    {
+        try {
+            $calendarObj = new \Artmax\Calendar\Calendar();
+            $events = $calendarObj->getEventsByBranch($branchId, $dateFrom, $dateTo);
+
+            return ['success' => true, 'events' => $events];
+        } catch (\Exception $e) {
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
     }
 } 
