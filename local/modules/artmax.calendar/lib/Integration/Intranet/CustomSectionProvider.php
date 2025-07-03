@@ -7,6 +7,8 @@ use Bitrix\Main\Web\Uri;
 
 class CustomSectionProvider extends Provider
 {
+
+
     /**
      * Проверяет доступность страницы для пользователя
      */
@@ -32,39 +34,31 @@ class CustomSectionProvider extends Provider
         }
     }
 
-    /**
+            /**
      * Возвращает параметры компонента для отображения
      */
-    public function resolveComponent(string $pageSettings, Uri $url): ?Component
+    public function resolveComponent(string $pageSettings, Uri $url): ?\Bitrix\Intranet\CustomSection\Provider\Component
     {
         try {
             // Парсим настройки страницы
             $params = explode('~', $pageSettings);
             $branchId = (int)($params[0] ?? 0);
-            
+
             if ($branchId <= 0) {
                 return null;
             }
 
-            // Проверяем существование компонента в local/components
-            $componentPath = $_SERVER['DOCUMENT_ROOT'] . '/local/components/artmax/calendar/class.php';
-            
-            if (!file_exists($componentPath)) {
-                return null;
-            }
-
-            // Возвращаем параметры для компонента календаря
-            return new Component([
-                'componentName' => 'artmax:calendar',
-                'componentTemplate' => '.default',
-                'params' => [
+            return (new Component())
+                ->setComponentTemplate('.default')
+                ->setComponentName('artmax:calendar')
+                ->setComponentParams([
                     'CACHE_TYPE' => 'A',
                     'CACHE_TIME' => 3600,
                     'EVENTS_COUNT' => 20,
                     'SHOW_FORM' => 'Y',
                     'BRANCH_ID' => $branchId,
-                ],
-            ]);
+                ])
+                ;
         } catch (\Exception $e) {
             return null;
         }

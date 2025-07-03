@@ -141,24 +141,33 @@ class Calendar
     /**
      * Получить события по филиалу
      */
-    public function getEventsByBranch($branchId, $dateFrom = null, $dateTo = null, $userId = null)
+    public function getEventsByBranch($branchId, $dateFrom = null, $dateTo = null, $userId = null, $limit = null)
     {
-        $sql = "SELECT * FROM artmax_calendar_events WHERE BRANCH_ID = ?";
-        $params = [$branchId];
+        // Проверяем, что branchId не null и является числом
+        if (!$branchId || !is_numeric($branchId)) {
+            return [];
+        }
+        
+        $sql = "SELECT * FROM artmax_calendar_events WHERE BRANCH_ID = " . (int)$branchId;
+        
         if ($dateFrom) {
-            $sql .= " AND DATE_FROM >= ?";
-            $params[] = $dateFrom;
+            $sql .= " AND DATE_FROM >= '" . $this->connection->getSqlHelper()->forSql($dateFrom) . "'";
         }
         if ($dateTo) {
-            $sql .= " AND DATE_TO <= ?";
-            $params[] = $dateTo;
+            $sql .= " AND DATE_TO <= '" . $this->connection->getSqlHelper()->forSql($dateTo) . "'";
         }
         if ($userId) {
-            $sql .= " AND USER_ID = ?";
-            $params[] = $userId;
+            $sql .= " AND USER_ID = " . (int)$userId;
         }
+        
         $sql .= " ORDER BY DATE_FROM ASC";
-        $result = $this->connection->query($sql, $params);
+        
+        // Добавляем LIMIT, если он передан
+        if ($limit !== null && $limit > 0) {
+            $sql .= " LIMIT " . (int)$limit;
+        }
+        
+        $result = $this->connection->query($sql);
         return $result->fetchAll();
     }
 
