@@ -210,6 +210,59 @@ $totalDays = 42; // 6 недель * 7 дней
             </div>
         </div>
     <?php endif; ?>
+
+    <!-- Модальное окно для создания расписания -->
+    <div id="scheduleModal" class="modal-overlay" style="display: none;">
+        <div class="modal-content schedule-modal">
+            <div class="modal-header">
+                <h3>Создать расписание</h3>
+                <button type="button" class="modal-close" onclick="closeScheduleModal()">&times;</button>
+            </div>
+            
+            <form id="scheduleForm" class="schedule-form">
+                <div class="form-group">
+                    <label for="schedule-title">Название *</label>
+                    <input type="text" id="schedule-title" name="title" required placeholder="Введите название расписания">
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="schedule-date">Дата *</label>
+                        <input type="date" id="schedule-date" name="date" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="schedule-time">Время *</label>
+                        <input type="time" id="schedule-time" name="time" required>
+                    </div>
+                </div>
+                
+                <div class="form-group checkbox-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="schedule-repeat" name="repeat" onchange="toggleRepeatFields()">
+                        <span class="checkmark"></span>
+                        Повторяемое
+                    </label>
+                </div>
+                
+                <div id="repeat-fields" class="repeat-fields" style="display: none;">
+                    <div class="form-group">
+                        <label for="schedule-frequency">Повторяемость</label>
+                        <select id="schedule-frequency" name="frequency">
+                            <option value="daily">Каждый день</option>
+                            <option value="weekly">Каждую неделю</option>
+                            <option value="monthly">Каждый месяц</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeScheduleModal()">Отмена</button>
+                    <button type="submit" class="btn btn-primary">Создать</button>
+                </div>
+            </form>
+        </div>
+    </div>
 </div>
 
 <script>
@@ -277,6 +330,54 @@ $totalDays = 42; // 6 недель * 7 дней
         }
     }
 
+    function toggleRepeatFields() {
+        const repeatCheckbox = document.getElementById('schedule-repeat');
+        const repeatFields = document.getElementById('repeat-fields');
+        
+        if (repeatCheckbox.checked) {
+            repeatFields.style.display = 'block';
+        } else {
+            repeatFields.style.display = 'none';
+        }
+    }
+
+    function openScheduleModal() {
+        const modal = document.getElementById('scheduleModal');
+        if (modal) {
+            // Устанавливаем текущую дату по умолчанию
+            const today = new Date().toISOString().split('T')[0];
+            const dateInput = document.getElementById('schedule-date');
+            if (dateInput) {
+                dateInput.value = today;
+            }
+
+            // Устанавливаем текущее время по умолчанию
+            const timeInput = document.getElementById('schedule-time');
+            if (timeInput) {
+                const now = new Date();
+                const hours = now.getHours().toString().padStart(2, '0');
+                const minutes = now.getMinutes().toString().padStart(2, '0');
+                timeInput.value = `${hours}:${minutes}`;
+            }
+
+            // Сбрасываем форму
+            document.getElementById('scheduleForm').reset();
+            document.getElementById('schedule-repeat').checked = false;
+            document.getElementById('repeat-fields').style.display = 'none';
+
+            modal.style.display = 'block';
+            document.body.style.overflow = 'hidden';
+        }
+    }
+
+    function closeScheduleModal() {
+        const modal = document.getElementById('scheduleModal');
+        if (modal) {
+            modal.style.display = 'none';
+            document.body.style.overflow = 'auto';
+        }
+    }
+
     // Обработка клика по ячейке календаря
     document.addEventListener('DOMContentLoaded', function() {
         const calendarDays = document.querySelectorAll('.calendar-day');
@@ -297,6 +398,45 @@ $totalDays = 42; // 6 недель * 7 дней
         const modal = document.getElementById('eventFormModal');
         if (event.target === modal) {
             closeEventForm();
+        }
+        
+        const scheduleModal = document.getElementById('scheduleModal');
+        if (event.target === scheduleModal) {
+            closeScheduleModal();
+        }
+    });
+
+    // Обработка отправки формы расписания
+    document.addEventListener('DOMContentLoaded', function() {
+        const scheduleForm = document.getElementById('scheduleForm');
+        if (scheduleForm) {
+            scheduleForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                const formData = new FormData(this);
+                const scheduleData = {
+                    title: formData.get('title'),
+                    date: formData.get('date'),
+                    time: formData.get('time'),
+                    repeat: formData.get('repeat') === 'on',
+                    frequency: formData.get('frequency')
+                };
+
+                console.log('Данные расписания:', scheduleData);
+                
+                // Здесь можно добавить AJAX запрос для сохранения расписания
+                // Пока просто показываем уведомление
+                alert('Расписание успешно создано!');
+                closeScheduleModal();
+            });
+        }
+    });
+
+    // Закрытие по Escape
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            closeEventForm();
+            closeScheduleModal();
         }
     });
 </script> 

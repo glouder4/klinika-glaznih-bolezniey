@@ -78,7 +78,7 @@
 
     function initNavigation() {
         // Обработка вкладок навигации
-        const navTabs = document.querySelectorAll('.nav-tab');
+        /*const navTabs = document.querySelectorAll('.nav-tab');
         navTabs.forEach(tab => {
             tab.addEventListener('click', function() {
                 navTabs.forEach(t => t.classList.remove('active'));
@@ -88,14 +88,13 @@
                 const viewType = this.textContent.trim();
                 console.log('Переключение на вид:', viewType);
             });
-        });
+        });*/
 
-        // Обработка кнопки "СОЗДАТЬ"
+        // Обработка кнопки "СОЗДАТЬ РАСПИСАНИЕ"
         const createBtn = document.querySelector('.btn-create');
         if (createBtn) {
             createBtn.addEventListener('click', function() {
-                const today = new Date().toISOString().split('T')[0];
-                openEventForm(today);
+                openScheduleModal();
             });
         }
     }
@@ -509,10 +508,102 @@
         return branchElement ? branchElement.getAttribute('data-branch-id') : 0;
     }
 
+    // Функции для работы с модальным окном расписания
+    function openScheduleModal() {
+        const modal = document.getElementById('scheduleModal');
+        if (modal) {
+            // Устанавливаем текущую дату по умолчанию
+            const today = new Date().toISOString().split('T')[0];
+            const dateInput = document.getElementById('schedule-date');
+            if (dateInput) {
+                dateInput.value = today;
+            }
+
+            // Устанавливаем текущее время по умолчанию
+            const timeInput = document.getElementById('schedule-time');
+            if (timeInput) {
+                const now = new Date();
+                const hours = now.getHours().toString().padStart(2, '0');
+                const minutes = now.getMinutes().toString().padStart(2, '0');
+                timeInput.value = `${hours}:${minutes}`;
+            }
+
+            // Сбрасываем форму
+            document.getElementById('scheduleForm').reset();
+            document.getElementById('schedule-repeat').checked = false;
+            document.getElementById('repeat-fields').style.display = 'none';
+
+            modal.style.display = 'block';
+            document.body.style.overflow = 'hidden';
+        }
+    }
+
+    function closeScheduleModal() {
+        const modal = document.getElementById('scheduleModal');
+        if (modal) {
+            modal.style.display = 'none';
+            document.body.style.overflow = 'auto';
+        }
+    }
+
+    function toggleRepeatFields() {
+        const repeatCheckbox = document.getElementById('schedule-repeat');
+        const repeatFields = document.getElementById('repeat-fields');
+        
+        if (repeatCheckbox.checked) {
+            repeatFields.style.display = 'block';
+        } else {
+            repeatFields.style.display = 'none';
+        }
+    }
+
+    // Обработка отправки формы расписания
+    document.addEventListener('DOMContentLoaded', function() {
+        const scheduleForm = document.getElementById('scheduleForm');
+        if (scheduleForm) {
+            scheduleForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                const formData = new FormData(this);
+                const scheduleData = {
+                    title: formData.get('title'),
+                    date: formData.get('date'),
+                    time: formData.get('time'),
+                    repeat: formData.get('repeat') === 'on',
+                    frequency: formData.get('frequency')
+                };
+
+                console.log('Данные расписания:', scheduleData);
+                
+                // Здесь можно добавить AJAX запрос для сохранения расписания
+                // Пока просто показываем уведомление
+                showNotification('Расписание успешно создано!', 'success');
+                closeScheduleModal();
+            });
+        }
+
+        // Закрытие модального окна при клике вне его
+        window.addEventListener('click', function(event) {
+            const modal = document.getElementById('scheduleModal');
+            if (event.target === modal) {
+                closeScheduleModal();
+            }
+        });
+
+        // Закрытие по Escape
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                closeScheduleModal();
+            }
+        });
+    });
+
     // Экспорт функций для использования в других скриптах
     window.ArtmaxCalendar = {
         openEventForm: openEventForm,
         closeEventForm: closeEventForm,
+        openScheduleModal: openScheduleModal,
+        closeScheduleModal: closeScheduleModal,
         showNotification: showNotification,
         searchEvents: searchEvents,
         clearSearch: clearSearch
