@@ -2,8 +2,8 @@
 <project version="4">
   <component name="WebServers">
     <option name="servers">
-      <webServer id="a1deee4e-a234-48f1-b6e5-e936f086d2f0" name="kgb-b24-test" url="https://b24test.eyeclinicufa.ru">
-        <fileTransfer rootFolder="/home/bitrix/www" accessType="SFTP" host="194.87.118.157" port="22" sshConfigId="a9d0e506-060a-40b3-ab7f-649a2b849a5b" sshConfig="root@194.87.118.157:22 password">
+      <webServer id="a1deee4e-a234-48f1-b6e5-e936f086d2f0" name="kgb-b24-test" url="http://kgb.amiiya.ru">
+        <fileTransfer rootFolder="/home/g/glouder/kgb.amiiya.ru/public_html" accessType="SFTP" host="glouder.beget.tech" port="22" sshConfigId="a9d0e506-060a-40b3-ab7f-649a2b849a5b" sshConfig="glouder_ftp@glouder.beget.tech:22 password">
           <advancedOptions>
             <advancedOptions dataProtectionLevel="Private" keepAliveTimeout="0" passiveMode="true" shareSSLContext="true" />
           </advancedOptions>

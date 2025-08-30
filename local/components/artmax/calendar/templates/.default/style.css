@@ -448,6 +448,14 @@ input:checked + .toggle-slider:before {
     max-height: 90vh;
     overflow-y: auto;
     box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+
+    margin: auto;
+    margin-top: calc(615px - 425px);
+
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
 }
 
 .modal-header {
@@ -458,6 +466,8 @@ input:checked + .toggle-slider:before {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    box-sizing: border-box;
+    width: 100%;
 }
 
 .modal-header h3 {
@@ -488,6 +498,8 @@ input:checked + .toggle-slider:before {
 
 #add-event-form {
     padding: 20px;
+    width: 100%;
+    box-sizing: border-box;
 }
 
 .form-group {
@@ -502,20 +514,56 @@ input:checked + .toggle-slider:before {
 }
 
 .form-group input,
-.form-group textarea {
+.form-group textarea,
+.form-group select {
     width: 100%;
     padding: 12px;
     border: 2px solid #e9ecef;
     border-radius: 8px;
     font-size: 14px;
     transition: all 0.3s ease;
+    background: white;
+    color: #2c3e50;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    box-sizing: border-box;
+}
+
+/* Специальные стили для полей даты */
+.form-group input[type="date"] {
+    min-height: 44px;
+}
+
+/* Стили для select */
+.form-group select {
+    cursor: pointer;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e");
+    background-position: right 12px center;
+    background-repeat: no-repeat;
+    background-size: 16px;
+    padding-right: 40px;
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+}
+
+.form-group select:focus {
+    outline: none;
+    border-color: #667eea;
+    background: white;
+    box-shadow: 0 0 0 3px rgba(102,126,234,0.1);
 }
 
 .form-group input:focus,
 .form-group textarea:focus {
     outline: none;
     border-color: #667eea;
+    background: white;
     box-shadow: 0 0 0 3px rgba(102,126,234,0.1);
+}
+
+.form-group input::placeholder,
+.form-group textarea::placeholder {
+    color: #95a5a6;
 }
 
 .form-actions {
@@ -535,17 +583,74 @@ input:checked + .toggle-slider:before {
     transition: all 0.3s ease;
     text-decoration: none;
     display: inline-block;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
 }
 
 .btn-primary {
-    background: linear-gradient(45deg, #667eea, #764ba2);
+    background: linear-gradient(45deg, #ff6b6b, #ee5a24);
     color: white;
-    box-shadow: 0 4px 15px rgba(102,126,234,0.4);
+    box-shadow: 0 4px 15px rgba(255,107,107,0.4);
+    min-width: 180px;
 }
 
 .btn-primary:hover {
     transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(102,126,234,0.6);
+    box-shadow: 0 6px 20px rgba(255,107,107,0.6);
+}
+
+.btn-secondary {
+    background: #495057;
+    color: white;
+    box-shadow: 0 4px 15px rgba(73,80,87,0.4);
+    min-width: 120px;
+}
+
+.btn-secondary:hover {
+    background: #343a40;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(73,80,87,0.6);
+}
+
+/* Стили для ошибок валидации */
+.form-group.error input,
+.form-group.error textarea,
+.form-group.error select {
+    border-color: #e74c3c;
+    background: white;
+}
+
+.form-group.error .error-message {
+    color: #e74c3c;
+    font-size: 14px;
+    margin-top: 5px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.error-icon {
+    color: #e74c3c;
+    font-size: 16px;
+}
+
+/* Кастомный скроллбар для модального окна */
+.modal-content::-webkit-scrollbar {
+    width: 8px;
+}
+
+.modal-content::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+
+.modal-content::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 4px;
+}
+
+.modal-content::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
 }
 
 /* Адаптивность */
@@ -555,60 +660,60 @@ input:checked + .toggle-slider:before {
         gap: 15px;
         padding: 15px;
     }
-    
+
     .header-right {
         flex-wrap: wrap;
         justify-content: center;
     }
-    
+
     .search-input {
         width: 200px;
     }
-    
+
     .calendar-navigation {
         flex-direction: column;
         gap: 15px;
         padding: 15px;
     }
-    
+
     .nav-tabs {
         flex-wrap: wrap;
         justify-content: center;
     }
-    
+
     .nav-controls {
         flex-direction: column;
         gap: 15px;
     }
-    
+
     .calendar-main {
         padding: 15px;
     }
-    
+
     .calendar-toolbar {
         flex-direction: column;
         gap: 15px;
         text-align: center;
     }
-    
+
     .calendar-day {
         min-height: 80px;
         padding: 5px;
     }
-    
+
     .day-number {
         font-size: 14px;
     }
-    
+
     .calendar-event {
         font-size: 10px;
         padding: 2px 4px;
     }
-    
+
     .form-actions {
         flex-direction: column;
     }
-    
+
     .btn {
         width: 100%;
     }
@@ -638,4 +743,4 @@ input:checked + .toggle-slider:before {
     transform: scale(1.02);
     z-index: 1;
     box-shadow: 0 4px 20px rgba(0,0,0,0.1);
-} 
+}

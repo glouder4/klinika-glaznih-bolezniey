@@ -42,10 +42,10 @@ $APPLICATION->SetTitle('Календарь событий - ' . $branch['NAME'])
 $APPLICATION->SetPageProperty('title', 'Календарь событий - ' . $branch['NAME']);
 
 // Подключаем стили
-$APPLICATION->SetAdditionalCSS('/local/css/artmax.calendar/style.css');
+$APPLICATION->SetAdditionalCSS('/local/components/artmax/calendar/templates/.default/style.css');
 
 // Подключаем скрипты
-$APPLICATION->AddHeadScript('/local/js/artmax-calendar/script.js');
+$APPLICATION->AddHeadScript('/local/components/artmax/calendar/templates/.default/script.js');
 ?>
 
 <div class="calendar-page">

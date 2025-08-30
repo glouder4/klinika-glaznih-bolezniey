@@ -15,8 +15,8 @@ class EventHandlers
 
         // Подключение CSS и JS файлов
         $asset = \Bitrix\Main\Page\Asset::getInstance();
-        $asset->addCss('/local/css/artmax.calendar/style.css');
-        $asset->addJs('/local/js/artmax.calendar/script.js');
+        //$asset->addCss('/local/components/artmax/calendar/templates/.default/style.css');
+        //$asset->addJs('/local/components/artmax/calendar/templates/.default/script.js');
     }
 
     public static function onBeforeEventAdd(&$arFields)

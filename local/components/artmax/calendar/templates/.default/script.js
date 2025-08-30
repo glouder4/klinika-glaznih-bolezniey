@@ -13,32 +13,32 @@
     function initCalendar() {
         // Инициализация календарных ячеек
         initCalendarCells();
-        
+
         // Инициализация навигации
         initNavigation();
-        
+
         // Инициализация поиска
         initSearch();
-        
+
         // Инициализация переключателей
         initToggles();
-        
+
         // Инициализация модального окна
         initModal();
-        
+
         // Автозаполнение даты окончания
         initDateAutoFill();
-        
+
         // Валидация формы
         initFormValidation();
-        
+
         // Анимации
         initAnimations();
     }
 
     function initCalendarCells() {
         const calendarDays = document.querySelectorAll('.calendar-day');
-        
+
         calendarDays.forEach(day => {
             // Добавляем обработчик клика для открытия формы
             day.addEventListener('click', function(e) {
@@ -46,7 +46,7 @@
                 if (e.target.closest('.calendar-event')) {
                     return;
                 }
-                
+
                 const date = this.getAttribute('data-date');
                 if (date) {
                     openEventForm(date);
@@ -83,7 +83,7 @@
             tab.addEventListener('click', function() {
                 navTabs.forEach(t => t.classList.remove('active'));
                 this.classList.add('active');
-                
+
                 // Здесь можно добавить логику переключения между видами
                 const viewType = this.textContent.trim();
                 console.log('Переключение на вид:', viewType);
@@ -104,7 +104,7 @@
         const searchInput = document.querySelector('.search-input');
         if (searchInput) {
             let searchTimeout;
-            
+
             searchInput.addEventListener('input', function() {
                 clearTimeout(searchTimeout);
                 searchTimeout = setTimeout(() => {
@@ -135,7 +135,7 @@
             toggleSwitch.addEventListener('change', function() {
                 const isEnabled = this.checked;
                 console.log('Свободные слоты:', isEnabled ? 'включены' : 'выключены');
-                
+
                 // Здесь можно добавить логику для показа/скрытия свободных слотов
                 if (isEnabled) {
                     showFreeSlots();
@@ -164,18 +164,22 @@
     }
 
     function initDateAutoFill() {
-        const dateFromInput = document.getElementById('event-date-from');
-        const dateToInput = document.getElementById('event-date-to');
+        const dateInput = document.getElementById('event-date');
+        const timeSelect = document.getElementById('event-time');
+        const durationSelect = document.getElementById('event-duration');
 
-        if (dateFromInput && dateToInput) {
-            dateFromInput.addEventListener('change', function() {
-                const dateFrom = new Date(this.value);
-                if (dateFrom && !dateToInput.value) {
-                    // Устанавливаем дату окончания на час позже
-                    const dateTo = new Date(dateFrom.getTime() + 60 * 60 * 1000);
-                    dateToInput.value = dateTo.toISOString().slice(0, 16);
-                }
-            });
+        if (dateInput && timeSelect) {
+            // Устанавливаем текущую дату по умолчанию
+            const today = new Date().toISOString().split('T')[0];
+            dateInput.value = today;
+            
+            // Устанавливаем время по умолчанию (9:00)
+            timeSelect.value = '09:00';
+            
+            // Устанавливаем длительность по умолчанию (30 минут)
+            if (durationSelect) {
+                durationSelect.value = '30';
+            }
         }
     }
 
@@ -183,6 +187,27 @@
         const form = document.getElementById('add-event-form');
         if (form) {
             form.addEventListener('submit', validateAndSubmitForm);
+            
+            // Добавляем обработчики для очистки ошибок при вводе
+            const titleInput = document.getElementById('event-title');
+            if (titleInput) {
+                titleInput.addEventListener('input', () => clearFieldError('title-group'));
+            }
+            
+            const dateInput = document.getElementById('event-date');
+            if (dateInput) {
+                dateInput.addEventListener('input', () => clearFieldError('date-group'));
+            }
+            
+            const timeSelect = document.getElementById('event-time');
+            if (timeSelect) {
+                timeSelect.addEventListener('change', () => clearFieldError('time-group'));
+            }
+            
+            const durationSelect = document.getElementById('event-duration');
+            if (durationSelect) {
+                durationSelect.addEventListener('change', () => clearFieldError('duration-group'));
+            }
         }
     }
 
@@ -192,7 +217,7 @@
         calendarDays.forEach((day, index) => {
             day.style.opacity = '0';
             day.style.transform = 'translateY(20px)';
-            
+
             setTimeout(() => {
                 day.style.transition = 'all 0.3s ease';
                 day.style.opacity = '1';
@@ -206,18 +231,23 @@
         const modal = document.getElementById('eventFormModal');
         if (modal) {
             // Устанавливаем выбранную дату
-            const dateFromInput = document.getElementById('event-date-from');
-            if (dateFromInput) {
-                dateFromInput.value = date + 'T09:00';
+            const dateInput = document.getElementById('event-date');
+            if (dateInput) {
+                dateInput.value = date;
             }
-            
-            const dateToInput = document.getElementById('event-date-to');
-            if (dateToInput) {
-                dateToInput.value = date + 'T10:00';
+
+            const timeSelect = document.getElementById('event-time');
+            if (timeSelect) {
+                timeSelect.value = '09:00';
             }
-            
+
+            const durationSelect = document.getElementById('event-duration');
+            if (durationSelect) {
+                durationSelect.value = '30';
+            }
+
             modal.style.display = 'block';
-            
+
             // Фокус на первое поле
             setTimeout(() => {
                 const titleInput = document.getElementById('event-title');
@@ -232,7 +262,7 @@
         const modal = document.getElementById('eventFormModal');
         if (modal) {
             modal.style.display = 'none';
-            
+
             // Сбрасываем форму
             const form = document.getElementById('add-event-form');
             if (form) {
@@ -244,54 +274,41 @@
     function validateAndSubmitForm(event) {
         event.preventDefault();
         
+        // Сбрасываем все ошибки
+        clearAllErrors();
+        
         const title = document.getElementById('event-title');
-        const dateFrom = document.getElementById('event-date-from');
-        const dateTo = document.getElementById('event-date-to');
+        const date = document.getElementById('event-date');
+        const timeSelect = document.getElementById('event-time');
+        const duration = document.getElementById('event-duration');
 
         let isValid = true;
-        let errorMessage = '';
 
         // Проверка названия
         if (!title.value.trim()) {
             isValid = false;
-            errorMessage += 'Название события обязательно для заполнения\n';
-            highlightField(title, true);
-        } else {
-            highlightField(title, false);
+            showFieldError('title-group', 'Заполните это поле.');
         }
 
-        // Проверка дат
-        if (!dateFrom.value) {
+        // Проверка даты
+        if (!date.value) {
             isValid = false;
-            errorMessage += 'Дата начала обязательна для заполнения\n';
-            highlightField(dateFrom, true);
-        } else {
-            highlightField(dateFrom, false);
+            showFieldError('date-group', 'Заполните это поле.');
         }
 
-        if (!dateTo.value) {
+        // Проверка времени
+        if (!timeSelect.value) {
             isValid = false;
-            errorMessage += 'Дата окончания обязательна для заполнения\n';
-            highlightField(dateTo, true);
-        } else {
-            highlightField(dateTo, false);
+            showFieldError('time-group', 'Выберите время приема.');
         }
 
-        // Проверка логики дат
-        if (dateFrom.value && dateTo.value) {
-            const fromDate = new Date(dateFrom.value);
-            const toDate = new Date(dateTo.value);
-
-            if (fromDate >= toDate) {
-                isValid = false;
-                errorMessage += 'Дата окончания должна быть позже даты начала\n';
-                highlightField(dateFrom, true);
-                highlightField(dateTo, true);
-            }
+        // Проверка длительности
+        if (!duration.value) {
+            isValid = false;
+            showFieldError('duration-group', 'Выберите длительность приема.');
         }
 
         if (!isValid) {
-            showNotification(errorMessage, 'error');
             return;
         }
 
@@ -299,23 +316,69 @@
         submitEventForm();
     }
 
+    function showFieldError(groupId, message) {
+        const group = document.getElementById(groupId);
+        if (group) {
+            group.classList.add('error');
+            const errorMessage = group.querySelector('.error-message');
+            if (errorMessage) {
+                errorMessage.querySelector('span:last-child').textContent = message;
+                errorMessage.style.display = 'flex';
+            }
+        }
+    }
+
+    function clearAllErrors() {
+        const errorGroups = document.querySelectorAll('.form-group.error');
+        errorGroups.forEach(group => {
+            group.classList.remove('error');
+            const errorMessage = group.querySelector('.error-message');
+            if (errorMessage) {
+                errorMessage.style.display = 'none';
+            }
+        });
+    }
+
+    function clearFieldError(fieldId) {
+        const field = document.getElementById(fieldId);
+        if (field) {
+            field.classList.remove('error');
+            const errorMessage = field.querySelector('.error-message');
+            if (errorMessage) {
+                errorMessage.style.display = 'none';
+            }
+        }
+    }
+
     function submitEventForm() {
         const form = document.getElementById('add-event-form');
         const formData = new FormData(form);
-        
+
         // Показываем индикатор загрузки
         const submitBtn = form.querySelector('button[type="submit"]');
         const originalText = submitBtn.textContent;
         submitBtn.textContent = 'Добавление...';
         submitBtn.disabled = true;
+
+        // Формируем дату и время начала
+        const dateValue = formData.get('date');
+        const timeValue = formData.get('time');
+        const durationValue = formData.get('duration');
+        
+        // Создаем объект Date для начала события
+        const startDateTime = new Date(dateValue + 'T' + timeValue);
+        
+        // Создаем объект Date для окончания события (добавляем длительность)
+        const endDateTime = new Date(startDateTime.getTime() + parseInt(durationValue) * 60 * 1000);
         
         BX.ajax.runComponentAction('artmax:calendar', 'addEvent', {
             mode: 'class',
             data: {
                 title: formData.get('title'),
                 description: formData.get('description'),
-                dateFrom: formData.get('dateFrom'),
-                dateTo: formData.get('dateTo'),
+                dateFrom: startDateTime.toISOString(),
+                dateTo: endDateTime.toISOString(),
+                duration: durationValue,
                 branchId: getBranchId()
             }
         }).then(function(response) {
@@ -323,7 +386,7 @@
                 showNotification('Событие добавлено успешно!', 'success');
                 closeEventForm();
                 form.reset();
-                
+
                 // Перезагружаем страницу для отображения нового события
                 setTimeout(() => {
                     location.reload();
@@ -340,15 +403,7 @@
         });
     }
 
-    function highlightField(field, isError) {
-        if (isError) {
-            field.style.borderColor = '#e74c3c';
-            field.style.boxShadow = '0 0 0 3px rgba(231,76,60,0.1)';
-        } else {
-            field.style.borderColor = '';
-            field.style.boxShadow = '';
-        }
-    }
+
 
     function showNotification(message, type) {
         const notification = document.createElement('div');
@@ -397,14 +452,14 @@
 
     function searchEvents(query) {
         console.log('Поиск событий:', query);
-        
+
         // Здесь можно добавить AJAX запрос для поиска событий
         // Пока просто подсвечиваем ячейки с событиями
         const calendarDays = document.querySelectorAll('.calendar-day');
         calendarDays.forEach(day => {
             const events = day.querySelectorAll('.calendar-event');
             let hasMatch = false;
-            
+
             events.forEach(event => {
                 const title = event.querySelector('.event-title').textContent.toLowerCase();
                 if (title.includes(query.toLowerCase())) {
@@ -414,7 +469,7 @@
                     event.style.background = '#27ae60';
                 }
             });
-            
+
             if (hasMatch) {
                 day.style.background = '#fff3cd';
             }
@@ -463,4 +518,4 @@
         clearSearch: clearSearch
     };
 
-})(); 
+})();
