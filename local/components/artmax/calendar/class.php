@@ -14,16 +14,10 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
     {
         // Проверяем, является ли это AJAX запросом
         if ($this->isAjaxRequest()) {
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "EXECUTE: AJAX request detected, calling handleAjaxRequest()\n\n", 
-                FILE_APPEND | LOCK_EX);
             $this->handleAjaxRequest();
             // Принудительно завершаем выполнение для AJAX запросов
             die();
         } else {
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "EXECUTE: Not an AJAX request, continuing with normal execution\n\n", 
-                FILE_APPEND | LOCK_EX);
         }
 
         // Проверяем существование модуля
@@ -51,6 +45,16 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
             $calendarObj = new \Artmax\Calendar\Calendar();
             $events = $calendarObj->getEventsByBranch($branchId, null, null, null, $eventsCount);
 
+            // Группируем события по датам для отображения в календаре
+            $eventsByDate = [];
+            foreach ($events as $event) {
+                $dateKey = date('Y-m-d', strtotime($this->convertRussianDateToStandard($event['DATE_FROM'])));
+                if (!isset($eventsByDate[$dateKey])) {
+                    $eventsByDate[$dateKey] = [];
+                }
+                $eventsByDate[$dateKey][] = $event;
+            }
+
             // Получаем список всех филиалов для навигации
             $allBranches = $branchObj->getBranches();
         } catch (Exception $e) {
@@ -62,6 +66,7 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
         $this->arResult = [
             'BRANCH' => $branch,
             'EVENTS' => $events,
+            'EVENTS_BY_DATE' => $eventsByDate,
             'ALL_BRANCHES' => $allBranches,
             'SHOW_FORM' => $showForm,
             'CURRENT_USER_ID' => $GLOBALS['USER'] ? $GLOBALS['USER']->GetID() : 0,
@@ -86,17 +91,9 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
             'POST_data' => $_POST
         ];
         
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-            json_encode($logData, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) . "\n\n", 
-            FILE_APPEND | LOCK_EX);
-        
         $isAjax = isset($_POST['action']) || 
                   (isset($_SERVER['HTTP_X_REQUESTED_WITH']) && 
                    strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest');
-        
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-            "RESULT: isAjaxRequest() returned: " . ($isAjax ? 'TRUE' : 'FALSE') . "\n\n", 
-            FILE_APPEND | LOCK_EX);
         
         return $isAjax;
     }
@@ -106,43 +103,20 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
      */
     private function handleAjaxRequest()
     {
-        // Включаем обработку ошибок
-        set_error_handler(function($severity, $message, $file, $line) {
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "ERROR_HANDLER: Severity=$severity, Message=$message, File=$file, Line=$line\n", 
-                FILE_APPEND | LOCK_EX);
-        });
-        
-        // Включаем обработку исключений
-        set_exception_handler(function($exception) {
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "EXCEPTION_HANDLER: " . $exception->getMessage() . " in " . $exception->getFile() . ":" . $exception->getLine() . "\n", 
-                FILE_APPEND | LOCK_EX);
-        });
-        
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-            "HANDLE_AJAX: Starting handleAjaxRequest, action = " . ($_POST['action'] ?? 'NOT SET') . "\n", 
-            FILE_APPEND | LOCK_EX);
         
         $action = $_POST['action'] ?? '';
 
         switch ($action) {
             case 'addEvent':
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                    "HANDLE_AJAX: Processing addEvent case\n", 
-                    FILE_APPEND | LOCK_EX);
                 
                 $result = $this->addEventAction(
                     $_POST['title'] ?? '',
                     $_POST['description'] ?? '',
                     $_POST['dateFrom'] ?? '',
                     $_POST['dateTo'] ?? '',
-                    (int)($_POST['branchId'] ?? 1)
+                    (int)($_POST['branchId'] ?? 1),
+                    $_POST['eventColor'] ?? '#3498db'
                 );
-                
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                    "HANDLE_AJAX: addEventAction result = " . json_encode($result) . "\n", 
-                    FILE_APPEND | LOCK_EX);
                 break;
                 
             case 'addSchedule':
@@ -172,6 +146,24 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                 );
                 break;
                 
+            case 'getEvent':
+                $result = $this->getEventAction(
+                    (int)($_POST['eventId'] ?? 0)
+                );
+                break;
+                
+            case 'updateEvent':
+                $result = $this->updateEventAction(
+                    (int)($_POST['eventId'] ?? 0),
+                    $_POST['title'] ?? '',
+                    $_POST['description'] ?? '',
+                    $_POST['dateFrom'] ?? '',
+                    $_POST['dateTo'] ?? '',
+                    $_POST['eventColor'] ?? '#3498db',
+                    (int)($_POST['branchId'] ?? 1)
+                );
+                break;
+                
             case 'getEvents':
                 $result = $this->getEventsAction(
                     (int)($_POST['branchId'] ?? 1),
@@ -183,27 +175,11 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
             default:
                 $result = ['success' => false, 'error' => 'Неизвестное действие'];
         }
-        
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-            "HANDLE_AJAX: About to send JSON response: " . json_encode($result) . "\n", 
-            FILE_APPEND | LOCK_EX);
-        
-        // Отправляем JSON ответ
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-            "HANDLE_AJAX: Setting Content-Type header\n", 
-            FILE_APPEND | LOCK_EX);
+
         
         header('Content-Type: application/json');
         
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-            "HANDLE_AJAX: Echoing JSON response\n", 
-            FILE_APPEND | LOCK_EX);
-        
         echo json_encode($result);
-        
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-            "HANDLE_AJAX: Calling exit()\n", 
-            FILE_APPEND | LOCK_EX);
         
         exit;
         die();
@@ -214,85 +190,36 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
     /**
      * Добавление события
      */
-    public function addEventAction($title, $description, $dateFrom, $dateTo, $branchId)
+    public function addEventAction($title, $description, $dateFrom, $dateTo, $branchId, $eventColor = '#3498db')
     {
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-            "ADD_EVENT: Starting addEventAction with params: " . json_encode([
-                'title' => $title,
-                'description' => $description,
-                'dateFrom' => $dateFrom,
-                'dateTo' => $dateTo,
-                'branchId' => $branchId
-            ]) . "\n", 
-            FILE_APPEND | LOCK_EX);
         
         if (!$GLOBALS['USER'] || !$GLOBALS['USER']->IsAuthorized()) {
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "ADD_EVENT: User not authorized\n", 
-                FILE_APPEND | LOCK_EX);
             return ['success' => false, 'error' => 'Необходима авторизация'];
         }
 
         try {
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "ADD_EVENT: Including module artmax.calendar\n", 
-                FILE_APPEND | LOCK_EX);
             
             if (!CModule::IncludeModule('artmax.calendar')) {
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                    "ADD_EVENT: Module not found\n", 
-                    FILE_APPEND | LOCK_EX);
                 return ['success' => false, 'error' => 'Модуль artmax.calendar не установлен'];
             }
             
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "ADD_EVENT: Creating Calendar object\n", 
-                FILE_APPEND | LOCK_EX);
-            
             $calendarObj = new \Artmax\Calendar\Calendar();
             $userId = $GLOBALS['USER']->GetID();
-            
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "ADD_EVENT: User ID = " . $userId . "\n", 
-                FILE_APPEND | LOCK_EX);
 
             // Проверяем доступность времени
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "ADD_EVENT: Checking time availability\n", 
-                FILE_APPEND | LOCK_EX);
             
             if (!$calendarObj->isTimeAvailable($dateFrom, $dateTo, $userId)) {
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                    "ADD_EVENT: Time not available\n", 
-                    FILE_APPEND | LOCK_EX);
                 return ['success' => false, 'error' => 'Время уже занято'];
             }
-
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "ADD_EVENT: Adding event to database\n", 
-                FILE_APPEND | LOCK_EX);
             
-            $eventId = $calendarObj->addEvent($title, $description, $dateFrom, $dateTo, $userId, $branchId, '#3498db');
-            
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "ADD_EVENT: Event ID returned = " . ($eventId ?: 'FALSE') . "\n", 
-                FILE_APPEND | LOCK_EX);
+            $eventId = $calendarObj->addEvent($title, $description, $dateFrom, $dateTo, $userId, $branchId, $eventColor);
 
             if ($eventId) {
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                    "ADD_EVENT: Success, returning eventId = " . $eventId . "\n", 
-                    FILE_APPEND | LOCK_EX);
                 return ['success' => true, 'eventId' => $eventId];
             } else {
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                    "ADD_EVENT: Failed to add event\n", 
-                    FILE_APPEND | LOCK_EX);
                 return ['success' => false, 'error' => 'Ошибка добавления события'];
             }
         } catch (\Exception $e) {
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "ADD_EVENT: Exception caught: " . $e->getMessage() . "\n", 
-                FILE_APPEND | LOCK_EX);
             return ['success' => false, 'error' => $e->getMessage()];
         }
     }
@@ -487,6 +414,84 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
     }
 
     /**
+     * Получение события по ID
+     */
+    public function getEventAction($eventId)
+    {
+        if (!$GLOBALS['USER'] || !$GLOBALS['USER']->IsAuthorized()) {
+            return ['success' => false, 'error' => 'Необходима авторизация'];
+        }
+
+        try {
+            if (!CModule::IncludeModule('artmax.calendar')) {
+                return ['success' => false, 'error' => 'Модуль artmax.calendar не установлен'];
+            }
+            
+            $calendarObj = new \Artmax\Calendar\Calendar();
+            $event = $calendarObj->getEvent($eventId);
+
+            if (!$event) {
+                return ['success' => false, 'error' => 'Событие не найдено'];
+            }
+
+            // Проверяем права на просмотр (только автор события)
+            if ($event['USER_ID'] != $GLOBALS['USER']->GetID()) {
+                return ['success' => false, 'error' => 'Нет прав на просмотр'];
+            }
+
+            return ['success' => true, 'event' => $event];
+        } catch (\Exception $e) {
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+
+    /**
+     * Обновление события
+     */
+    public function updateEventAction($eventId, $title, $description, $dateFrom, $dateTo, $eventColor, $branchId)
+    {
+        if (!$GLOBALS['USER'] || !$GLOBALS['USER']->IsAuthorized()) {
+            return ['success' => false, 'error' => 'Необходима авторизация'];
+        }
+
+        try {
+            if (!CModule::IncludeModule('artmax.calendar')) {
+                return ['success' => false, 'error' => 'Модуль artmax.calendar не установлен'];
+            }
+            
+            $calendarObj = new \Artmax\Calendar\Calendar();
+            $userId = $GLOBALS['USER']->GetID();
+
+            // Получаем существующее событие для проверки прав
+            $existingEvent = $calendarObj->getEvent($eventId);
+            if (!$existingEvent) {
+                return ['success' => false, 'error' => 'Событие не найдено'];
+            }
+
+            // Проверяем права на редактирование (только автор события)
+            if ($existingEvent['USER_ID'] != $userId) {
+                return ['success' => false, 'error' => 'Нет прав на редактирование'];
+            }
+
+            // Проверяем доступность времени (исключая текущее событие)
+            if (!$calendarObj->isTimeAvailable($dateFrom, $dateTo, $userId, $eventId)) {
+                return ['success' => false, 'error' => 'Время уже занято'];
+            }
+
+            // Обновляем событие
+            $result = $calendarObj->updateEvent($eventId, $title, $description, $dateFrom, $dateTo, $eventColor, $branchId);
+
+            if ($result) {
+                return ['success' => true];
+            } else {
+                return ['success' => false, 'error' => 'Ошибка обновления события'];
+            }
+        } catch (\Exception $e) {
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+
+    /**
      * Получение следующего дня недели для еженедельного повторения
      */
     private function getNextWeekday($startDate, $weekdays)
@@ -503,5 +508,44 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
         }
         
         return null;
+    }
+
+    /**
+     * Конвертирует дату из российского формата (день.месяц.год) в стандартный (год-месяц-день)
+     * @param string $dateString Дата в формате "04.08.2025 09:00:00"
+     * @return string Дата в формате "2025-08-04 09:00:00"
+     */
+    private function convertRussianDateToStandard($dateString)
+    {
+        // Проверяем, что строка не пустая
+        if (empty($dateString)) {
+            return $dateString;
+        }
+
+        // Если дата уже в стандартном формате, возвращаем как есть
+        if (preg_match('/^\d{4}-\d{2}-\d{2}/', $dateString)) {
+            return $dateString;
+        }
+
+        // Парсим российский формат: день.месяц.год час:минута:секунда
+        if (preg_match('/^(\d{1,2})\.(\d{1,2})\.(\d{4})\s+(\d{1,2}):(\d{1,2}):(\d{1,2})$/', $dateString, $matches)) {
+            $day = str_pad($matches[1], 2, '0', STR_PAD_LEFT);
+            $month = str_pad($matches[2], 2, '0', STR_PAD_LEFT);
+            $year = $matches[3];
+            $hour = str_pad($matches[4], 2, '0', STR_PAD_LEFT);
+            $minute = str_pad($matches[5], 2, '0', STR_PAD_LEFT);
+            $second = str_pad($matches[6], 2, '0', STR_PAD_LEFT);
+            
+            return "{$year}-{$month}-{$day} {$hour}:{$minute}:{$second}";
+        }
+
+        // Если формат не распознан, пытаемся использовать strtotime как fallback
+        $timestamp = strtotime($dateString);
+        if ($timestamp !== false) {
+            return date('Y-m-d H:i:s', $timestamp);
+        }
+
+        // Если ничего не получилось, возвращаем исходную строку
+        return $dateString;
     }
 }

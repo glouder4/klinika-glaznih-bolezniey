@@ -99,6 +99,23 @@
     transition: all 0.3s ease;
 }
 
+.btn-timezone {
+    background: rgba(155, 89, 182, 0.8);
+    border: 1px solid rgba(155, 89, 182, 0.5);
+    color: white;
+    padding: 10px 20px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-size: 14px;
+}
+
+.btn-timezone:hover {
+    background: rgba(155, 89, 182, 1);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(155, 89, 182, 0.3);
+}
+
 .btn-secondary:hover {
     background: rgba(255,255,255,0.2);
 }
@@ -638,4 +655,12 @@ input:checked + .toggle-slider:before {
     transform: scale(1.02);
     z-index: 1;
     box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+}
+
+/* Адаптивность для настроек филиала */
+@media (max-width: 768px) {
+    .header-right .btn-timezone {
+        width: 100%;
+        text-align: center;
+    }
 } 

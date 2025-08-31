@@ -1,32 +1,76 @@
-{
-    "timestamp": "2025-08-31 18:27:31",
-    "POST_action": "addEvent",
-    "HTTP_X_REQUESTED_WITH": "XMLHttpRequest",
-    "REQUEST_METHOD": "POST",
-    "POST_data": {
-        "action": "addEvent",
-        "title": "555",
-        "description": "55",
-        "dateFrom": "2025-08-04T04:00:00.000Z",
-        "dateTo": "2025-08-04T04:30:00.000Z",
-        "branchId": "1"
-    }
-}
+=== INCOMING AJAX REQUEST ===
+Action: getEvent
+POST data: {"action":"getEvent","eventId":"12"}
+Calendar object created successfully
+=== AJAX GET_EVENT ===
+AJAX: Requesting event ID: 12
+=== GET_EVENT DEBUG ===
+GET_EVENT: Requesting event ID: 12
+GET_EVENT: SQL Query: SELECT * FROM artmax_calendar_events WHERE ID = 12
+GET_EVENT: Event found:
+  - DATE_FROM: 04.08.2025 12:00:00 (тип: object)
+  - DATE_TO: 04.08.2025 12:30:00 (тип: object)
+GET_EVENT: Time converted to branch timezone:
+  - Branch timezone: Asia/Yekaterinburg
+  - DATE_FROM converted: 04.08.2025 12:00:00
+=== END GET_EVENT DEBUG ===
+AJAX: getEvent result: {"ID":"12","TITLE":"111","DESCRIPTION":"111","DATE_FROM":"04.08.2025 12:00:00","DATE_TO":"04.08.2025 12:30:00","USER_ID":"1","BRANCH_ID":"1","EVENT_COLOR":"#3498db","CREATED_AT":{},"UPDATED_AT":{}}
+AJAX: DATE_FROM type: string
+AJAX: DATE_TO type: string
+AJAX: DATE_FROM value: 04.08.2025 12:00:00
+AJAX: DATE_TO value: 04.08.2025 12:30:00
+AJAX: Event found, returning success
+AJAX: Final event data before JSON: Array
+(
+    [ID] => 12
+    [TITLE] => 111
+    [DESCRIPTION] => 111
+    [DATE_FROM] => 04.08.2025 12:00:00
+    [DATE_TO] => 04.08.2025 12:30:00
+    [USER_ID] => 1
+    [BRANCH_ID] => 1
+    [EVENT_COLOR] => #3498db
+    [CREATED_AT] => Bitrix\Main\Type\DateTime Object
+        (
+            [value:protected] => DateTime Object
+                (
+                    [date] => 2025-08-31 22:30:55.000000
+                    [timezone_type] => 3
+                    [timezone] => Europe/Moscow
+                )
 
-RESULT: isAjaxRequest() returned: TRUE
+            [userTimeEnabled:protected] => 1
+        )
 
-EXECUTE: AJAX request detected, calling handleAjaxRequest()
+    [UPDATED_AT] => Bitrix\Main\Type\DateTime Object
+        (
+            [value:protected] => DateTime Object
+                (
+                    [date] => 2025-08-31 22:30:55.000000
+                    [timezone_type] => 3
+                    [timezone] => Europe/Moscow
+                )
 
-HANDLE_AJAX: Starting handleAjaxRequest, action = addEvent
-HANDLE_AJAX: Processing addEvent case
-ADD_EVENT: Starting addEventAction with params: {"title":"555","description":"55","dateFrom":"2025-08-04T04:00:00.000Z","dateTo":"2025-08-04T04:30:00.000Z","branchId":1}
-ADD_EVENT: Including module artmax.calendar
-ADD_EVENT: Creating Calendar object
-ADD_EVENT: User ID = 1
-ADD_EVENT: Checking time availability
-ADD_EVENT: Time not available
-HANDLE_AJAX: addEventAction result = {"success":false,"error":"\u0412\u0440\u0435\u043c\u044f \u0443\u0436\u0435 \u0437\u0430\u043d\u044f\u0442\u043e"}
-HANDLE_AJAX: About to send JSON response: {"success":false,"error":"\u0412\u0440\u0435\u043c\u044f \u0443\u0436\u0435 \u0437\u0430\u043d\u044f\u0442\u043e"}
-HANDLE_AJAX: Setting Content-Type header
-HANDLE_AJAX: Echoing JSON response
-HANDLE_AJAX: Calling exit()
+            [userTimeEnabled:protected] => 1
+        )
+
+)
+
+AJAX: Final DATE_FROM type: string
+AJAX: Final DATE_TO type: string
+AJAX: JSON result: {"success":true,"event":{"ID":"12","TITLE":"111","DESCRIPTION":"111","DATE_FROM":"04.08.2025 12:00:00","DATE_TO":"04.08.2025 12:30:00","USER_ID":"1","BRANCH_ID":"1","EVENT_COLOR":"#3498db","CREATED_AT":{},"UPDATED_AT":{}}}
+AJAX: JSON length: 222
+AJAX: JSON first 500 chars: {"success":true,"event":{"ID":"12","TITLE":"111","DESCRIPTION":"111","DATE_FROM":"04.08.2025 12:00:00","DATE_TO":"04.08.2025 12:30:00","USER_ID":"1","BRANCH_ID":"1","EVENT_COLOR":"#3498db","CREATED_AT":{},"UPDATED_AT":{}}}
+AJAX: JSON last 500 chars: {"success":true,"event":{"ID":"12","TITLE":"111","DESCRIPTION":"111","DATE_FROM":"04.08.2025 12:00:00","DATE_TO":"04.08.2025 12:30:00","USER_ID":"1","BRANCH_ID":"1","EVENT_COLOR":"#3498db","CREATED_AT":{},"UPDATED_AT":{}}}
+AJAX: JSON contains DATE_FROM: YES
+AJAX: JSON contains DATE_TO: YES
+AJAX: JSON contains empty objects: YES
+AJAX: JSON contains quotes around DATE_FROM: YES
+AJAX: JSON contains quotes around DATE_TO: YES
+AJAX: JSON contains quotes around DATE_FROM value: YES
+AJAX: JSON contains quotes around DATE_TO value: YES
+AJAX: JSON contains quotes around DATE_FROM value: YES
+AJAX: JSON contains quotes around DATE_TO value: YES
+AJAX: JSON contains quotes around DATE_FROM value: YES
+AJAX: JSON contains quotes around DATE_TO value: YES
+AJAX: JSON contains quotes around DATE_FROM value: YES

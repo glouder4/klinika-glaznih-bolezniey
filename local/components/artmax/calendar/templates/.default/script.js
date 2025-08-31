@@ -155,12 +155,19 @@
             if (event.target === modal) {
                 closeEventForm();
             }
+            
+            // Закрытие модального окна редактирования
+            const editModal = document.getElementById('editEventModal');
+            if (event.target === editModal) {
+                closeEditEventModal();
+            }
         });
 
         // Закрытие по Escape
         document.addEventListener('keydown', function(e) {
             if (e.key === 'Escape') {
                 closeEventForm();
+                closeEditEventModal();
             }
         });
     }
@@ -172,8 +179,13 @@
 
         if (dateInput && timeSelect) {
             // Устанавливаем текущую дату по умолчанию
-            const today = new Date().toISOString().split('T')[0];
-            dateInput.value = today;
+            const today = new Date();
+            // Форматируем дату в локальном формате, избегая проблем с часовыми поясами
+            const year = today.getFullYear();
+            const month = String(today.getMonth() + 1).padStart(2, '0');
+            const day = String(today.getDate()).padStart(2, '0');
+            const todayString = `${year}-${month}-${day}`;
+            dateInput.value = todayString;
             
             // Устанавливаем время по умолчанию (9:00)
             timeSelect.value = '09:00';
@@ -209,6 +221,33 @@
             const durationSelect = document.getElementById('event-duration');
             if (durationSelect) {
                 durationSelect.addEventListener('change', () => clearFieldError('duration-group'));
+            }
+        }
+
+        // Инициализация формы редактирования
+        const editForm = document.getElementById('edit-event-form');
+        if (editForm) {
+            editForm.addEventListener('submit', validateAndSubmitEditForm);
+            
+            // Добавляем обработчики для очистки ошибок при вводе
+            const editTitleInput = document.getElementById('edit-event-title');
+            if (editTitleInput) {
+                editTitleInput.addEventListener('input', () => clearFieldError('edit-title-group'));
+            }
+            
+            const editDateInput = document.getElementById('edit-event-date');
+            if (editDateInput) {
+                editDateInput.addEventListener('input', () => clearFieldError('edit-date-group'));
+            }
+            
+            const editTimeSelect = document.getElementById('edit-event-time');
+            if (editTimeSelect) {
+                editTimeSelect.addEventListener('change', () => clearFieldError('edit-time-group'));
+            }
+            
+            const editDurationSelect = document.getElementById('edit-event-duration');
+            if (editDurationSelect) {
+                editDurationSelect.addEventListener('change', () => clearFieldError('edit-duration-group'));
             }
         }
     }
@@ -273,6 +312,20 @@
         }
     }
 
+    function closeEditEventModal() {
+        const modal = document.getElementById('editEventModal');
+        if (modal) {
+            modal.style.display = 'none';
+            document.body.style.overflow = 'auto';
+
+            // Сбрасываем форму
+            const form = document.getElementById('edit-event-form');
+            if (form) {
+                form.reset();
+            }
+        }
+    }
+
     function validateAndSubmitForm(event) {
         event.preventDefault();
         
@@ -316,6 +369,51 @@
 
         // Отправляем форму
         submitEventForm();
+    }
+
+    function validateAndSubmitEditForm(event) {
+        event.preventDefault();
+        
+        // Сбрасываем все ошибки
+        clearAllErrors();
+        
+        const title = document.getElementById('edit-event-title');
+        const date = document.getElementById('edit-event-date');
+        const timeSelect = document.getElementById('edit-event-time');
+        const duration = document.getElementById('edit-event-duration');
+
+        let isValid = true;
+
+        // Проверка названия
+        if (!title.value.trim()) {
+            isValid = false;
+            showFieldError('edit-title-group', 'Заполните это поле.');
+        }
+
+        // Проверка даты
+        if (!date.value) {
+            isValid = false;
+            showFieldError('edit-date-group', 'Заполните это поле.');
+        }
+
+        // Проверка времени
+        if (!timeSelect.value) {
+            isValid = false;
+            showFieldError('edit-time-group', 'Выберите время приема.');
+        }
+
+        // Проверка длительности
+        if (!duration.value) {
+            isValid = false;
+            showFieldError('edit-duration-group', 'Выберите длительность приема.');
+        }
+
+        if (!isValid) {
+            return;
+        }
+
+        // Отправляем форму редактирования
+        submitEditEventForm();
     }
 
     function showFieldError(groupId, message) {
@@ -367,19 +465,63 @@
         const timeValue = formData.get('time');
         const durationValue = formData.get('duration');
         
-        // Создаем объект Date для начала события
-        const startDateTime = new Date(dateValue + 'T' + timeValue);
+        console.log('Значения формы (добавление):', { dateValue, timeValue, durationValue });
         
-        // Создаем объект Date для окончания события (добавляем длительность)
-        const endDateTime = new Date(startDateTime.getTime() + parseInt(durationValue) * 60 * 1000);
+        // Проверяем корректность даты
+        if (!dateValue || !timeValue) {
+            showNotification('Ошибка: некорректные дата или время', 'error');
+            return;
+        }
+        
+        let startDateTime, endDateTime;
+        
+        try {
+            // Создаем объект Date для начала события в локальном времени
+            // Разбираем дату и время на компоненты
+            const [year, month, day] = dateValue.split('-').map(Number);
+            const [hours, minutes] = timeValue.split(':').map(Number);
+            
+            // Создаем дату в локальном времени (без конвертации в UTC)
+            startDateTime = new Date(year, month - 1, day, hours, minutes, 0, 0);
+            
+            if (isNaN(startDateTime.getTime())) {
+                showNotification('Ошибка: некорректная дата начала', 'error');
+                return;
+            }
+            
+            // Создаем объект Date для окончания события (добавляем длительность)
+            endDateTime = new Date(startDateTime.getTime() + parseInt(durationValue) * 60 * 1000);
+            
+            if (isNaN(endDateTime.getTime())) {
+                showNotification('Ошибка: некорректная дата окончания', 'error');
+                return;
+            }
+            
+            console.log('Созданные даты (добавление):', { startDateTime, endDateTime });
+        } catch (e) {
+            console.error('Ошибка при создании дат (добавление):', e);
+            showNotification('Ошибка при обработке дат', 'error');
+            return;
+        }
         
         // Отправляем AJAX запрос для добавления события
+        // Форматируем время в локальном формате, избегая конвертации в UTC
+        const formatLocalDateTime = (date) => {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            const hours = String(date.getHours()).padStart(2, '0');
+            const minutes = String(date.getMinutes()).padStart(2, '0');
+            const seconds = String(date.getSeconds()).padStart(2, '0');
+            return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+        };
+
         const postData = {
             action: 'addEvent',
             title: formData.get('title'),
             description: formData.get('description'),
-            dateFrom: startDateTime.toISOString(),
-            dateTo: endDateTime.toISOString(),
+            dateFrom: formatLocalDateTime(startDateTime),
+            dateTo: formatLocalDateTime(endDateTime),
             branchId: getBranchId() || 1
         };
         
@@ -407,10 +549,14 @@
                     closeEventForm();
                     form.reset();
 
-                    // Перезагружаем страницу для отображения нового события
-                    setTimeout(() => {
-                        location.reload();
-                    }, 1000);
+                    // Динамически добавляем событие в календарь
+                    addEventToCalendar({
+                        id: data.eventId,
+                        title: formData.get('title'),
+                        description: formData.get('description'),
+                        dateFrom: formatLocalDateTime(startDateTime),
+                        dateTo: formatLocalDateTime(endDateTime)
+                    });
                 } else {
                     showNotification('Ошибка: ' + (data.error || 'Неизвестная ошибка'), 'error');
                 }
@@ -431,7 +577,140 @@
         });
     }
 
+    function submitEditEventForm() {
+        const form = document.getElementById('edit-event-form');
+        const formData = new FormData(form);
+        const eventId = form.getAttribute('data-event-id');
 
+        if (!eventId) {
+            showNotification('Ошибка: ID события не найден', 'error');
+            return;
+        }
+
+        // Показываем индикатор загрузки
+        const submitBtn = form.querySelector('button[type="submit"]');
+        const originalText = submitBtn.textContent;
+        submitBtn.textContent = 'Сохранение...';
+        submitBtn.disabled = true;
+
+        // Формируем дату и время начала
+        const dateValue = formData.get('date');
+        const timeValue = formData.get('time');
+        const durationValue = formData.get('duration');
+        
+        console.log('Значения формы (редактирование):', { dateValue, timeValue, durationValue });
+        
+        // Проверяем корректность даты
+        if (!dateValue || !timeValue) {
+            showNotification('Ошибка: некорректные дата или время', 'error');
+            return;
+        }
+        
+        let startDateTime, endDateTime;
+        
+        try {
+            // Создаем объект Date для начала события в локальном времени
+            // Разбираем дату и время на компоненты
+            const [year, month, day] = dateValue.split('-').map(Number);
+            const [hours, minutes] = timeValue.split(':').map(Number);
+            
+            // Создаем дату в локальном времени (без конвертации в UTC)
+            startDateTime = new Date(year, month - 1, day, hours, minutes, 0, 0);
+            
+            if (isNaN(startDateTime.getTime())) {
+                showNotification('Ошибка: некорректная дата начала', 'error');
+                return;
+            }
+            
+            // Создаем объект Date для окончания события (добавляем длительность)
+            endDateTime = new Date(startDateTime.getTime() + parseInt(durationValue) * 60 * 1000);
+            
+            if (isNaN(endDateTime.getTime())) {
+                showNotification('Ошибка: некорректная дата окончания', 'error');
+                return;
+            }
+            
+            console.log('Созданные даты (редактирование):', { startDateTime, endDateTime });
+        } catch (e) {
+            console.error('Ошибка при создании дат (редактирование):', e);
+            showNotification('Ошибка при обработке дат', 'error');
+            return;
+        }
+        
+        // Получаем цвет события из скрытого поля
+        const eventColor = document.getElementById('edit-selected-color').value || '#3498db';
+        
+        // Отправляем AJAX запрос для обновления события
+        // Форматируем время в локальном формате, избегая конвертации в UTC
+        const formatLocalDateTime = (date) => {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            const hours = String(date.getHours()).padStart(2, '0');
+            const minutes = String(date.getMinutes()).padStart(2, '0');
+            const seconds = String(date.getSeconds()).padStart(2, '0');
+            return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+        };
+
+        const postData = {
+            action: 'updateEvent',
+            eventId: eventId,
+            title: formData.get('title'),
+            description: formData.get('description'),
+            dateFrom: formatLocalDateTime(startDateTime),
+            dateTo: formatLocalDateTime(endDateTime),
+            eventColor: eventColor,
+            branchId: getBranchId() || 1
+        };
+        
+        fetch('/local/components/artmax/calendar/ajax.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: new URLSearchParams(postData)
+        })
+        .then(response => response.text())
+        .then(text => {
+            console.log('Raw response:', text);
+            try {
+                const data = JSON.parse(text);
+                console.log('Parsed data:', data);
+                
+                if (data.success) {
+                    showNotification('Событие обновлено успешно!', 'success');
+                    closeEditEventModal();
+                    form.reset();
+
+                    // Обновляем событие в календаре
+                    updateEventInCalendar({
+                        id: eventId,
+                        title: formData.get('title'),
+                        description: formData.get('description'),
+                        dateFrom: formatLocalDateTime(startDateTime),
+                        dateTo: formatLocalDateTime(endDateTime),
+                        eventColor: eventColor
+                    });
+                } else {
+                    showNotification('Ошибка: ' + (data.error || 'Неизвестная ошибка'), 'error');
+                }
+            } catch (parseError) {
+                console.error('JSON parse error:', parseError);
+                console.error('Raw response that failed to parse:', text);
+                showNotification('Ошибка парсинга ответа сервера', 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Ошибка при обновлении события:', error);
+            showNotification('Ошибка при обновлении события', 'error');
+        })
+        .finally(() => {
+            // Восстанавливаем кнопку
+            submitBtn.textContent = originalText;
+            submitBtn.disabled = false;
+        });
+    }
 
     function showNotification(message, type) {
         const notification = document.createElement('div');
@@ -526,9 +805,226 @@
     }
 
     function showEventDetails(eventId) {
-        console.log('Показываем детали события:', eventId);
-        // Здесь можно добавить модальное окно с деталями события
-        alert('Детали события ID: ' + eventId);
+        console.log('showEventDetails: Показываем детали события:', eventId);
+        openEditEventModal(eventId);
+    }
+
+    function openEditEventModal(eventId) {
+        // Получаем данные события по AJAX
+        fetch('/local/components/artmax/calendar/ajax.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: new URLSearchParams({
+                action: 'getEvent',
+                eventId: eventId
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            console.log('showEventDetails: Получены данные события:', data);
+            
+            if (data.success && data.event) {
+                const event = data.event;
+                console.log('showEventDetails: Данные события для заполнения формы:', event);
+                console.log('showEventDetails: DATE_FROM:', event.DATE_FROM, 'тип:', typeof event.DATE_FROM);
+                console.log('showEventDetails: DATE_TO:', event.DATE_TO, 'тип:', typeof event.DATE_TO);
+                console.log('showEventDetails: Длина DATE_FROM:', event.DATE_FROM ? event.DATE_FROM.length : 'undefined');
+                console.log('showEventDetails: Длина DATE_TO:', event.DATE_TO ? event.DATE_TO.length : 'undefined');
+                
+                // Заполняем форму данными события
+                const titleInput = document.getElementById('edit-event-title');
+                const dateInput = document.getElementById('edit-event-date');
+                const timeInput = document.getElementById('edit-event-time');
+                const durationInput = document.getElementById('edit-event-duration');
+                const descriptionInput = document.getElementById('edit-event-description');
+                const colorInput = document.getElementById('edit-event-color');
+                
+                // Проверяем, что все поля найдены
+                console.log('showEventDetails: Заполняем форму события:', event.TITLE);
+                
+                if (titleInput) titleInput.value = event.TITLE || '';
+                if (dateInput) {
+                    try {
+                        console.log('showEventDetails: Извлекаем дату из DATE_FROM:', event.DATE_FROM);
+                        
+                        // Извлекаем дату из строки, избегая проблем с часовыми поясами
+                        let dateMatch;
+                        if (event.DATE_FROM.includes(' ')) {
+                            // Проверяем российский формат: "04.08.2025 12:00:00"
+                            let dateMatch = event.DATE_FROM.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})/);
+                            if (dateMatch) {
+                                console.log('showEventDetails: Найден российский формат даты:', dateMatch);
+                                const [, day, month, year] = dateMatch;
+                                const formattedDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+                                console.log('showEventDetails: Преобразованная дата:', formattedDate);
+                                // Используем formattedDate для дальнейшей обработки
+                            } else {
+                                // Проверяем стандартный формат: "2025-08-04 12:00:00"
+                                dateMatch = event.DATE_FROM.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+                                console.log('showEventDetails: Ищем дату с пробелом, результат:', dateMatch);
+                            }
+                        }
+                        
+                        if (dateMatch) {
+                            const year = dateMatch[1];
+                            const month = dateMatch[2].padStart(2, '0');
+                            const day = dateMatch[3].padStart(2, '0');
+                            dateInput.value = `${year}-${month}-${day}`;
+                            console.log('showEventDetails: Дата извлечена:', dateInput.value);
+                        } else {
+                            console.error('showEventDetails: Не удалось извлечь дату из строки:', event.DATE_FROM);
+                            // Устанавливаем текущую дату без конвертации в UTC
+                            const today = new Date();
+                            const year = today.getFullYear();
+                            const month = String(today.getMonth() + 1).padStart(2, '0');
+                            const day = String(today.getDate()).padStart(2, '0');
+                            dateInput.value = `${year}-${month}-${day}`;
+                        }
+                    } catch (e) {
+                        console.error('showEventDetails: Ошибка при обработке даты DATE_FROM:', e);
+                        // Устанавливаем текущую дату без конвертации в UTC
+                        const today = new Date();
+                        const year = today.getFullYear();
+                        const month = String(today.getMonth() + 1).padStart(2, '0');
+                        const day = String(today.getDate()).padStart(2, '0');
+                        dateInput.value = `${year}-${month}-${day}`;
+                    }
+                }
+                if (timeInput) {
+                    try {
+                        console.log('showEventDetails: Извлекаем время из DATE_FROM:', event.DATE_FROM);
+                        
+                        // Извлекаем время из строки DATE_FROM, избегая проблем с часовыми поясами
+                        let timeMatch;
+                        if (event.DATE_FROM.includes(' ')) {
+                            // Если дата в формате "2025-08-04 12:00:00"
+                            timeMatch = event.DATE_FROM.match(/\s+(\d{1,2}):(\d{1,2}):(\d{1,2})$/);
+                            console.log('showEventDetails: Ищем время с пробелом, результат:', timeMatch);
+                        } else {
+                            // Если дата в ISO формате (с T)
+                            timeMatch = event.DATE_FROM.match(/T(\d{1,2}):(\d{1,2}):(\d{1,2})/);
+                            console.log('showEventDetails: Ищем время с T, результат:', timeMatch);
+                        }
+                        
+                        if (timeMatch) {
+                            const hours = timeMatch[1].padStart(2, '0');
+                            const minutes = timeMatch[2].padStart(2, '0');
+                            timeInput.value = `${hours}:${minutes}`;
+                            console.log('showEventDetails: Время установлено:', timeInput.value);
+                        } else {
+                            console.error('showEventDetails: Не удалось извлечь время из строки:', event.DATE_FROM);
+                            timeInput.value = '09:00';
+                        }
+                    } catch (e) {
+                        console.error('showEventDetails: Ошибка при обработке времени DATE_FROM:', e);
+                        timeInput.value = '09:00';
+                    }
+                }
+                if (durationInput) {
+                    try {
+                        console.log('showEventDetails: Рассчитываем длительность из DATE_FROM:', event.DATE_FROM, 'и DATE_TO:', event.DATE_TO);
+                        
+                        // Извлекаем время начала и окончания для расчета длительности
+                        let startTimeMatch, endTimeMatch;
+                        
+                        if (event.DATE_FROM.includes(' ')) {
+                            // Если дата в формате "2025-08-04 12:00:00"
+                            startTimeMatch = event.DATE_FROM.match(/\s+(\d{1,2}):(\d{1,2}):(\d{1,2})$/);
+                            console.log('showEventDetails: Время начала с пробелом:', startTimeMatch);
+                        } else {
+                            // Если дата в ISO формате (с T)
+                            startTimeMatch = event.DATE_FROM.match(/T(\d{1,2}):(\d{1,2}):(\d{1,2})/);
+                            console.log('showEventDetails: Время начала с T:', startTimeMatch);
+                        }
+                        
+                        if (event.DATE_TO.includes(' ')) {
+                            // Если дата в формате "2025-08-04 12:00:00"
+                            endTimeMatch = event.DATE_TO.match(/\s+(\d{1,2}):(\d{1,2}):(\d{1,2})$/);
+                            console.log('showEventDetails: Время окончания с пробелом:', endTimeMatch);
+                        } else {
+                            // Если дата в ISO формате (с T)
+                            endTimeMatch = event.DATE_TO.match(/T(\d{1,2}):(\d{1,2}):(\d{1,2})/);
+                            console.log('showEventDetails: Время окончания с T:', endTimeMatch);
+                        }
+                        
+                        if (startTimeMatch && endTimeMatch) {
+                            const startHours = parseInt(startTimeMatch[1]);
+                            const startMinutes = parseInt(startTimeMatch[2]);
+                            const endHours = parseInt(endTimeMatch[1]);
+                            const endMinutes = parseInt(endTimeMatch[2]);
+                            
+                            console.log('showEventDetails: Время начала:', startHours + ':' + startMinutes, 'Время окончания:', endHours + ':' + endMinutes);
+                            
+                            // Рассчитываем разницу в минутах
+                            const startTotalMinutes = startHours * 60 + startMinutes;
+                            const endTotalMinutes = endHours * 60 + endMinutes;
+                            const durationMinutes = endTotalMinutes - startTotalMinutes;
+                            
+                            if (durationMinutes > 0) {
+                                durationInput.value = durationMinutes;
+                                console.log('showEventDetails: Длительность рассчитана:', durationMinutes, 'минут');
+                            } else {
+                                console.error('showEventDetails: Некорректная длительность:', durationMinutes);
+                                durationInput.value = '30';
+                            }
+                        } else {
+                            console.error('showEventDetails: Не удалось извлечь время для расчета длительности');
+                            durationInput.value = '30';
+                        }
+                    } catch (e) {
+                        console.error('showEventDetails: Ошибка при расчете длительности:', e);
+                        durationInput.value = '30';
+                    }
+                }
+                if (descriptionInput) descriptionInput.value = event.DESCRIPTION || '';
+                if (colorInput) {
+                    const eventColor = event.EVENT_COLOR || '#3498db';
+                    colorInput.value = eventColor;
+                    
+                    // Обновляем цветовой пикер
+                    const customColorInput = document.getElementById('edit-custom-color-input');
+                    const selectedColorInput = document.getElementById('edit-selected-color');
+                    if (customColorInput) customColorInput.value = eventColor;
+                    if (selectedColorInput) selectedColorInput.value = eventColor;
+                    
+                    // Убираем активный класс со всех пресетов
+                    const editModal = document.getElementById('editEventModal');
+                    if (editModal) {
+                        editModal.querySelectorAll('.color-preset').forEach(preset => {
+                            preset.classList.remove('active');
+                        });
+                        
+                        // Находим и активируем соответствующий пресет
+                        const matchingPreset = editModal.querySelector(`[data-color="${eventColor}"]`);
+                        if (matchingPreset) {
+                            matchingPreset.classList.add('active');
+                        }
+                    }
+                }
+                
+                // Устанавливаем ID события для формы
+                const editForm = document.getElementById('edit-event-form');
+                if (editForm) {
+                    editForm.setAttribute('data-event-id', eventId);
+                }
+                
+                // Показываем модальное окно
+                const modal = document.getElementById('editEventModal');
+                if (modal) {
+                    modal.style.display = 'block';
+                    document.body.style.overflow = 'hidden';
+                }
+            } else {
+                showNotification('Ошибка при загрузке события', 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Ошибка при загрузке события:', error);
+            showNotification('Ошибка при загрузке события', 'error');
+        });
     }
 
     function getBranchId() {
@@ -542,10 +1038,16 @@
         const modal = document.getElementById('scheduleModal');
         if (modal) {
             // Устанавливаем текущую дату по умолчанию
-            const today = new Date().toISOString().split('T')[0];
+            const today = new Date();
+            // Форматируем дату в локальном формате, избегая проблем с часовыми поясами
+            const year = today.getFullYear();
+            const month = String(today.getMonth() + 1).padStart(2, '0');
+            const day = String(today.getDate()).padStart(2, '0');
+            const todayString = `${year}-${month}-${day}`;
+            
             const dateInput = document.getElementById('schedule-date');
             if (dateInput) {
-                dateInput.value = today;
+                dateInput.value = todayString;
             }
 
             // Устанавливаем текущее время по умолчанию
@@ -650,6 +1152,34 @@
             preset.classList.remove('active');
         });
     }
+
+    // Функция для выбора предустановленного цвета в форме редактирования
+    function selectEditPresetColor(color) {
+        document.getElementById('edit-selected-color').value = color;
+        document.getElementById('edit-custom-color-input').value = color;
+        
+        // Обновляем активный класс для пресетов
+        const editModal = document.getElementById('editEventModal');
+        if (editModal) {
+            editModal.querySelectorAll('.color-preset').forEach(preset => {
+                preset.classList.remove('active');
+            });
+            event.target.classList.add('active');
+        }
+    }
+    
+    // Функция для выбора кастомного цвета в форме редактирования
+    function selectEditCustomColor(color) {
+        document.getElementById('edit-selected-color').value = color;
+        
+        // Убираем активный класс со всех пресетов
+        const editModal = document.getElementById('editEventModal');
+        if (editModal) {
+            editModal.querySelectorAll('.color-preset').forEach(preset => {
+                preset.classList.remove('active');
+            });
+        }
+    }
     
     function initColorPicker() {
         // Устанавливаем первый цвет как активный по умолчанию
@@ -703,10 +1233,18 @@
                 showNotification('Расписание успешно создано!', 'success');
                 closeScheduleModal();
                 
-                // Перезагружаем страницу для отображения нового события
-                setTimeout(() => {
-                    window.location.reload();
-                }, 1000);
+                // Динамически добавляем события расписания в календарь
+                if (data.events && Array.isArray(data.events)) {
+                    data.events.forEach(event => {
+                        addEventToCalendar({
+                            id: event.ID,
+                            title: event.TITLE,
+                            description: event.DESCRIPTION,
+                            dateFrom: event.DATE_FROM,
+                            dateTo: event.DATE_TO
+                        });
+                    });
+                }
             } else {
                 showNotification('Ошибка: ' + (data.error || 'Неизвестная ошибка'), 'error');
             }
@@ -770,6 +1308,8 @@
     window.ArtmaxCalendar = {
         openEventForm: openEventForm,
         closeEventForm: closeEventForm,
+        openEditEventModal: openEditEventModal,
+        closeEditEventModal: closeEditEventModal,
         openScheduleModal: openScheduleModal,
         closeScheduleModal: closeScheduleModal,
         showNotification: showNotification,
@@ -779,8 +1319,516 @@
         toggleEndFields: toggleEndFields,
         selectPresetColor: selectPresetColor,
         selectCustomColor: selectCustomColor,
+        selectEditPresetColor: selectEditPresetColor,
+        selectEditCustomColor: selectEditCustomColor,
         initColorPicker: initColorPicker,
-        saveSchedule: saveSchedule
+        saveSchedule: saveSchedule,
+        addEventToCalendar: addEventToCalendar,
+        updateEventInCalendar: updateEventInCalendar,
+        deleteEvent: deleteEvent,
+        deleteEventAjax: deleteEventAjax
     };
+
+    // Делаем функции доступными глобально для использования в HTML
+    window.closeEditEventModal = closeEditEventModal;
+    window.closeEventForm = closeEventForm;
+    window.openEventForm = openEventForm;
+    window.openEditEventModal = openEditEventModal;
+    window.openScheduleModal = openScheduleModal;
+    window.closeScheduleModal = closeScheduleModal;
+    window.toggleWeeklyDays = toggleWeeklyDays;
+    window.toggleEndFields = toggleEndFields;
+    window.selectPresetColor = selectPresetColor;
+    window.selectCustomColor = selectCustomColor;
+    window.selectEditPresetColor = selectEditPresetColor;
+    window.selectEditCustomColor = selectEditCustomColor;
+    window.previousMonth = previousMonth;
+    window.nextMonth = nextMonth;
+    window.goToToday = goToToday;
+    window.refreshCalendarEvents = refreshCalendarEvents;
+    window.deleteEventAjax = deleteEventAjax;
+
+    /**
+     * Динамически добавляет событие в календарь с анимацией
+     */
+    function addEventToCalendar(eventData) {
+        // Создаем объект Date из строки времени, избегая проблем с часовыми поясами
+        let dateFrom;
+        if (typeof eventData.dateFrom === 'string' && eventData.dateFrom.includes(' ')) {
+            // Если дата в формате "2025-08-04 12:00:00", парсим компоненты отдельно
+            const [datePart, timePart] = eventData.dateFrom.split(' ');
+            const [year, month, day] = datePart.split('-').map(Number);
+            const [hours, minutes, seconds] = timePart.split(':').map(Number);
+            // Создаем Date в локальном времени (month - 1, так как в JS месяцы начинаются с 0)
+            dateFrom = new Date(year, month - 1, day, hours, minutes, seconds);
+        } else {
+            // Если дата в ISO формате
+            dateFrom = new Date(eventData.dateFrom);
+        }
+        
+        // Получаем ключ даты в формате YYYY-MM-DD
+        let dateKey;
+        if (typeof eventData.dateFrom === 'string' && eventData.dateFrom.includes(' ')) {
+            // Если дата в формате "2025-08-04 12:00:00"
+            dateKey = eventData.dateFrom.split(' ')[0];
+        } else {
+            // Если дата в ISO формате, извлекаем дату без конвертации
+            dateKey = eventData.dateFrom.split('T')[0];
+        }
+        
+        // Находим ячейку календаря для этой даты
+        const calendarDay = document.querySelector(`[data-date="${dateKey}"]`);
+        
+        if (!calendarDay) {
+            console.error('Не найдена ячейка календаря для даты:', dateKey);
+            return;
+        }
+        
+        // Создаем элемент события
+        const eventElement = document.createElement('div');
+        eventElement.className = 'calendar-event new-event';
+        eventElement.setAttribute('data-event-id', eventData.id);
+        
+        // Форматируем время, избегая проблем с часовыми поясами
+        console.log('addEventToCalendar: eventData.dateFrom =', eventData.dateFrom);
+        
+        let timeString;
+        if (typeof eventData.dateFrom === 'string') {
+            // Если дата в формате "2025-08-04 12:00:00", извлекаем время напрямую
+            const timeMatch = eventData.dateFrom.match(/(\d{2}):(\d{2}):(\d{2})$/);
+            if (timeMatch) {
+                timeString = `${timeMatch[1]}:${timeMatch[2]}`;
+                console.log('addEventToCalendar: Время извлечено из пробела:', timeString);
+            } else {
+                // Если дата в ISO формате (с T), извлекаем время
+                const isoTimeMatch = eventData.dateFrom.match(/T(\d{2}):(\d{2}):/);
+                if (isoTimeMatch) {
+                    timeString = `${isoTimeMatch[1]}:${isoTimeMatch[2]}`;
+                    console.log('addEventToCalendar: Время извлечено из T:', timeString);
+                } else {
+                    // Fallback на локальное время
+                    timeString = dateFrom.toLocaleTimeString('ru-RU', { 
+                        hour: '2-digit', 
+                        minute: '2-digit',
+                        hour12: false
+                    });
+                    console.log('addEventToCalendar: Время извлечено через toLocaleTimeString:', timeString);
+                }
+            }
+        } else {
+            // Fallback на локальное время
+            timeString = dateFrom.toLocaleTimeString('ru-RU', { 
+                hour: '2-digit', 
+                minute: '2-digit',
+                hour12: false
+            });
+            console.log('addEventToCalendar: Время извлечено через toLocaleTimeString (fallback):', timeString);
+        }
+        
+        eventElement.innerHTML = `
+            <div class="event-dot"></div>
+            <span class="event-title">${eventData.title}</span>
+            <span class="event-time">${timeString}</span>
+        `;
+        
+        // Добавляем обработчик клика для просмотра деталей
+        eventElement.addEventListener('click', function(e) {
+            e.stopPropagation();
+            showEventDetails(eventData.id);
+        });
+        
+        // Добавляем событие в ячейку календаря
+        calendarDay.appendChild(eventElement);
+        
+        // Анимация появления с мерцанием
+        eventElement.style.opacity = '0';
+        eventElement.style.transform = 'scale(0.8)';
+        
+        // Плавное появление
+        setTimeout(() => {
+            eventElement.style.transition = 'all 0.3s ease-out';
+            eventElement.style.opacity = '1';
+            eventElement.style.transform = 'scale(1)';
+        }, 100);
+        
+        // Эффект мерцания в течение 2-3 секунд
+        let blinkCount = 0;
+        const maxBlinks = 6; // 3 секунды (6 мерцаний по 0.5 сек)
+        
+        const blinkInterval = setInterval(() => {
+            if (blinkCount >= maxBlinks) {
+                clearInterval(blinkInterval);
+                eventElement.style.boxShadow = 'none';
+                eventElement.classList.remove('new-event');
+                return;
+            }
+            
+            if (blinkCount % 2 === 0) {
+                eventElement.style.boxShadow = '0 0 20px rgba(52, 152, 219, 0.8)';
+            } else {
+                eventElement.style.boxShadow = 'none';
+            }
+            
+            blinkCount++;
+        }, 500);
+        
+        // Убираем класс new-event через 3 секунды
+        setTimeout(() => {
+            eventElement.classList.remove('new-event');
+        }, 3000);
+    }
+
+    /**
+     * Обновляет события календаря по AJAX
+     */
+    function refreshCalendarEvents() {
+        const branchId = getBranchId() || 1;
+        
+        fetch('/local/components/artmax/calendar/ajax.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: new URLSearchParams({
+                action: 'getEvents',
+                branchId: branchId
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.events) {
+                updateCalendarEvents(data.events);
+            }
+        })
+        .catch(error => {
+            console.error('Ошибка при обновлении событий:', error);
+        });
+    }
+
+    /**
+     * Обновляет события в календаре
+     */
+    function updateCalendarEvents(events) {
+        // Очищаем все существующие события
+        const existingEvents = document.querySelectorAll('.calendar-event');
+        existingEvents.forEach(event => event.remove());
+        
+        // Группируем события по датам
+        const eventsByDate = {};
+        events.forEach(event => {
+            console.log('updateCalendarEvents: Обрабатываем событие:', event);
+            console.log('updateCalendarEvents: event.DATE_FROM =', event.DATE_FROM);
+            
+            // Получаем ключ даты, избегая проблем с часовыми поясами
+            let dateKey;
+            if (typeof event.DATE_FROM === 'string' && event.DATE_FROM.includes(' ')) {
+                // Если дата в формате "2025-08-04 12:00:00"
+                dateKey = event.DATE_FROM.split(' ')[0];
+                console.log('updateCalendarEvents: Дата извлечена из пробела:', dateKey);
+            } else {
+                // Если дата в ISO формате, извлекаем дату без конвертации
+                dateKey = event.DATE_FROM.split('T')[0];
+                console.log('updateCalendarEvents: Дата извлечена из T:', dateKey);
+            }
+            
+            if (!eventsByDate[dateKey]) {
+                eventsByDate[dateKey] = [];
+            }
+            eventsByDate[dateKey].push(event);
+        });
+        
+        // Добавляем события в соответствующие ячейки
+        Object.keys(eventsByDate).forEach(dateKey => {
+            const calendarDay = document.querySelector(`[data-date="${dateKey}"]`);
+            if (calendarDay) {
+                eventsByDate[dateKey].forEach(event => {
+                    const eventElement = createEventElement(event);
+                    calendarDay.appendChild(eventElement);
+                });
+            }
+        });
+    }
+
+    /**
+     * Обновляет событие в календаре
+     */
+    function updateEventInCalendar(eventData) {
+        const eventId = eventData.id;
+        const eventElement = document.querySelector(`[data-event-id="${eventId}"]`);
+        
+        if (eventElement) {
+            // Обновляем содержимое события
+            const titleElement = eventElement.querySelector('.event-title');
+            const timeElement = eventElement.querySelector('.event-time');
+            
+            if (titleElement) titleElement.textContent = eventData.title;
+            if (timeElement) {
+                console.log('updateEventInCalendar: eventData.dateFrom =', eventData.dateFrom);
+                
+                // Форматируем время, избегая проблем с часовыми поясами
+                let timeString;
+                if (typeof eventData.dateFrom === 'string') {
+                    // Если дата в формате "2025-08-04 12:00:00", извлекаем время напрямую
+                    const timeMatch = eventData.dateFrom.match(/(\d{2}):(\d{2}):(\d{2})$/);
+                    if (timeMatch) {
+                        timeString = `${timeMatch[1]}:${timeMatch[2]}`;
+                        console.log('updateEventInCalendar: Время извлечено из пробела:', timeString);
+                    } else {
+                        // Если дата в ISO формате (с T), извлекаем время
+                        const isoTimeMatch = eventData.dateFrom.match(/T(\d{2}):(\d{2}):/);
+                        if (isoTimeMatch) {
+                            timeString = `${isoTimeMatch[1]}:${isoTimeMatch[2]}`;
+                            console.log('updateEventInCalendar: Время извлечено из T:', timeString);
+                        } else {
+                            // Fallback на локальное время
+                            timeString = new Date(eventData.dateFrom).toLocaleTimeString('ru-RU', { 
+                                hour: '2-digit', 
+                                minute: '2-digit',
+                                hour12: false
+                            });
+                            console.log('updateEventInCalendar: Время извлечено через toLocaleTimeString:', timeString);
+                        }
+                    }
+                } else {
+                    // Fallback на локальное время
+                    timeString = new Date(eventData.dateFrom).toLocaleTimeString('ru-RU', { 
+                        hour: '2-digit', 
+                        minute: '2-digit',
+                        hour12: false
+                    });
+                    console.log('updateEventInCalendar: Время извлечено через toLocaleTimeString (fallback):', timeString);
+                }
+                timeElement.textContent = timeString;
+            }
+            
+            // Обновляем цвет события
+            if (eventData.eventColor) {
+                eventElement.style.borderLeft = `4px solid ${eventData.eventColor}`;
+                eventElement.style.backgroundColor = `${eventData.eventColor}15`;
+            }
+            
+            // Анимация обновления
+            eventElement.style.transform = 'scale(1.05)';
+            eventElement.style.boxShadow = '0 0 20px rgba(52, 152, 219, 0.6)';
+            
+            setTimeout(() => {
+                eventElement.style.transition = 'all 0.3s ease';
+                eventElement.style.transform = 'scale(1)';
+                eventElement.style.boxShadow = 'none';
+            }, 200);
+        }
+    }
+
+    /**
+     * Удаляет событие из календаря
+     */
+    function deleteEvent(eventId) {
+        const eventElement = document.querySelector(`[data-event-id="${eventId}"]`);
+        
+        if (eventElement) {
+            // Анимация удаления
+            eventElement.style.transition = 'all 0.3s ease';
+            eventElement.style.transform = 'scale(0.8)';
+            eventElement.style.opacity = '0';
+            
+            setTimeout(() => {
+                if (eventElement.parentNode) {
+                    eventElement.parentNode.removeChild(eventElement);
+                }
+            }, 300);
+        }
+    }
+
+    /**
+     * Удаляет событие через AJAX
+     */
+    function deleteEventAjax(eventId) {
+        if (!confirm('Вы уверены, что хотите удалить это событие?')) {
+            return;
+        }
+
+        fetch('/local/components/artmax/calendar/ajax.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: new URLSearchParams({
+                action: 'deleteEvent',
+                eventId: eventId
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showNotification('Событие удалено успешно!', 'success');
+                deleteEvent(eventId);
+                closeEditEventModal();
+            } else {
+                showNotification('Ошибка: ' + (data.error || 'Неизвестная ошибка'), 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Ошибка при удалении события:', error);
+            showNotification('Ошибка при удалении события', 'error');
+        });
+    }
+
+    /**
+     * Создает HTML элемент события
+     */
+    function createEventElement(event) {
+        const eventElement = document.createElement('div');
+        eventElement.className = 'calendar-event';
+        eventElement.setAttribute('data-event-id', event.ID);
+        
+        // Применяем цвет события
+        if (event.EVENT_COLOR) {
+            eventElement.style.borderLeft = `4px solid ${event.EVENT_COLOR}`;
+            eventElement.style.backgroundColor = `${event.EVENT_COLOR}15`;
+        }
+        
+        // Форматируем время, избегая проблем с часовыми поясами
+        console.log('createEventElement: event.DATE_FROM =', event.DATE_FROM);
+        
+        let timeString;
+        if (typeof event.DATE_FROM === 'string') {
+            // Если дата в формате "2025-08-04 12:00:00", извлекаем время напрямую
+            const timeMatch = event.DATE_FROM.match(/(\d{2}):(\d{2}):(\d{2})$/);
+            if (timeMatch) {
+                timeString = `${timeMatch[1]}:${timeMatch[2]}`;
+                console.log('createEventElement: Время извлечено из пробела:', timeString);
+            } else {
+                // Если дата в ISO формате (с T), извлекаем время
+                const isoTimeMatch = event.DATE_FROM.match(/T(\d{2}):(\d{2}):/);
+                if (isoTimeMatch) {
+                    timeString = `${isoTimeMatch[1]}:${isoTimeMatch[2]}`;
+                    console.log('createEventElement: Время извлечено из T:', timeString);
+                } else {
+                    // Fallback на локальное время
+                    timeString = new Date(event.DATE_FROM).toLocaleTimeString('ru-RU', { 
+                        hour: '2-digit', 
+                        minute: '2-digit',
+                        hour12: false
+                    });
+                    console.log('createEventElement: Время извлечено через toLocaleTimeString:', timeString);
+                }
+            }
+        } else {
+            // Fallback на локальное время
+            timeString = new Date(event.DATE_FROM).toLocaleTimeString('ru-RU', { 
+                hour: '2-digit', 
+                minute: '2-digit',
+                hour12: false
+            });
+            console.log('createEventElement: Время извлечено через toLocaleTimeString (fallback):', timeString);
+        }
+        
+        eventElement.innerHTML = `
+            <div class="event-dot"></div>
+            <span class="event-title">${event.TITLE}</span>
+            <span class="event-time">${timeString}</span>
+        `;
+        
+        // Добавляем обработчик клика
+        eventElement.addEventListener('click', function(e) {
+            e.stopPropagation();
+            showEventDetails(event.ID);
+        });
+        
+        return eventElement;
+    }
+
+    // Функции навигации по календарю
+    function previousMonth() {
+        const currentMonthElement = document.querySelector('.current-month');
+        if (currentMonthElement) {
+            const currentText = currentMonthElement.textContent;
+            const currentDate = new Date();
+            
+            // Парсим текущий месяц и год
+            const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+                               'July', 'August', 'September', 'October', 'November', 'December'];
+            
+            let currentMonth = currentDate.getMonth();
+            let currentYear = currentDate.getFullYear();
+            
+            // Пытаемся найти месяц в тексте
+            for (let i = 0; i < monthNames.length; i++) {
+                if (currentText.includes(monthNames[i])) {
+                    currentMonth = i;
+                    break;
+                }
+            }
+            
+            // Переходим к предыдущему месяцу
+            if (currentMonth === 0) {
+                currentMonth = 11;
+                currentYear--;
+            } else {
+                currentMonth--;
+            }
+            
+            // Обновляем URL и перезагружаем страницу
+            const newDate = new Date(currentYear, currentMonth, 1);
+            // Форматируем дату в локальном формате, избегая проблем с часовыми поясами
+            const year = newDate.getFullYear();
+            const month = String(newDate.getMonth() + 1).padStart(2, '0');
+            const day = String(newDate.getDate()).padStart(2, '0');
+            const newDateString = `${year}-${month}-${day}`;
+            window.location.href = window.location.pathname + '?date=' + newDateString;
+        }
+    }
+
+    function nextMonth() {
+        const currentMonthElement = document.querySelector('.current-month');
+        if (currentMonthElement) {
+            const currentText = currentMonthElement.textContent;
+            const currentDate = new Date();
+            
+            // Парсим текущий месяц и год
+            const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+                               'July', 'August', 'September', 'October', 'November', 'December'];
+            
+            let currentMonth = currentDate.getMonth();
+            let currentYear = currentDate.getFullYear();
+            
+            // Пытаемся найти месяц в тексте
+            for (let i = 0; i < monthNames.length; i++) {
+                if (currentText.includes(monthNames[i])) {
+                    currentMonth = i;
+                    break;
+                }
+            }
+            
+            // Переходим к следующему месяцу
+            if (currentMonth === 11) {
+                currentMonth = 0;
+                currentYear++;
+            } else {
+                currentMonth++;
+            }
+            
+            // Обновляем URL и перезагружаем страницу
+            const newDate = new Date(currentYear, currentMonth, 1);
+            // Форматируем дату в локальном формате, избегая проблем с часовыми поясами
+            const year = newDate.getFullYear();
+            const month = String(newDate.getMonth() + 1).padStart(2, '0');
+            const day = String(newDate.getDate()).padStart(2, '0');
+            const newDateString = `${year}-${month}-${day}`;
+            window.location.href = window.location.pathname + '?date=' + newDateString;
+        }
+    }
+
+    function goToToday() {
+        const today = new Date();
+        // Форматируем дату в локальном формате, избегая проблем с часовыми поясами
+        const year = today.getFullYear();
+        const month = String(today.getMonth() + 1).padStart(2, '0');
+        const day = String(today.getDate()).padStart(2, '0');
+        const todayString = `${year}-${month}-${day}`;
+        window.location.href = window.location.pathname + '?date=' + todayString;
+    }
 
 })();

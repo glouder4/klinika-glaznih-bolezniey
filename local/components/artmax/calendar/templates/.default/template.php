@@ -4,6 +4,67 @@ use Bitrix\Main\Localization\Loc;
 
 Loc::loadMessages(__FILE__);
 
+/**
+ * Конвертирует дату из российского формата (день.месяц.год) в стандартный (год-месяц-день)
+ * @param string $dateString Дата в формате "04.08.2025 09:00:00"
+ * @return string Дата в формате "2025-08-04 09:00:00"
+ */
+function convertRussianDateToStandard($dateString)
+{
+    // Проверяем, что строка не пустая
+    if (empty($dateString)) {
+        return $dateString;
+    }
+
+    // Если дата уже в стандартном формате, возвращаем как есть
+    if (preg_match('/^\d{4}-\d{2}-\d{2}/', $dateString)) {
+        return $dateString;
+    }
+
+    // Парсим российский формат: день.месяц.год час:минута:секунда
+    if (preg_match('/^(\d{1,2})\.(\d{1,2})\.(\d{4})\s+(\d{1,2}):(\d{1,2}):(\d{1,2})$/', $dateString, $matches)) {
+        $day = str_pad($matches[1], 2, '0', STR_PAD_LEFT);
+        $month = str_pad($matches[2], 2, '0', STR_PAD_LEFT);
+        $year = $matches[3];
+        $hour = str_pad($matches[4], 2, '0', STR_PAD_LEFT);
+        $minute = str_pad($matches[5], 2, '0', STR_PAD_LEFT);
+        $second = str_pad($matches[6], 2, '0', STR_PAD_LEFT);
+        
+        return "{$year}-{$month}-{$day} {$hour}:{$minute}:{$second}";
+    }
+
+    // Если формат не распознан, пытаемся использовать strtotime как fallback
+    $timestamp = strtotime($dateString);
+    if ($timestamp !== false) {
+        return date('Y-m-d H:i:s', $timestamp);
+    }
+
+    // Если ничего не получилось, возвращаем исходную строку
+    return $dateString;
+}
+
+/**
+ * Извлекает время из даты в формате "2025-08-04 09:00:00" без учета часового пояса
+ * @param string $dateString Дата в формате "2025-08-04 09:00:00"
+ * @return string Время в формате "09:00"
+ */
+function extractTimeFromDate($dateString)
+{
+    // Извлекаем время напрямую из строки, избегая проблем с часовыми поясами
+    if (preg_match('/\s+(\d{2}):(\d{2}):(\d{2})$/', $dateString, $timeMatches)) {
+        $result = $timeMatches[1] . ':' . $timeMatches[2];
+        return $result;
+    }
+    
+    // Если дата в ISO формате (с T), извлекаем время
+    if (preg_match('/T(\d{2}):(\d{2}):(\d{2})/', $dateString, $timeMatches)) {
+        $result = $timeMatches[1] . ':' . $timeMatches[2];
+        return $result;
+    }
+
+    return '??:??';
+}
+
 // Получаем текущую дату или выбранную дату
 $currentDate = isset($_GET['date']) ? new DateTime($_GET['date']) : new DateTime();
 $year = $currentDate->format('Y');
@@ -29,7 +90,7 @@ $startDate->modify('-' . ($firstDayOfWeek - 1) . ' days');
 $totalDays = 42; // 6 недель * 7 дней
 ?>
 
-<div class="artmax-calendar">
+<div class="artmax-calendar" data-branch-id="<?= $arResult['BRANCH']['ID'] ?>">
     <!-- Заголовок календаря -->
     <div class="calendar-header">
         <div class="header-left">
@@ -44,6 +105,12 @@ $totalDays = 42; // 6 недель * 7 дней
                 СОЗДАТЬ РАСПИСАНИЕ
             </button> 
         </div>
+        
+        <div class="header-right">
+            <button class="btn btn-secondary btn-timezone" id="timezone-settings-btn" title="Настройки филиала">
+                ⚙️ Настройки филиала
+            </button>
+        </div>
     </div>
 
     <!-- Основной календарь -->
@@ -57,6 +124,7 @@ $totalDays = 42; // 6 недель * 7 дней
                 <button class="btn-nav" onclick="previousMonth()">◀</button>
                 <button class="btn-nav" onclick="nextMonth()">▶</button>
                 <button class="btn-today" onclick="goToToday()">Сегодня</button>
+                <button class="btn-refresh" onclick="refreshCalendarEvents()" title="Обновить события">🔄</button>
             </div>
         </div>
 
@@ -100,10 +168,19 @@ $totalDays = 42; // 6 недель * 7 дней
                         // Отображаем события для этого дня
                         if (isset($arResult['EVENTS_BY_DATE'][$dateKey])) {
                             foreach ($arResult['EVENTS_BY_DATE'][$dateKey] as $event) {
-                                echo '<div class="calendar-event" data-event-id="' . $event['ID'] . '">';
+                                $eventColor = $event['EVENT_COLOR'] ?? '#3498db';
+                                $style = 'border-left: 4px solid ' . $eventColor . '; background-color: ' . $eventColor . '65;';
+                                
+                                // Логируем данные события перед извлечением времени
+                                error_log("Отображение события ID=" . $event['ID'] . ", DATE_FROM=" . $event['DATE_FROM']);
+                                
+                                // Получаем время напрямую из БД, избегая проблем с часовыми поясами
+                                $eventTime = extractTimeFromDate($event['DATE_FROM']);
+                                
+                                echo '<div class="calendar-event" data-event-id="' . $event['ID'] . '" style="' . $style . '">';
                                 echo '<div class="event-dot"></div>';
                                 echo '<span class="event-title">' . htmlspecialchars($event['TITLE']) . '</span>';
-                                echo '<span class="event-time">' . date('H:i', strtotime($event['DATE_FROM'])) . '</span>';
+                                echo '<span class="event-time">' . $eventTime . '</span>';
                                 echo '</div>';
                             }
                         }
@@ -202,14 +279,150 @@ $totalDays = 42; // 6 недель * 7 дней
                         </div>
                     </div>
                     
+                    <!-- Поле для выбора цвета события -->
+                    <div class="form-group">
+                        <label for="event-color">Цвет события</label>
+                        <div class="color-picker-container">
+                            <div class="color-presets">
+                                <button type="button" class="color-preset" data-color="#3498db" style="background-color: #3498db;" onclick="selectPresetColor('#3498db')"></button>
+                                <button type="button" class="color-preset" data-color="#e74c3c" style="background-color: #e74c3c;" onclick="selectPresetColor('#e74c3c')"></button>
+                                <button type="button" class="color-preset" data-color="#2ecc71" style="background-color: #2ecc71;" onclick="selectPresetColor('#2ecc71')"></button>
+                                <button type="button" class="color-preset" data-color="#f39c12" style="background-color: #f39c12;" onclick="selectPresetColor('#f39c12')"></button>
+                                <button type="button" class="color-preset" data-color="#9b59b6" style="background-color: #9b59b6;" onclick="selectPresetColor('#9b59b6')"></button>
+                                <button type="button" class="color-preset" data-color="#1abc9c" style="background-color: #1abc9c;" onclick="selectPresetColor('#1abc9c')"></button>
+                                <button type="button" class="color-preset" data-color="#34495e" style="background-color: #34495e;" onclick="selectPresetColor('#34495e')"></button>
+                                <button type="button" class="color-preset" data-color="#95a5a6" style="background-color: #95a5a6;" onclick="selectPresetColor('#95a5a6')"></button>
+                            </div>
+                            <div class="custom-color">
+                                <label for="custom-color-input">Свой цвет:</label>
+                                <input type="color" id="custom-color-input" name="custom-color" value="#3498db" onchange="selectCustomColor(this.value)">
+                            </div>
+                            <input type="hidden" id="selected-color" name="event-color" value="#3498db">
+                        </div>
+                    </div>
+                    
                     <div class="form-actions">
                         <button type="button" class="btn btn-secondary" onclick="closeEventForm()">ОТМЕНА</button>
-                        <button type="submit" class="btn btn-primary">ДОБАВИТЬ СОБЫТИЕ</button>
+                        <button type="submit" class="submit-btn" type="submit">ДОБАВИТЬ СОБЫТИЕ</button>
                     </div>
                 </form>
             </div>
         </div>
     <?php endif; ?>
+
+    <!-- Модальное окно для редактирования события -->
+    <div id="editEventModal" class="event-form-modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Редактировать событие</h3>
+                <button class="close-btn" onclick="closeEditEventModal()">×</button>
+            </div>
+            <form id="edit-event-form" novalidate>
+                <?= bitrix_sessid_post() ?>
+                <input type="hidden" id="edit-event-id" name="eventId">
+                
+                <div class="form-group" id="edit-title-group">
+                    <label for="edit-event-title">Название события *</label>
+                    <input type="text" id="edit-event-title" name="title" required>
+                    <div class="error-message" style="display: none;">
+                        <span class="error-icon">⚠️</span>
+                        <span>Заполните это поле.</span>
+                    </div>
+                </div>
+                
+                <div class="form-group" id="edit-description-group">
+                    <label for="edit-event-description">Описание</label>
+                    <textarea id="edit-event-description" name="description" rows="3"></textarea>
+                </div>
+                
+                <div class="form-group" id="edit-date-group">
+                    <label for="edit-event-date">ДАТА *</label>
+                    <input type="date" id="edit-event-date" name="date" required>
+                    <div class="error-message" style="display: none;">
+                        <span class="error-icon">⚠️</span>
+                        <span>Заполните это поле.</span>
+                    </div>
+                </div>
+                
+                <div class="form-group" id="edit-time-group">
+                    <label for="edit-event-time">ВРЕМЯ *</label>
+                    <select id="edit-event-time" name="time" required>
+                        <option value="">Выберите время</option>
+                        <option value="08:00">08:00</option>
+                        <option value="08:30">08:30</option>
+                        <option value="09:00">09:00</option>
+                        <option value="09:30">09:30</option>
+                        <option value="10:00">10:00</option>
+                        <option value="10:30">10:30</option>
+                        <option value="11:00">11:00</option>
+                        <option value="11:30">11:30</option>
+                        <option value="12:00">12:00</option>
+                        <option value="12:30">12:30</option>
+                        <option value="13:00">13:00</option>
+                        <option value="13:30">13:30</option>
+                        <option value="14:00">14:00</option>
+                        <option value="14:30">14:30</option>
+                        <option value="15:00">15:00</option>
+                        <option value="15:30">15:30</option>
+                        <option value="16:00">16:00</option>
+                        <option value="16:30">16:30</option>
+                        <option value="17:00">17:00</option>
+                        <option value="17:30">17:30</option>
+                        <option value="18:00">18:00</option>
+                    </select>
+                    <div class="error-message" style="display: none;">
+                        <span class="error-icon">⚠️</span>
+                        <span>Заполните это поле.</span>
+                    </div>
+                </div>
+                
+                <div class="form-group" id="edit-duration-group">
+                    <label for="edit-event-duration">Длительность приема *</label>
+                    <select id="edit-event-duration" name="duration" required>
+                        <option value="">Выберите длительность</option>
+                        <option value="5">5 минут</option>
+                        <option value="10">10 минут</option>
+                        <option value="15">15 минут</option>
+                        <option value="30">30 минут</option>
+                        <option value="60">1 час</option>
+                        <option value="120">2 часа</option>
+                    </select>
+                    <div class="error-message" style="display: none;">
+                        <span class="error-icon">⚠️</span>
+                        <span>Заполните это поле.</span>
+                    </div>
+                </div>
+                
+                <!-- Поле для выбора цвета события -->
+                <div class="form-group">
+                    <label for="edit-event-color">Цвет события</label>
+                    <div class="color-picker-container">
+                        <div class="color-presets">
+                            <button type="button" class="color-preset" data-color="#3498db" style="background-color: #3498db;" onclick="selectEditPresetColor('#3498db')"></button>
+                            <button type="button" class="color-preset" data-color="#e74c3c" style="background-color: #e74c3c;" onclick="selectEditPresetColor('#e74c3c')"></button>
+                            <button type="button" class="color-preset" data-color="#2ecc71" style="background-color: #2ecc71;" onclick="selectEditPresetColor('#2ecc71')"></button>
+                            <button type="button" class="color-preset" data-color="#f39c12" style="background-color: #f39c12;" onclick="selectEditPresetColor('#f39c12')"></button>
+                            <button type="button" class="color-preset" data-color="#9b59b6" style="background-color: #9b59b6;" onclick="selectEditPresetColor('#9b59b6')"></button>
+                            <button type="button" class="color-preset" data-color="#1abc9c" style="background-color: #1abc9c;" onclick="selectEditPresetColor('#1abc9c')"></button>
+                            <button type="button" class="color-preset" data-color="#34495e" style="background-color: #34495e;" onclick="selectEditPresetColor('#34495e')"></button>
+                            <button type="button" class="color-preset" data-color="#95a5a6" style="background-color: #95a5a6;" onclick="selectEditPresetColor('#95a5a6')"></button>
+                        </div>
+                        <div class="custom-color">
+                            <label for="edit-custom-color-input">Свой цвет:</label>
+                            <input type="color" id="edit-custom-color-input" name="custom-color" value="#3498db" onchange="selectEditCustomColor(this.value)">
+                        </div>
+                        <input type="hidden" id="edit-selected-color" name="event-color" value="#3498db">
+                    </div>
+                </div>
+                
+                <div class="form-actions">
+                    <button type="button" class="btn btn-danger" onclick="deleteEventAjax(document.getElementById('edit-event-form').getAttribute('data-event-id'))">УДАЛИТЬ</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeEditEventModal()">ОТМЕНА</button>
+                    <button type="submit" class="btn btn-primary">СОХРАНИТЬ</button>
+                </div>
+            </form>
+        </div>
+    </div>
 
     <!-- Модальное окно для создания расписания -->
     <div id="scheduleModal" class="modal-overlay" style="display: none;">
@@ -339,11 +552,75 @@ $totalDays = 42; // 6 недель * 7 дней
             </form>
         </div>
     </div>
+
+    <!-- Модальное окно для настроек часового пояса -->
+    <div id="timezoneModal" class="event-form-modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Настройки филиала</h3>
+                <button class="close-btn" id="close-timezone-modal">×</button>
+            </div>
+            <form id="timezone-form" novalidate>
+                <?= bitrix_sessid_post() ?>
+                <input type="hidden" name="branch_id" value="<?= $arResult['BRANCH']['ID'] ?>">
+                
+                <div class="form-group">
+                    <label for="timezone-name">Часовой пояс *</label>
+                    <select id="timezone-name" name="timezone_name" required>
+                        <option value="">Выберите часовой пояс</option>
+                        <?php
+                        $timezoneManager = new \Artmax\Calendar\TimezoneManager();
+                        $availableTimezones = $timezoneManager->getAvailableTimezones();
+                        $currentTimezone = null;
+                        
+                        // Получаем текущие настройки часового пояса для филиала
+                        if (isset($arResult['BRANCH']['ID'])) {
+                            $currentTimezone = $timezoneManager->getBranchTimezone($arResult['BRANCH']['ID']);
+                        }
+                        
+                        foreach ($availableTimezones as $timezoneName => $timezoneLabel) {
+                            $selected = ($currentTimezone && $currentTimezone['TIMEZONE_NAME'] === $timezoneName) ? 'selected' : '';
+                            echo '<option value="' . htmlspecialchars($timezoneName) . '" ' . $selected . '>' . htmlspecialchars($timezoneLabel) . '</option>';
+                        }
+                        ?>
+                    </select>
+                    <div class="error-message" style="display: none;">
+                        <span class="error-icon">⚠️</span>
+                        <span>Выберите часовой пояс.</span>
+                    </div>
+                </div>
+                
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" id="cancel-timezone-modal">ОТМЕНА</button>
+                    <button type="submit" class="btn btn-primary">СОХРАНИТЬ</button>
+                </div>
+            </form>
+        </div>
+    </div>
 </div>
 
 <script>
     let currentYear = <?= $year ?>;
     let currentMonth = <?= $month ?>;
+
+    // Функции для работы с модальным окном настроек филиала
+    function openTimezoneModal() {
+        const modal = document.getElementById('timezoneModal');
+        if (modal) {
+            modal.style.display = 'block';
+            document.body.style.overflow = 'hidden';
+        }
+    }
+
+    function closeTimezoneModal() {
+        const modal = document.getElementById('timezoneModal');
+        if (modal) {
+            modal.style.display = 'none';
+            document.body.style.overflow = 'auto';
+        }
+    }
+
+
 
     function previousMonth() {
         currentMonth--;
@@ -518,6 +795,32 @@ $totalDays = 42; // 6 недель * 7 дней
             });
         });
 
+        // Обработка кнопки настроек филиала
+        const timezoneBtn = document.getElementById('timezone-settings-btn');
+        if (timezoneBtn) {
+            timezoneBtn.addEventListener('click', function() {
+                openTimezoneModal();
+            });
+        }
+
+        // Обработка кнопки закрытия модального окна настроек
+        const closeTimezoneBtn = document.getElementById('close-timezone-modal');
+        if (closeTimezoneBtn) {
+            closeTimezoneBtn.addEventListener('click', function() {
+                closeTimezoneModal();
+            });
+        }
+
+        // Обработка кнопки "ОТМЕНА" в форме настроек
+        const cancelTimezoneBtn = document.getElementById('cancel-timezone-modal');
+        if (cancelTimezoneBtn) {
+            cancelTimezoneBtn.addEventListener('click', function() {
+                closeTimezoneModal();
+            });
+        }
+
+
+
         // Обработка формы добавления события уже настроена в script.js
     });
 
@@ -565,6 +868,59 @@ $totalDays = 42; // 6 недель * 7 дней
         if (e.key === 'Escape') {
             closeEventForm();
             closeScheduleModal();
+            closeTimezoneModal();
+        }
+    });
+
+
+
+    // Обработка отправки формы настроек филиала
+    document.addEventListener('DOMContentLoaded', function() {
+        const timezoneForm = document.getElementById('timezone-form');
+        if (timezoneForm) {
+            timezoneForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                const formData = new FormData(this);
+                const timezoneData = {
+                    action: 'update_timezone',
+                    branch_id: formData.get('branch_id'),
+                    timezone_name: formData.get('timezone_name')
+                };
+
+                // Отправляем AJAX запрос
+                fetch('/local/components/artmax/calendar/ajax.php', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: new URLSearchParams(timezoneData)
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert('Настройки часового пояса успешно обновлены!');
+                        closeTimezoneModal();
+                        // Перезагружаем страницу для применения изменений
+                        location.reload();
+                    } else {
+                        alert('Ошибка при обновлении настроек: ' + (data.message || 'Неизвестная ошибка'));
+                    }
+                })
+                .catch(error => {
+                    console.error('Ошибка:', error);
+                    alert('Произошла ошибка при отправке запроса');
+                });
+            });
+        }
+    });
+
+    // Закрытие модального окна часового пояса при клике вне его
+    window.addEventListener('click', function(event) {
+        const timezoneModal = document.getElementById('timezoneModal');
+        if (event.target === timezoneModal) {
+            closeTimezoneModal();
         }
     });
 </script> 

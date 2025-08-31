@@ -309,14 +309,21 @@
         submitBtn.textContent = 'Добавление...';
         submitBtn.disabled = true;
         
+        // Конвертируем время в UTC с учетом часового пояса филиала
+        const branchId = getBranchId();
+        const dateFrom = formData.get('dateFrom');
+        const dateTo = formData.get('dateTo');
+        
+        // Отправляем время в локальном формате, сервер сам конвертирует в UTC
         BX.ajax.runComponentAction('artmax:calendar', 'addEvent', {
             mode: 'class',
             data: {
                 title: formData.get('title'),
                 description: formData.get('description'),
-                dateFrom: formData.get('dateFrom'),
-                dateTo: formData.get('dateTo'),
-                branchId: getBranchId()
+                dateFrom: dateFrom,
+                dateTo: dateTo,
+                branchId: branchId,
+                eventColor: getSelectedEventColor()
             }
         }).then(function(response) {
             if (response.data.success) {
@@ -324,10 +331,14 @@
                 closeEventForm();
                 form.reset();
                 
-                // Перезагружаем страницу для отображения нового события
-                setTimeout(() => {
-                    location.reload();
-                }, 1000);
+                // Динамически добавляем событие в календарь
+                addEventToCalendar({
+                    id: response.data.eventId,
+                    title: formData.get('title'),
+                    description: formData.get('description'),
+                    dateFrom: formData.get('dateFrom'),
+                    dateTo: formData.get('dateTo')
+                });
             } else {
                 showNotification('Ошибка: ' + response.data.error, 'error');
             }
@@ -446,6 +457,17 @@
         console.log('Показываем детали события:', eventId);
         // Здесь можно добавить модальное окно с деталями события
         alert('Детали события ID: ' + eventId);
+    }
+
+    function getSelectedEventColor() {
+        // Получаем выбранный цвет события
+        const selectedColorInput = document.getElementById('selected-color');
+        if (selectedColorInput) {
+            return selectedColorInput.value;
+        }
+        
+        // Если не найден, возвращаем цвет по умолчанию
+        return '#3498db';
     }
 
     function getBranchId() {

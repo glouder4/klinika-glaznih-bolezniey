@@ -451,7 +451,7 @@ input:checked + .toggle-slider:before {
     box-shadow: 0 10px 40px rgba(0,0,0,0.3);
 
     margin: auto;
-    margin-top: calc(615px - 425px);
+    margin-top: 35px;
 
     display: flex;
     flex-direction: column;
@@ -1102,4 +1102,84 @@ input:checked + .toggle-slider:before {
     border: 1px solid #dee2e6;
     border-radius: 4px;
     cursor: pointer;
+}
+
+/* Стили для кнопки обновления */
+.btn-refresh {
+    background: #28a745;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 8px 12px;
+    cursor: pointer;
+    font-size: 16px;
+    transition: all 0.2s ease;
+    margin-left: 8px;
+}
+
+.btn-refresh:hover {
+    background: #218838;
+    transform: scale(1.05);
+}
+
+.btn-refresh:active {
+    transform: scale(0.95);
+}
+
+/* Плавное появление события */
+.calendar-event {
+    transition: opacity 0.3s ease-out, transform 0.3s ease-out;
+}
+
+/* Анимация вращения для кнопки обновления */
+.btn-refresh.loading {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+/* Стили для новых событий с анимацией */
+.calendar-event.new-event {
+    animation: newEventPulse 0.5s ease-in-out;
+    position: relative;
+    z-index: 10;
+}
+
+@keyframes newEventPulse {
+    0% {
+        transform: scale(0.8);
+        opacity: 0;
+    }
+    50% {
+        transform: scale(1.05);
+        opacity: 0.8;
+    }
+    100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+/* Эффект мерцания для новых событий */
+.calendar-event.new-event {
+    transition: all 0.3s ease-out;
+}
+
+.calendar-event.new-event:hover {
+    transform: scale(1.02);
+    box-shadow: 0 2px 8px rgba(52, 152, 219, 0.3);
+}
+
+/* Анимация при добавлении */
+.calendar-event.adding {
+    opacity: 0;
+    transform: scale(0.8);
+}
+
+.calendar-event.added {
+    opacity: 1;
+    transform: scale(1);
 }

@@ -7,11 +7,14 @@
 // Подключаем Bitrix
 require($_SERVER['DOCUMENT_ROOT'].'/bitrix/modules/main/include/prolog_before.php');
 
-// Проверяем, что это AJAX запрос
-if (!isset($_SERVER['HTTP_X_REQUESTED_WITH']) || 
-    strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) !== 'xmlhttprequest') {
+// Проверяем, что это AJAX запрос (более мягкая проверка)
+$isAjax = isset($_SERVER['HTTP_X_REQUESTED_WITH']) && 
+          strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest';
+
+// Также проверяем по наличию action в POST данных
+if (!$isAjax && !isset($_POST['action'])) {
     http_response_code(400);
-    die(json_encode(['success' => false, 'error' => 'Только AJAX запросы']));
+    die(json_encode(['success' => false, 'error' => 'Только AJAX запросы или POST с action']));
 }
 
 // Проверяем метод запроса
@@ -35,10 +38,27 @@ if (!CModule::IncludeModule('artmax.calendar')) {
 // Получаем действие
 $action = $_POST['action'] ?? '';
 
+// Логируем входящий запрос
+file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+    "=== INCOMING AJAX REQUEST ===\n", 
+    FILE_APPEND | LOCK_EX);
+file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+    "Action: {$action}\n", 
+    FILE_APPEND | LOCK_EX);
+file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+    "POST data: " . json_encode($_POST) . "\n", 
+    FILE_APPEND | LOCK_EX);
+
 // Создаем объект календаря
 try {
     $calendarObj = new \Artmax\Calendar\Calendar();
+    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+        "Calendar object created successfully\n", 
+        FILE_APPEND | LOCK_EX);
 } catch (Exception $e) {
+    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+        "Error creating calendar object: " . $e->getMessage() . "\n", 
+        FILE_APPEND | LOCK_EX);
     http_response_code(500);
     die(json_encode(['success' => false, 'error' => 'Ошибка инициализации календаря: ' . $e->getMessage()]));
 }
@@ -51,6 +71,7 @@ switch ($action) {
         $dateFrom = $_POST['dateFrom'] ?? '';
         $dateTo = $_POST['dateTo'] ?? '';
         $branchId = (int)($_POST['branchId'] ?? 1);
+        $eventColor = $_POST['eventColor'] ?? '#3498db';
         
         if (empty($title) || empty($dateFrom) || empty($dateTo)) {
             http_response_code(400);
@@ -59,13 +80,16 @@ switch ($action) {
         
         $userId = $GLOBALS['USER']->GetID();
         
+        // Сохраняем время как есть, без конвертации в UTC
+        // Это позволит избежать проблем с часовыми поясами
+        
         // Проверяем доступность времени
         if (!$calendarObj->isTimeAvailable($dateFrom, $dateTo, $userId)) {
             die(json_encode(['success' => false, 'error' => 'Время уже занято']));
         }
         
-        // Добавляем событие
-        $eventId = $calendarObj->addEvent($title, $description, $dateFrom, $dateTo, $userId, $branchId);
+        // Добавляем событие с цветом (без конвертации в UTC)
+        $eventId = $calendarObj->addEvent($title, $description, $dateFrom, $dateTo, $userId, $branchId, $eventColor);
         
         if ($eventId) {
             die(json_encode(['success' => true, 'eventId' => $eventId]));
@@ -102,6 +126,43 @@ switch ($action) {
         }
         break;
         
+    case 'updateEvent':
+        $eventId = (int)($_POST['eventId'] ?? 0);
+        $title = $_POST['title'] ?? '';
+        $description = $_POST['description'] ?? '';
+        $dateFrom = $_POST['dateFrom'] ?? '';
+        $dateTo = $_POST['dateTo'] ?? '';
+        $eventColor = $_POST['eventColor'] ?? '#3498db';
+        $branchId = (int)($_POST['branchId'] ?? 1);
+        
+        if (!$eventId || empty($title) || empty($dateFrom) || empty($dateTo)) {
+            http_response_code(400);
+            die(json_encode(['success' => false, 'error' => 'Не все обязательные поля заполнены']));
+        }
+        
+        $event = $calendarObj->getEvent($eventId);
+        if (!$event) {
+            die(json_encode(['success' => false, 'error' => 'Событие не найдено']));
+        }
+        
+        // Проверяем права на редактирование (только автор события)
+        if ($event['USER_ID'] != $GLOBALS['USER']->GetID()) {
+            http_response_code(403);
+            die(json_encode(['success' => false, 'error' => 'Нет прав на редактирование']));
+        }
+        
+        try {
+            $result = $calendarObj->updateEvent($eventId, $title, $description, $dateFrom, $dateTo, $eventColor, $branchId);
+            if ($result) {
+                die(json_encode(['success' => true]));
+            } else {
+                die(json_encode(['success' => false, 'error' => 'Ошибка обновления события']));
+            }
+        } catch (Exception $e) {
+            die(json_encode(['success' => false, 'error' => $e->getMessage()]));
+        }
+        break;
+        
     case 'getEvents':
         $branchId = (int)($_POST['branchId'] ?? 1);
         $dateFrom = $_POST['dateFrom'] ?? null;
@@ -113,6 +174,129 @@ switch ($action) {
         } catch (Exception $e) {
             die(json_encode(['success' => false, 'error' => $e->getMessage()]));
         }
+        break;
+        
+    case 'getEvent':
+        $eventId = (int)($_POST['eventId'] ?? 0);
+        
+        // Логируем запрос
+        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+            "=== AJAX GET_EVENT ===\n", 
+            FILE_APPEND | LOCK_EX);
+        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+            "AJAX: Requesting event ID: {$eventId}\n", 
+            FILE_APPEND | LOCK_EX);
+        
+        if (!$eventId) {
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "AJAX: Error - ID события не указан\n", 
+                FILE_APPEND | LOCK_EX);
+            http_response_code(400);
+            die(json_encode(['success' => false, 'error' => 'ID события не указан']));
+        }
+        
+        try {
+            $event = $calendarObj->getEvent($eventId);
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "AJAX: getEvent result: " . json_encode($event) . "\n", 
+                FILE_APPEND | LOCK_EX);
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "AJAX: DATE_FROM type: " . gettype($event['DATE_FROM'] ?? null) . "\n", 
+                FILE_APPEND | LOCK_EX);
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "AJAX: DATE_TO type: " . gettype($event['DATE_TO'] ?? null) . "\n", 
+                FILE_APPEND | LOCK_EX);
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "AJAX: DATE_FROM value: " . print_r($event['DATE_FROM'] ?? null, true) . "\n", 
+                FILE_APPEND | LOCK_EX);
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "AJAX: DATE_TO value: " . print_r($event['DATE_TO'] ?? null, true) . "\n", 
+                FILE_APPEND | LOCK_EX);
+            
+            if ($event) {
+                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                    "AJAX: Event found, returning success\n", 
+                    FILE_APPEND | LOCK_EX);
+                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                    "AJAX: Final event data before JSON: " . print_r($event, true) . "\n", 
+                    FILE_APPEND | LOCK_EX);
+                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                    "AJAX: Final DATE_FROM type: " . gettype($event['DATE_FROM'] ?? null) . "\n", 
+                    FILE_APPEND | LOCK_EX);
+                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                    "AJAX: Final DATE_TO type: " . gettype($event['DATE_TO'] ?? null) . "\n", 
+                    FILE_APPEND | LOCK_EX);
+                $jsonResult = json_encode(['success' => true, 'event' => $event]);
+                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                    "AJAX: JSON result: " . $jsonResult . "\n", 
+                    FILE_APPEND | LOCK_EX);
+                if (json_last_error() !== JSON_ERROR_NONE) {
+                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                        "AJAX: JSON error: " . json_last_error_msg() . "\n", 
+                        FILE_APPEND | LOCK_EX);
+                }
+                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                    "AJAX: JSON length: " . strlen($jsonResult) . "\n", 
+                    FILE_APPEND | LOCK_EX);
+                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                    "AJAX: JSON first 500 chars: " . substr($jsonResult, 0, 500) . "\n", 
+                    FILE_APPEND | LOCK_EX);
+                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                    "AJAX: JSON last 500 chars: " . substr($jsonResult, -500) . "\n", 
+                    FILE_APPEND | LOCK_EX);
+                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                    "AJAX: JSON contains DATE_FROM: " . (strpos($jsonResult, 'DATE_FROM') !== false ? 'YES' : 'NO') . "\n", 
+                    FILE_APPEND | LOCK_EX);
+                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                    "AJAX: JSON contains DATE_TO: " . (strpos($jsonResult, 'DATE_TO') !== false ? 'YES' : 'NO') . "\n", 
+                    FILE_APPEND | LOCK_EX);
+                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                    "AJAX: JSON contains empty objects: " . (strpos($jsonResult, '{}') !== false ? 'YES' : 'NO') . "\n", 
+                    FILE_APPEND | LOCK_EX);
+                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                    "AJAX: JSON contains quotes around DATE_FROM: " . (strpos($jsonResult, '"DATE_FROM"') !== false ? 'YES' : 'NO') . "\n", 
+                    FILE_APPEND | LOCK_EX);
+                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                    "AJAX: JSON contains quotes around DATE_TO: " . (strpos($jsonResult, '"DATE_TO"') !== false ? 'YES' : 'NO') . "\n", 
+                    FILE_APPEND | LOCK_EX);
+                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                    "AJAX: JSON contains quotes around DATE_FROM value: " . (strpos($jsonResult, '"DATE_FROM":') !== false ? 'YES' : 'NO') . "\n", 
+                    FILE_APPEND | LOCK_EX);
+                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                    "AJAX: JSON contains quotes around DATE_TO value: " . (strpos($jsonResult, '"DATE_TO":') !== false ? 'YES' : 'NO') . "\n", 
+                    FILE_APPEND | LOCK_EX);
+                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                    "AJAX: JSON contains quotes around DATE_FROM value: " . (strpos($jsonResult, '"DATE_FROM":') !== false ? 'YES' : 'NO') . "\n", 
+                    FILE_APPEND | LOCK_EX);
+                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                    "AJAX: JSON contains quotes around DATE_TO value: " . (strpos($jsonResult, '"DATE_TO":') !== false ? 'YES' : 'NO') . "\n", 
+                    FILE_APPEND | LOCK_EX);
+                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                    "AJAX: JSON contains quotes around DATE_FROM value: " . (strpos($jsonResult, '"DATE_FROM":') !== false ? 'YES' : 'NO') . "\n", 
+                    FILE_APPEND | LOCK_EX);
+                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                    "AJAX: JSON contains quotes around DATE_TO value: " . (strpos($jsonResult, '"DATE_TO":') !== false ? 'YES' : 'NO') . "\n", 
+                    FILE_APPEND | LOCK_EX);
+                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                    "AJAX: JSON contains quotes around DATE_FROM value: " . (strpos($jsonResult, '"DATE_FROM":') !== false ? 'YES' : 'NO') . "\n", 
+                    FILE_APPEND | LOCK_EX);
+                die($jsonResult);
+            } else {
+                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                    "AJAX: Event not found\n", 
+                    FILE_APPEND | LOCK_EX);
+                die(json_encode(['success' => false, 'error' => 'Событие не найдено']));
+            }
+        } catch (Exception $e) {
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "AJAX: Exception: " . $e->getMessage() . "\n", 
+                FILE_APPEND | LOCK_EX);
+            die(json_encode(['success' => false, 'error' => $e->getMessage()]));
+        }
+        
+        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+            "=== END AJAX GET_EVENT ===\n", 
+            FILE_APPEND | LOCK_EX);
         break;
         
     case 'addSchedule':
@@ -158,11 +342,57 @@ switch ($action) {
         }
         break;
         
+    case 'update_timezone':
+        $branchId = (int)($_POST['branch_id'] ?? 0);
+        $timezoneName = $_POST['timezone_name'] ?? '';
+        
+        if (!$branchId || empty($timezoneName)) {
+            http_response_code(400);
+            die(json_encode(['success' => false, 'error' => 'Не все обязательные поля заполнены']));
+        }
+        
+        try {
+            $timezoneManager = new \Artmax\Calendar\TimezoneManager();
+            
+            $timezoneData = [
+                'timezone_name' => $timezoneName,
+                'timezone_offset' => 0, // Автоматически определяется из timezone_name
+                'dst_enabled' => 0, // Отключаем DST
+                'dst_start_month' => 3,
+                'dst_start_day' => 1,
+                'dst_start_hour' => 2,
+                'dst_end_month' => 10,
+                'dst_end_day' => 1,
+                'dst_end_hour' => 3
+            ];
+            
+            $result = $timezoneManager->updateBranchTimezone($branchId, $timezoneData);
+            
+            if ($result) {
+                die(json_encode(['success' => true, 'message' => 'Часовой пояс обновлен']));
+            } else {
+                die(json_encode(['success' => false, 'error' => 'Ошибка обновления часового пояса']));
+            }
+        } catch (Exception $e) {
+            die(json_encode(['success' => false, 'error' => 'Ошибка: ' . $e->getMessage()]));
+        }
+        break;
+        
     default:
+        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+            "Unknown action: {$action}\n", 
+            FILE_APPEND | LOCK_EX);
         http_response_code(400);
         die(json_encode(['success' => false, 'error' => 'Неизвестное действие']));
 }
 
-// Если дошли до сюда, что-то пошло не так
-http_response_code(500);
-die(json_encode(['success' => false, 'error' => 'Неожиданная ошибка']));
+        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+            "=== END AJAX REQUEST ===\n", 
+            FILE_APPEND | LOCK_EX);
+        
+        // Если дошли до сюда, что-то пошло не так
+        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+            "Reached end of file - unexpected\n", 
+            FILE_APPEND | LOCK_EX);
+        http_response_code(500);
+        die(json_encode(['success' => false, 'error' => 'Неожиданная ошибка']));

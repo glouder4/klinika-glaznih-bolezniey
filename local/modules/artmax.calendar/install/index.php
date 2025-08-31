@@ -80,9 +80,41 @@ class artmax_calendar extends CModule
             PRIMARY KEY (ID)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
         ";
+
+        // Таблица настроек филиалов
+        $sqlBranchesSettings = "
+        CREATE TABLE IF NOT EXISTS artmax_calendar_timezone_settings (
+            ID INT AUTO_INCREMENT PRIMARY KEY,
+            BRANCH_ID INT NOT NULL,
+            TIMEZONE_NAME VARCHAR(50) NOT NULL,
+            TIMEZONE_OFFSET INT NOT NULL,
+            DST_ENABLED TINYINT(1) DEFAULT 1,
+            DST_START_MONTH TINYINT DEFAULT 3,
+            DST_START_DAY TINYINT DEFAULT 31,
+            DST_START_HOUR TINYINT DEFAULT 2,
+            DST_END_MONTH TINYINT DEFAULT 10,
+            DST_END_DAY TINYINT DEFAULT 27,
+            DST_END_HOUR TINYINT DEFAULT 3,
+            IS_ACTIVE TINYINT(1) DEFAULT 1,
+            CREATED_AT TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UPDATED_AT TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY unique_branch_timezone (BRANCH_ID),
+            FOREIGN KEY (BRANCH_ID) REFERENCES artmax_calendar_branches(ID) ON DELETE CASCADE ON UPDATE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        ";
+        $sqlModifier = "
+        INSERT IGNORE INTO artmax_calendar_timezone_settings (BRANCH_ID, TIMEZONE_NAME, TIMEZONE_OFFSET, DST_ENABLED) VALUES
+        (1, 'Europe/Moscow', 3, 1),
+        (2, 'Europe/Moscow', 3, 1),
+        (3, 'Asia/Yekaterinburg', 5, 1),
+        (4, 'Asia/Novosibirsk', 7, 1),
+        (5, 'Asia/Vladivostok', 10, 1);
+        ";
         
         $connection->query($sqlEvents);
         $connection->query($sqlBranches);
+        $connection->query($sqlBranchesSettings);
+        $connection->query($sqlModifier);
         
         // Добавляем тестовые филиалы, если таблица пустая
         $result = $connection->query("SELECT COUNT(*) as cnt FROM artmax_calendar_branches");
@@ -96,6 +128,19 @@ class artmax_calendar extends CModule
                 ('Филиал №2', 'ул. Третья, 25', '+7 (123) 456-78-92', 'branch2@example.com')
             ");
         }
+        
+        // Добавляем тестовые события, если таблица пустая
+        $result = $connection->query("SELECT COUNT(*) as cnt FROM artmax_calendar_events");
+        $row = $result->fetch();
+        
+        if ($row['cnt'] == 0) {
+            $connection->query("
+                INSERT INTO artmax_calendar_events (TITLE, DESCRIPTION, DATE_FROM, DATE_TO, USER_ID, BRANCH_ID, EVENT_COLOR) VALUES 
+                ('Консультация офтальмолога', 'Первичный прием пациента', NOW() + INTERVAL 1 DAY, NOW() + INTERVAL 1 DAY + INTERVAL 30 MINUTE, 1, 1, '#3498db'),
+                ('Проверка зрения', 'Комплексная диагностика', NOW() + INTERVAL 2 DAY, NOW() + INTERVAL 2 DAY + INTERVAL 1 HOUR, 1, 1, '#e74c3c'),
+                ('Подбор очков', 'Консультация по выбору очков', NOW() + INTERVAL 3 DAY, NOW() + INTERVAL 3 DAY + INTERVAL 45 MINUTE, 1, 1, '#2ecc71')
+            ");
+        }
     }
 
     public function UnInstallDB()
@@ -104,6 +149,7 @@ class artmax_calendar extends CModule
         $connection = \Bitrix\Main\Application::getConnection();
         $connection->query("DROP TABLE IF EXISTS artmax_calendar_events");
         $connection->query("DROP TABLE IF EXISTS artmax_calendar_branches");
+        $connection->query("DROP TABLE IF EXISTS artmax_calendar_timezone_settings");
         
         // Удаляем настройки модуля
         \Bitrix\Main\Config\Option::delete('artmax.calendar', ['name' => 'menu_item_id']);
