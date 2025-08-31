@@ -248,11 +248,87 @@ $totalDays = 42; // 6 недель * 7 дней
                 <div id="repeat-fields" class="repeat-fields" style="display: none;">
                     <div class="form-group">
                         <label for="schedule-frequency">Повторяемость</label>
-                        <select id="schedule-frequency" name="frequency">
+                        <select id="schedule-frequency" name="frequency" onchange="toggleWeeklyDays()">
                             <option value="daily">Каждый день</option>
                             <option value="weekly">Каждую неделю</option>
                             <option value="monthly">Каждый месяц</option>
                         </select>
+                    </div>
+                    
+                    <!-- Дни недели для еженедельного повторения -->
+                    <div id="weekly-days" class="weekly-days" style="display: none;">
+                        <label>Дни недели</label>
+                        <div class="weekday-checkboxes">
+                            <label class="weekday-checkbox">
+                                <input type="checkbox" name="weekdays[]" value="1">
+                                <span>ПН</span>
+                            </label>
+                            <label class="weekday-checkbox">
+                                <input type="checkbox" name="weekdays[]" value="2">
+                                <span>ВТ</span>
+                            </label>
+                            <label class="weekday-checkbox">
+                                <input type="checkbox" name="weekdays[]" value="3">
+                                <span>СР</span>
+                            </label>
+                            <label class="weekday-checkbox">
+                                <input type="checkbox" name="weekdays[]" value="4">
+                                <span>ЧТ</span>
+                            </label>
+                            <label class="weekday-checkbox">
+                                <input type="checkbox" name="weekdays[]" value="5">
+                                <span>ПТ</span>
+                            </label>
+                            <label class="weekday-checkbox">
+                                <input type="checkbox" name="weekdays[]" value="6">
+                                <span>СБ</span>
+                            </label>
+                            <label class="weekday-checkbox">
+                                <input type="checkbox" name="weekdays[]" value="7">
+                                <span>ВС</span>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <!-- Поля для окончания повторения -->
+                    <div class="form-group">
+                        <label>Окончание</label>
+                        <div class="radio-group">
+                            <label class="radio-label">
+                                <input type="radio" name="repeat-end" value="never" checked onchange="toggleEndFields()">
+                                Никогда
+                            </label>
+                            <label class="radio-label">
+                                <input type="radio" name="repeat-end" value="after" onchange="toggleEndFields()">
+                                После <input type="number" name="repeat-count" min="1" value="1" class="repeat-count-input"> повторений
+                            </label>
+                            <label class="radio-label">
+                                <input type="radio" name="repeat-end" value="date" onchange="toggleEndFields()">
+                                Дата <input type="date" name="repeat-end-date" class="repeat-end-date-input">
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Поле для выбора цвета события -->
+                <div class="form-group">
+                    <label for="event-color">Цвет события</label>
+                    <div class="color-picker-container">
+                        <div class="color-presets">
+                            <button type="button" class="color-preset" data-color="#3498db" style="background-color: #3498db;" onclick="selectPresetColor('#3498db')"></button>
+                            <button type="button" class="color-preset" data-color="#e74c3c" style="background-color: #e74c3c;" onclick="selectPresetColor('#e74c3c')"></button>
+                            <button type="button" class="color-preset" data-color="#2ecc71" style="background-color: #2ecc71;" onclick="selectPresetColor('#2ecc71')"></button>
+                            <button type="button" class="color-preset" data-color="#f39c12" style="background-color: #f39c12;" onclick="selectPresetColor('#f39c12')"></button>
+                            <button type="button" class="color-preset" data-color="#9b59b6" style="background-color: #9b59b6;" onclick="selectPresetColor('#9b59b6')"></button>
+                            <button type="button" class="color-preset" data-color="#1abc9c" style="background-color: #1abc9c;" onclick="selectPresetColor('#1abc9c')"></button>
+                            <button type="button" class="color-preset" data-color="#34495e" style="background-color: #34495e;" onclick="selectPresetColor('#34495e')"></button>
+                            <button type="button" class="color-preset" data-color="#95a5a6" style="background-color: #95a5a6;" onclick="selectPresetColor('#95a5a6')"></button>
+                        </div>
+                        <div class="custom-color">
+                            <label for="custom-color-input">Свой цвет:</label>
+                            <input type="color" id="custom-color-input" name="custom-color" value="#3498db" onchange="selectCustomColor(this.value)">
+                        </div>
+                        <input type="hidden" id="selected-color" name="event-color" value="#3498db">
                     </div>
                 </div>
                 
@@ -298,6 +374,58 @@ $totalDays = 42; // 6 недель * 7 дней
         const url = new URL(window.location);
         url.searchParams.set('date', `${year}-${month.toString().padStart(2, '0')}-01`);
         window.location.href = url.toString();
+    }
+
+    // Функция для переключения отображения дней недели
+    function toggleWeeklyDays() {
+        const frequency = document.getElementById('schedule-frequency').value;
+        const weeklyDays = document.getElementById('weekly-days');
+        
+        if (frequency === 'weekly') {
+            weeklyDays.style.display = 'block';
+        } else {
+            weeklyDays.style.display = 'none';
+        }
+    }
+    
+    // Функция для переключения полей окончания повторения
+    function toggleEndFields() {
+        const repeatEnd = document.querySelector('input[name="repeat-end"]:checked').value;
+        const repeatCountInput = document.querySelector('.repeat-count-input');
+        const repeatEndDateInput = document.querySelector('.repeat-end-date-input');
+        
+        // Скрываем все поля
+        repeatCountInput.style.display = 'none';
+        repeatEndDateInput.style.display = 'none';
+        
+        // Показываем нужные поля
+        if (repeatEnd === 'after') {
+            repeatCountInput.style.display = 'inline-block';
+        } else if (repeatEnd === 'date') {
+            repeatEndDateInput.style.display = 'inline-block';
+        }
+    }
+    
+    // Функция для выбора предустановленного цвета
+    function selectPresetColor(color) {
+        document.getElementById('selected-color').value = color;
+        document.getElementById('custom-color-input').value = color;
+        
+        // Обновляем активный класс для пресетов
+        document.querySelectorAll('.color-preset').forEach(preset => {
+            preset.classList.remove('active');
+        });
+        event.target.classList.add('active');
+    }
+    
+    // Функция для выбора кастомного цвета
+    function selectCustomColor(color) {
+        document.getElementById('selected-color').value = color;
+        
+        // Убираем активный класс со всех пресетов
+        document.querySelectorAll('.color-preset').forEach(preset => {
+            preset.classList.remove('active');
+        });
     }
 
     function openEventForm(date) {

@@ -1,31 +1,26 @@
 <?php
+
 return array (
-  'utf_mode' =>
+  'cache_flags' => 
   array (
-    'value' => true,
-    'readonly' => true,
-  ),
-  'cache_flags' =>
-  array (
-    'value' =>
+    'value' => 
     array (
-      'config_options' => 3600,
-      'site_domain' => 3600,
+      'config_options' => 3600.0,
     ),
     'readonly' => false,
   ),
-  'cookies' =>
+  'cookies' => 
   array (
-    'value' =>
+    'value' => 
     array (
       'secure' => false,
       'http_only' => true,
     ),
     'readonly' => false,
   ),
-  'exception_handling' =>
+  'exception_handling' => 
   array (
-    'value' =>
+    'value' => 
     array (
       'debug' => true,
       'handled_errors_types' => 4437,
@@ -33,38 +28,54 @@ return array (
       'ignore_silence' => false,
       'assertion_throws_exception' => true,
       'assertion_error_type' => 256,
-      'log' => array (
-          'settings' =>
-          array (
-            'file' => '/var/log/php/exceptions.log',
-            'log_size' => 1000000,
-        ),
-      ),
+      'log' => NULL,
     ),
     'readonly' => false,
+  ),
+  'connections' => 
+  array (
+    'value' => 
+    array (
+      'default' => 
+      array (
+        'host' => 'localhost',
+        'database' => 'glouder_kgb',
+        'login' => 'glouder_kgb',
+        'password' => 'n4UAK%r&Mfpf',
+        'options' => 2.0,
+        'className' => '\\Bitrix\\Main\\DB\\MysqliConnection',
+      ),
+    ),
+    'readonly' => true,
   ),
   'crypto' => 
   array (
     'value' => 
     array (
-        'crypto_key'    => 'x4ad3w1gqul1uj6uwhorttolwdxu9imz',
+      'crypto_key' => 'cc5ceede1c8163bfec9d0ba5c27d2404',
     ),
     'readonly' => true,
   ),
-  'connections' =>
+  'messenger' => 
   array (
-    'value' =>
+    'value' => 
     array (
-      'default' =>
+      'run_mode' => NULL,
+      'brokers' => 
       array (
-        'className' => '\\Bitrix\\Main\\DB\\MysqliConnection',
-        'host' => 'localhost',
-        'database' => 'sitemanager',
-        'login'    => 'bitrix0',
-        'password' => '(r!hg=12!ovJ+h7dTntl',
-        'options' => 2,
+        'default' => 
+        array (
+          'type' => 'db',
+          'params' => 
+          array (
+            'table' => 'Bitrix\\Main\\Messenger\\Internals\\Storage\\Db\\Model\\MessengerMessageTable',
+          ),
+        ),
+      ),
+      'queues' => 
+      array (
       ),
     ),
     'readonly' => true,
-  )
+  ),
 );

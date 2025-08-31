@@ -1,0 +1,32 @@
+{
+    "timestamp": "2025-08-31 18:27:31",
+    "POST_action": "addEvent",
+    "HTTP_X_REQUESTED_WITH": "XMLHttpRequest",
+    "REQUEST_METHOD": "POST",
+    "POST_data": {
+        "action": "addEvent",
+        "title": "555",
+        "description": "55",
+        "dateFrom": "2025-08-04T04:00:00.000Z",
+        "dateTo": "2025-08-04T04:30:00.000Z",
+        "branchId": "1"
+    }
+}
+
+RESULT: isAjaxRequest() returned: TRUE
+
+EXECUTE: AJAX request detected, calling handleAjaxRequest()
+
+HANDLE_AJAX: Starting handleAjaxRequest, action = addEvent
+HANDLE_AJAX: Processing addEvent case
+ADD_EVENT: Starting addEventAction with params: {"title":"555","description":"55","dateFrom":"2025-08-04T04:00:00.000Z","dateTo":"2025-08-04T04:30:00.000Z","branchId":1}
+ADD_EVENT: Including module artmax.calendar
+ADD_EVENT: Creating Calendar object
+ADD_EVENT: User ID = 1
+ADD_EVENT: Checking time availability
+ADD_EVENT: Time not available
+HANDLE_AJAX: addEventAction result = {"success":false,"error":"\u0412\u0440\u0435\u043c\u044f \u0443\u0436\u0435 \u0437\u0430\u043d\u044f\u0442\u043e"}
+HANDLE_AJAX: About to send JSON response: {"success":false,"error":"\u0412\u0440\u0435\u043c\u044f \u0443\u0436\u0435 \u0437\u0430\u043d\u044f\u0442\u043e"}
+HANDLE_AJAX: Setting Content-Type header
+HANDLE_AJAX: Echoing JSON response
+HANDLE_AJAX: Calling exit()

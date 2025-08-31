@@ -57,6 +57,7 @@ class artmax_calendar extends CModule
             DATE_TO datetime NOT NULL,
             USER_ID int(11) NOT NULL,
             BRANCH_ID int(11) NOT NULL DEFAULT 1,
+            EVENT_COLOR varchar(7) DEFAULT '#3498db',
             CREATED_AT datetime DEFAULT CURRENT_TIMESTAMP,
             UPDATED_AT datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             PRIMARY KEY (ID),
@@ -301,6 +302,16 @@ class artmax_calendar extends CModule
         } else {
             file_put_contents($_SERVER["DOCUMENT_ROOT"]."/copy_error.log", "Файл проверки классов не найден: $classesFrom\n", FILE_APPEND);
         }
+
+        // Копируем AJAX endpoint в корень сайта
+        $ajaxFrom = $_SERVER['DOCUMENT_ROOT'] . '/local/modules/' . $this->MODULE_ID . '/install/ajax.php';
+        $ajaxTo = $_SERVER['DOCUMENT_ROOT'] . '/local/components/artmax/calendar/ajax.php';
+        if (file_exists($ajaxFrom)) {
+            CopyDirFiles($ajaxFrom, $ajaxTo, true, true);
+            file_put_contents($_SERVER["DOCUMENT_ROOT"]."/copy_error.log", "AJAX endpoint скопирован из $ajaxFrom в $ajaxTo\n", FILE_APPEND);
+        } else {
+            file_put_contents($_SERVER["DOCUMENT_ROOT"]."/copy_error.log", "AJAX endpoint не найден: $ajaxFrom\n", FILE_APPEND);
+        }
     }
 
     public function UnInstallFiles()
@@ -326,6 +337,13 @@ class artmax_calendar extends CModule
         if (file_exists($calendarPage)) {
             unlink($calendarPage);
             file_put_contents($_SERVER["DOCUMENT_ROOT"]."/copy_error.log", "Страница календаря удалена: $calendarPage\n", FILE_APPEND);
+        }
+
+        // Удаляем AJAX endpoint
+        $ajaxFile = $_SERVER['DOCUMENT_ROOT'] . '/local/components/artmax/calendar/ajax.php';
+        if (file_exists($ajaxFile)) {
+            unlink($ajaxFile);
+            file_put_contents($_SERVER["DOCUMENT_ROOT"]."/copy_error.log", "AJAX endpoint удален: $ajaxFile\n", FILE_APPEND);
         }
 
     }
