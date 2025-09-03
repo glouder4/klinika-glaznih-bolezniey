@@ -190,8 +190,28 @@ $totalDays = 42; // 6 недель * 7 дней
                                 echo '<div class="event-icons">';
                                 echo '<span class="event-icon contact-icon ' . ($event['CONTACT_ENTITY_ID'] ? 'active' : '') . '" title="Контакт">👤</span>';
                                 echo '<span class="event-icon deal-icon" title="Сделка">💼</span>';
-                                echo '<span class="event-icon visit-icon" title="Визит">🏥</span>';
-                                echo '<span class="event-icon confirmation-icon" title="Подтверждение">✅</span>';
+                                
+                                // Логика для иконки визита
+                                $visitActive = '';
+                                if (isset($event['VISIT_STATUS'])) {
+                                    if ($event['VISIT_STATUS'] === 'client_came') {
+                                        $visitActive = 'active';
+                                    } elseif ($event['VISIT_STATUS'] === 'client_did_not_come') {
+                                        $visitActive = 'inactive';
+                                    }
+                                }
+                                echo '<span class="event-icon visit-icon ' . $visitActive . '" title="Визит">🏥</span>';
+                                
+                                // Логика для иконки подтверждения
+                                $confirmationActive = '';
+                                if (isset($event['CONFIRMATION_STATUS'])) {
+                                    if ($event['CONFIRMATION_STATUS'] === 'confirmed') {
+                                        $confirmationActive = 'active';
+                                    } elseif ($event['CONFIRMATION_STATUS'] === 'not_confirmed') {
+                                        $confirmationActive = 'inactive';
+                                    }
+                                }
+                                echo '<span class="event-icon confirmation-icon ' . $confirmationActive . '" title="Подтверждение">✅</span>';
                                 echo '</div>';
                                 echo '</div>';
                                 echo '</div>';
@@ -615,6 +635,12 @@ $totalDays = 42; // 6 недель * 7 дней
 
     <!-- Боковое окно для просмотра деталей события -->
     <div id="eventSidePanel" class="event-side-panel" style="display: none;">
+        <!-- Прелоадер -->
+        <div class="side-panel-preloader" id="sidePanelPreloader">
+            <div class="preloader-spinner"></div>
+            <div class="preloader-text">Загрузка данных...</div>
+        </div>
+        
         <div class="side-panel-content">
             <div class="side-panel-header">
                 <h3 id="sidePanelTitle">Детали записи</h3>
@@ -668,12 +694,19 @@ $totalDays = 42; // 6 недель * 7 дней
                     </div>
 
                     <div class="action-card">
-                        <div class="card-icon">👥</div>
+                        <div class="card-icon">🏥</div>
                         <div class="card-content">
                             <div class="card-title">Визит</div>
-                            <div class="card-status">Клиент не добавлен</div>
+                            <div class="card-status" id="visit-status">Не указано</div>
                         </div>
-                        <button class="card-action-btn">Выбрать ▼</button>
+                        <button class="card-action-btn" id="visit-select-btn" onclick="toggleVisitDropdown()">Выбрать ▼</button>
+                        
+                        <!-- Выпадающее меню визита -->
+                        <div class="visit-dropdown" id="visit-dropdown">
+                            <div class="visit-dropdown-item" onclick="setVisitStatus('not_specified')">Не указано</div>
+                            <div class="visit-dropdown-item" onclick="setVisitStatus('client_came')">Клиент пришел</div>
+                            <div class="visit-dropdown-item" onclick="setVisitStatus('client_did_not_come')">Клиент не пришел</div>
+                        </div>
                     </div>
                 </div>
 

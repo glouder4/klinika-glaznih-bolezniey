@@ -604,6 +604,70 @@ switch ($action) {
         }
         break;
 
+    case 'get_visit_status':
+        $eventId = (int)($_POST['event_id'] ?? 0);
+        
+        if (!$eventId) {
+            http_response_code(400);
+            die(json_encode(['success' => false, 'error' => 'ID события не указан']));
+        }
+        
+        try {
+            $event = $calendarObj->getEvent($eventId);
+            if (!$event) {
+                die(json_encode(['success' => false, 'error' => 'Событие не найдено']));
+            }
+            
+            die(json_encode([
+                'success' => true, 
+                'visit_status' => $event['VISIT_STATUS'] ?? 'not_specified'
+            ]));
+        } catch (Exception $e) {
+            die(json_encode(['success' => false, 'error' => $e->getMessage()]));
+        }
+        break;
+        
+    case 'update_visit_status':
+        $eventId = (int)($_POST['event_id'] ?? 0);
+        $visitStatus = $_POST['visit_status'] ?? '';
+        
+        if (!$eventId || empty($visitStatus)) {
+            http_response_code(400);
+            die(json_encode(['success' => false, 'error' => 'Не все обязательные поля заполнены']));
+        }
+        
+        // Проверяем валидность статуса
+        $validStatuses = ['not_specified', 'client_came', 'client_did_not_come'];
+        if (!in_array($visitStatus, $validStatuses)) {
+            http_response_code(400);
+            die(json_encode(['success' => false, 'error' => 'Недопустимый статус визита']));
+        }
+        
+        try {
+            $event = $calendarObj->getEvent($eventId);
+            if (!$event) {
+                die(json_encode(['success' => false, 'error' => 'Событие не найдено']));
+            }
+            
+            // Проверяем права на редактирование (только автор события)
+            if ($event['USER_ID'] != $GLOBALS['USER']->GetID()) {
+                http_response_code(403);
+                die(json_encode(['success' => false, 'error' => 'Нет прав на редактирование']));
+            }
+            
+            // Обновляем статус визита в базе данных
+            $result = $calendarObj->updateEventVisitStatus($eventId, $visitStatus);
+            
+            if ($result) {
+                die(json_encode(['success' => true, 'message' => 'Статус визита обновлен']));
+            } else {
+                die(json_encode(['success' => false, 'error' => 'Ошибка обновления статуса визита']));
+            }
+        } catch (Exception $e) {
+            die(json_encode(['success' => false, 'error' => $e->getMessage()]));
+        }
+        break;
+
     default:
         http_response_code(400);
         die(json_encode(['success' => false, 'error' => 'Неизвестное действие']));

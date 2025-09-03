@@ -886,6 +886,9 @@
         // Делаем видимым
         sidePanel.style.visibility = 'visible';
         
+        // Показываем прелоадер
+        showSidePanelPreloader();
+        
         // Получаем данные события и заполняем боковое окно
         const csrfToken = getCSRFToken();
         fetch('/local/components/artmax/calendar/ajax.php', {
@@ -927,15 +930,30 @@
                     resetClientInfoInSidePanel();
                 }
                 
+                // Инициализируем счетчик загрузки
+                window.sidePanelLoadingCount = 2; // 2 дополнительных запроса
+                window.sidePanelLoadingComplete = 0;
+                
                 // Загружаем и отображаем статус подтверждения
                 loadEventConfirmationStatus(eventId);
+                
+                // Загружаем и отображаем статус визита
+                loadEventVisitStatus(eventId);
             } else {
                 showNotification('Ошибка при загрузке события', 'error');
+                // Сбрасываем счетчик загрузки при ошибке основного запроса
+                window.sidePanelLoadingCount = 0;
+                window.sidePanelLoadingComplete = 0;
+                hideSidePanelPreloader();
             }
         })
         .catch(error => {
             console.error('Ошибка при загрузке события:', error);
             showNotification('Ошибка при загрузке события', 'error');
+            // Сбрасываем счетчик загрузки при ошибке основного запроса
+            window.sidePanelLoadingCount = 0;
+            window.sidePanelLoadingComplete = 0;
+            hideSidePanelPreloader();
         });
     }
 
@@ -981,6 +999,13 @@
     function closeEventSidePanel() {
         const sidePanel = document.getElementById('eventSidePanel');
         if (sidePanel) {
+            // Скрываем прелоадер при закрытии
+            hideSidePanelPreloader();
+            
+            // Сбрасываем счетчики загрузки
+            window.sidePanelLoadingCount = 0;
+            window.sidePanelLoadingComplete = 0;
+            
             sidePanel.classList.remove('open');
             setTimeout(() => {
                 sidePanel.style.display = 'none';
@@ -2576,7 +2601,7 @@
     }
 
     function closeAllDropdowns() {
-        const dropdowns = document.querySelectorAll('.confirmation-dropdown');
+        const dropdowns = document.querySelectorAll('.confirmation-dropdown, .visit-dropdown');
         dropdowns.forEach(dropdown => {
             dropdown.classList.remove('show');
             // Удаляем класс dropdown-open с родительского action-card
@@ -2695,11 +2720,15 @@
                 // Устанавливаем статус по умолчанию
                 updateConfirmationStatusDisplay('pending');
             }
+            // Проверяем завершение загрузки
+            checkSidePanelLoadingComplete();
         })
         .catch(error => {
             console.error('Ошибка AJAX запроса при загрузке статуса подтверждения:', error);
             // Устанавливаем статус по умолчанию
             updateConfirmationStatusDisplay('pending');
+            // Проверяем завершение загрузки даже при ошибке
+            checkSidePanelLoadingComplete();
         });
     }
 
@@ -2733,11 +2762,234 @@
                 }
                 break;
         }
+        
+        // Обновляем иконку в календаре
+        updateEventIconInCalendar('confirmation', status);
+    }
+
+    // Функции для выпадающего меню визита
+    function toggleVisitDropdown() {
+        const dropdown = document.getElementById('visit-dropdown');
+        const actionCard = dropdown.closest('.action-card');
+        
+        // Закрываем все другие выпадающие меню
+        closeAllDropdowns();
+        
+        if (dropdown.classList.contains('show')) {
+            dropdown.classList.remove('show');
+            actionCard.classList.remove('dropdown-open');
+        } else {
+            dropdown.classList.add('show');
+            actionCard.classList.add('dropdown-open');
+        }
+    }
+
+    function setVisitStatus(status) {
+        const statusElement = document.getElementById('visit-status');
+        const dropdown = document.getElementById('visit-dropdown');
+        const actionCard = dropdown.closest('.action-card');
+        
+        // Обновляем текст статуса
+        switch (status) {
+            case 'not_specified':
+                statusElement.textContent = 'Не указано';
+                statusElement.classList.remove('came', 'did-not-come');
+                break;
+            case 'client_came':
+                statusElement.textContent = 'Клиент пришел';
+                statusElement.classList.remove('did-not-come');
+                statusElement.classList.add('came');
+                break;
+            case 'client_did_not_come':
+                statusElement.textContent = 'Клиент не пришел';
+                statusElement.classList.remove('came');
+                statusElement.classList.add('did-not-come');
+                break;
+        }
+        
+        // Скрываем выпадающее меню
+        dropdown.classList.remove('show');
+        actionCard.classList.remove('dropdown-open');
+        
+        // Отправляем AJAX запрос для обновления статуса
+        updateEventVisitStatus(status);
+    }
+
+    function updateEventVisitStatus(status) {
+        if (!window.currentEventId) {
+            console.error('ID события не найден');
+            return;
+        }
+        
+        console.log('Отправляем запрос обновления статуса визита:', {
+            eventId: window.currentEventId,
+            status: status
+        });
+        
+        const params = new URLSearchParams();
+        params.append('action', 'update_visit_status');
+        params.append('event_id', window.currentEventId);
+        params.append('visit_status', status);
+        params.append('sessid', BX.bitrix_sessid());
+        
+        fetch('/local/components/artmax/calendar/ajax.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: params
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                console.log('Статус визита обновлен:', status);
+            } else {
+                console.error('Ошибка при обновлении статуса визита:', data.message);
+            }
+        })
+        .catch(error => {
+            console.error('Ошибка AJAX запроса:', error);
+        });
+    }
+
+    function loadEventVisitStatus(eventId) {
+        const params = new URLSearchParams();
+        params.append('action', 'get_visit_status');
+        params.append('event_id', eventId);
+        params.append('sessid', BX.bitrix_sessid());
+        
+        fetch('/local/components/artmax/calendar/ajax.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: params
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                updateVisitStatusDisplay(data.visit_status || 'not_specified');
+            } else {
+                console.error('Ошибка при загрузке статуса визита:', data.message);
+                updateVisitStatusDisplay('not_specified');
+            }
+            // Проверяем завершение загрузки
+            checkSidePanelLoadingComplete();
+        })
+        .catch(error => {
+            console.error('Ошибка AJAX запроса:', error);
+            updateVisitStatusDisplay('not_specified');
+            // Проверяем завершение загрузки даже при ошибке
+            checkSidePanelLoadingComplete();
+        });
+    }
+
+    function updateVisitStatusDisplay(status) {
+        const statusElement = document.getElementById('visit-status');
+        if (!statusElement) return;
+        
+        switch (status) {
+            case 'not_specified':
+                statusElement.textContent = 'Не указано';
+                statusElement.classList.remove('came', 'did-not-come');
+                break;
+            case 'client_came':
+                statusElement.textContent = 'Клиент пришел';
+                statusElement.classList.remove('did-not-come');
+                statusElement.classList.add('came');
+                break;
+            case 'client_did_not_come':
+                statusElement.textContent = 'Клиент не пришел';
+                statusElement.classList.remove('came');
+                statusElement.classList.add('did-not-come');
+                break;
+        }
+        
+        // Обновляем иконку в календаре
+        updateEventIconInCalendar('visit', status);
+    }
+
+    // Вспомогательные функции для определения классов иконок
+    function getConfirmationIconClass(status) {
+        if (status === 'confirmed') {
+            return 'active';
+        } else if (status === 'not_confirmed') {
+            return 'inactive';
+        }
+        return '';
+    }
+
+    function getVisitIconClass(status) {
+        if (status === 'client_came') {
+            return 'active';
+        } else if (status === 'client_did_not_come') {
+            return 'inactive';
+        }
+        return '';
+    }
+
+    // Функция для обновления иконок событий в календаре
+    function updateEventIconInCalendar(type, status) {
+        if (!window.currentEventId) return;
+        
+        const eventElement = document.querySelector(`[data-event-id="${window.currentEventId}"]`);
+        if (!eventElement) return;
+        
+        const iconElement = eventElement.querySelector(`.event-icon.${type}-icon`);
+        if (!iconElement) return;
+        
+        // Удаляем все классы состояний
+        iconElement.classList.remove('active', 'inactive');
+        
+        // Добавляем соответствующий класс в зависимости от типа и статуса
+        if (type === 'confirmation') {
+            if (status === 'confirmed') {
+                iconElement.classList.add('active');
+            } else if (status === 'not_confirmed') {
+                iconElement.classList.add('inactive');
+            }
+        } else if (type === 'visit') {
+            if (status === 'client_came') {
+                iconElement.classList.add('active');
+            } else if (status === 'client_did_not_come') {
+                iconElement.classList.add('inactive');
+            }
+        }
+    }
+
+    // Функции для управления прелоадером боковой панели
+    function showSidePanelPreloader() {
+        const preloader = document.getElementById('sidePanelPreloader');
+        if (preloader) {
+            preloader.classList.remove('hidden');
+        }
+    }
+
+    function hideSidePanelPreloader() {
+        const preloader = document.getElementById('sidePanelPreloader');
+        if (preloader) {
+            preloader.classList.add('hidden');
+        }
+    }
+
+    // Функция для проверки завершения всех загрузок
+    function checkSidePanelLoadingComplete() {
+        window.sidePanelLoadingComplete++;
+        console.log(`Загрузка завершена: ${window.sidePanelLoadingComplete}/${window.sidePanelLoadingCount}`);
+        
+        if (window.sidePanelLoadingComplete >= window.sidePanelLoadingCount) {
+            console.log('Все загрузки завершены, скрываем прелоадер');
+            hideSidePanelPreloader();
+        }
     }
 
     // Экспортируем функции в глобальную область
     window.toggleConfirmationDropdown = toggleConfirmationDropdown;
     window.setConfirmationStatus = setConfirmationStatus;
+    window.toggleVisitDropdown = toggleVisitDropdown;
+    window.setVisitStatus = setVisitStatus;
 
     /**
      * Динамически добавляет событие в календарь с анимацией
@@ -3342,8 +3594,8 @@
                     <div class="event-icons">
                         <span class="event-icon contact-icon ${event.CONTACT_ENTITY_ID ? 'active' : ''}" title="Контакт">👤</span>
                         <span class="event-icon deal-icon" title="Сделка">💼</span>
-                        <span class="event-icon visit-icon" title="Визит">🏥</span>
-                        <span class="event-icon confirmation-icon" title="Подтверждение">✅</span>
+                        <span class="event-icon visit-icon ${getVisitIconClass(event.VISIT_STATUS)}" title="Визит">🏥</span>
+                        <span class="event-icon confirmation-icon ${getConfirmationIconClass(event.CONFIRMATION_STATUS)}" title="Подтверждение">✅</span>
                     </div>
                 </div>
             </div>

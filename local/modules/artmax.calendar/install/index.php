@@ -119,33 +119,6 @@ class artmax_calendar extends CModule
         $connection->query($sqlBranches);
         $connection->query($sqlBranchesSettings);
         $connection->query($sqlModifier);
-        
-        
-        // Добавляем тестовые филиалы, если таблица пустая
-        $result = $connection->query("SELECT COUNT(*) as cnt FROM artmax_calendar_branches");
-        $row = $result->fetch();
-        
-        if ($row['cnt'] == 0) {
-            $connection->query("
-                INSERT INTO artmax_calendar_branches (NAME, ADDRESS, PHONE, EMAIL) VALUES 
-                ('Главный офис', 'ул. Примерная, 1', '+7 (123) 456-78-90', 'main@example.com'),
-                ('Филиал №1', 'ул. Вторая, 15', '+7 (123) 456-78-91', 'branch1@example.com'),
-                ('Филиал №2', 'ул. Третья, 25', '+7 (123) 456-78-92', 'branch2@example.com')
-            ");
-        }
-        
-        // Добавляем тестовые события, если таблица пустая
-        $result = $connection->query("SELECT COUNT(*) as cnt FROM artmax_calendar_events");
-        $row = $result->fetch();
-        
-        if ($row['cnt'] == 0) {
-            $connection->query("
-                INSERT INTO artmax_calendar_events (TITLE, DESCRIPTION, DATE_FROM, DATE_TO, USER_ID, BRANCH_ID, EVENT_COLOR) VALUES 
-                ('Консультация офтальмолога', 'Первичный прием пациента', NOW() + INTERVAL 1 DAY, NOW() + INTERVAL 1 DAY + INTERVAL 30 MINUTE, 1, 1, '#3498db'),
-                ('Проверка зрения', 'Комплексная диагностика', NOW() + INTERVAL 2 DAY, NOW() + INTERVAL 2 DAY + INTERVAL 1 HOUR, 1, 1, '#e74c3c'),
-                ('Подбор очков', 'Консультация по выбору очков', NOW() + INTERVAL 3 DAY, NOW() + INTERVAL 3 DAY + INTERVAL 45 MINUTE, 1, 1, '#2ecc71')
-            ");
-        }
     }
 
     public function UnInstallDB()

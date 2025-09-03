@@ -188,6 +188,7 @@ class Calendar
                 EVENT_COLOR,
                 CONTACT_ENTITY_ID,
                 CONFIRMATION_STATUS,
+                VISIT_STATUS,
                 CREATED_AT,
                 UPDATED_AT
             FROM artmax_calendar_events 
@@ -336,6 +337,8 @@ class Calendar
             BRANCH_ID,
             EVENT_COLOR,
             CONTACT_ENTITY_ID,
+            CONFIRMATION_STATUS,
+            VISIT_STATUS,
             DATE_FORMAT(CREATED_AT, '%d.%m.%Y %H:%i:%s') AS CREATED_AT,
             DATE_FORMAT(UPDATED_AT, '%d.%m.%Y %H:%i:%s') AS UPDATED_AT
         FROM artmax_calendar_events 
@@ -515,6 +518,24 @@ class Calendar
             file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
                 "SQL Error: {$errorMessage}\n", 
                 FILE_APPEND | LOCK_EX);
+            return false;
+        }
+    }
+
+    /**
+     * Обновить статус визита события
+     */
+    public function updateEventVisitStatus($eventId, $visitStatus)
+    {
+        $sql = "UPDATE artmax_calendar_events SET VISIT_STATUS = '" . 
+               $this->connection->getSqlHelper()->forSql($visitStatus) . "' WHERE ID = " . (int)$eventId;
+        
+        try {
+            $result = $this->connection->query($sql);
+            return true;
+        } catch (\Exception $e) {
+            $errorMessage = 'Ошибка обновления статуса визита события: ' . $e->getMessage();
+            error_log($errorMessage);
             return false;
         }
     }
