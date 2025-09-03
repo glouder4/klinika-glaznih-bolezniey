@@ -172,6 +172,13 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                 );
                 break;
                 
+            case 'searchClients':
+                $result = $this->searchClientsAction(
+                    $_POST['query'] ?? '',
+                    $_POST['type'] ?? 'contact'
+                );
+                break;
+                
             default:
                 $result = ['success' => false, 'error' => 'Неизвестное действие'];
         }
@@ -616,6 +623,64 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
         }
         
         return null;
+    }
+
+    /**
+     * Поиск клиентов в CRM
+     */
+    public function searchClientsAction($query, $type = 'contact')
+    {
+        if (!$GLOBALS['USER'] || !$GLOBALS['USER']->IsAuthorized()) {
+            return ['success' => false, 'error' => 'Необходима авторизация'];
+        }
+
+        try {
+            // Здесь должен быть код для поиска клиентов в CRM
+            // Пока что возвращаем заглушку с тестовыми данными
+            
+            $clients = [];
+            
+            if (strlen($query) >= 2) {
+                // Имитируем поиск в CRM
+                $testClients = [
+                    [
+                        'id' => 1,
+                        'name' => 'Иван Петров',
+                        'phone' => '+7 (999) 123-45-67',
+                        'email' => 'ivan@example.com',
+                        'company' => 'ООО "Пример"'
+                    ],
+                    [
+                        'id' => 2,
+                        'name' => 'Мария Сидорова',
+                        'phone' => '+7 (999) 765-43-21',
+                        'email' => 'maria@example.com',
+                        'company' => 'ИП Сидорова'
+                    ],
+                    [
+                        'id' => 3,
+                        'name' => 'Алексей Козлов',
+                        'phone' => '+7 (999) 111-22-33',
+                        'email' => 'alexey@example.com',
+                        'company' => 'ООО "Тест"'
+                    ]
+                ];
+                
+                // Фильтруем клиентов по запросу
+                foreach ($testClients as $client) {
+                    if (stripos($client['name'], $query) !== false ||
+                        stripos($client['phone'], $query) !== false ||
+                        stripos($client['email'], $query) !== false ||
+                        stripos($client['company'], $query) !== false) {
+                        $clients[] = $client;
+                    }
+                }
+            }
+            
+            return ['success' => true, 'clients' => $clients];
+        } catch (\Exception $e) {
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
     }
 
     /**

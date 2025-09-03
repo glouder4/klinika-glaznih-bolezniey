@@ -678,20 +678,22 @@ $totalDays = 42; // 6 недель * 7 дней
                 <button class="close-client-modal" onclick="closeClientModal()">×</button>
             </div>
             <div class="client-modal-body">
-                <div class="form-group">
-                    <label for="contact-input">Контакт</label>
-                    <div class="input-with-icons">
-                        <div class="input-icon left">👤</div>
-                        <input type="text" id="contact-input" placeholder="Имя контакта">
-                        <div class="input-icon right">🔍</div>
+                <div class="client-modal-form-wrapper">
+                    <div class="form-group">
+                        <label for="contact-input">Контакт</label>
+                        <div class="input-with-icons">
+                            <div class="input-icon left">👤</div>
+                            <input type="text" id="contact-input" placeholder="Имя контакта">
+                            <div class="input-icon right">🔍</div>
+                        </div>
                     </div>
-                </div>
-                <div class="form-group">
-                    <label for="company-input">Компания</label>
-                    <div class="input-with-icons">
-                        <div class="input-icon left">📄</div>
-                        <input type="text" id="company-input" placeholder="Название компании">
-                        <div class="input-icon right">🔍</div>
+                    <div class="form-group">
+                        <label for="company-input">Компания</label>
+                        <div class="input-with-icons">
+                            <div class="input-icon left">📄</div>
+                            <input type="text" id="company-input" placeholder="Название компании">
+                            <div class="input-icon right">🔍</div>
+                        </div>
                     </div>
                 </div>
                 <div class="modal-instruction">

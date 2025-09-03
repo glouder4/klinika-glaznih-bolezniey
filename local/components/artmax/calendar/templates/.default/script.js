@@ -37,6 +37,9 @@
         
         // Инициализация цветового пикера
         initColorPicker();
+        
+        // Инициализация модального окна клиента
+        initClientModal();
     }
 
     function initCalendarCells() {
@@ -1681,6 +1684,166 @@
             }
         }
     });
+
+    // Обработчик клика для кнопки добавления контакта
+    document.addEventListener('click', function(e) {
+        if (e.target.classList.contains('add-contact-btn') || e.target.closest('.add-contact-btn')) {
+            e.preventDefault();
+            e.stopPropagation();
+            openClientModal();
+        }
+    });
+
+    // Инициализация обработчиков для модального окна клиента
+    function initClientModal() {
+        const contactInput = document.getElementById('contact-input');
+        const companyInput = document.getElementById('company-input');
+        
+        if (contactInput) {
+            let searchTimeout;
+            contactInput.addEventListener('input', function() {
+                clearTimeout(searchTimeout);
+                const query = this.value.trim();
+                
+                if (query.length >= 2) {
+                    searchTimeout = setTimeout(() => {
+                        searchClients(query, 'contact');
+                    }, 300);
+                } else {
+                    clearSearchResults();
+                }
+            });
+        }
+        
+        if (companyInput) {
+            let searchTimeout;
+            companyInput.addEventListener('input', function() {
+                clearTimeout(searchTimeout);
+                const query = this.value.trim();
+                
+                if (query.length >= 2) {
+                    searchTimeout = setTimeout(() => {
+                        searchClients(query, 'company');
+                    }, 300);
+                } else {
+                    clearSearchResults();
+                }
+            });
+        }
+    }
+
+    // Функция поиска клиентов
+    function searchClients(query, type) {
+        console.log('Поиск клиентов:', query, 'тип:', type);
+        
+        // AJAX запрос к серверу для поиска клиентов
+        fetch(window.location.href, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: new URLSearchParams({
+                action: 'searchClients',
+                query: query,
+                type: type
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showSearchResults(data.clients);
+            } else {
+                console.error('Ошибка поиска клиентов:', data.error);
+                showSearchResults([]);
+            }
+        })
+        .catch(error => {
+            console.error('Ошибка AJAX запроса:', error);
+            showSearchResults([]);
+        });
+    }
+
+    // Функция отображения результатов поиска
+    function showSearchResults(clients) {
+        // Создаем контейнер для результатов, если его нет
+        let resultsContainer = document.getElementById('client-search-results');
+        if (!resultsContainer) {
+            resultsContainer = document.createElement('div');
+            resultsContainer.id = 'client-search-results';
+            resultsContainer.className = 'client-search-results';
+            
+            const modalBody = document.querySelector('.client-modal-body');
+            modalBody.appendChild(resultsContainer);
+        }
+        
+        // Очищаем предыдущие результаты
+        resultsContainer.innerHTML = '';
+        
+        if (clients.length === 0) {
+            resultsContainer.innerHTML = '<div class="no-results">Клиенты не найдены</div>';
+            return;
+        }
+        
+        // Создаем элементы для каждого клиента
+        clients.forEach(client => {
+            const clientElement = document.createElement('div');
+            clientElement.className = 'client-search-item';
+            clientElement.innerHTML = `
+                <div class="client-info">
+                    <div class="client-name">${client.name}</div>
+                    <div class="client-details">
+                        ${client.phone ? `<span class="client-phone">${client.phone}</span>` : ''}
+                        ${client.email ? `<span class="client-email">${client.email}</span>` : ''}
+                        ${client.company ? `<span class="client-company">${client.company}</span>` : ''}
+                    </div>
+                </div>
+                <button class="select-client-btn" data-client-id="${client.id}">Выбрать</button>
+            `;
+            
+            // Добавляем обработчик клика для выбора клиента
+            const selectBtn = clientElement.querySelector('.select-client-btn');
+            selectBtn.addEventListener('click', function() {
+                selectClient(client);
+            });
+            
+            resultsContainer.appendChild(clientElement);
+        });
+    }
+
+    // Функция очистки результатов поиска
+    function clearSearchResults() {
+        const resultsContainer = document.getElementById('client-search-results');
+        if (resultsContainer) {
+            resultsContainer.innerHTML = '';
+        }
+    }
+
+    // Функция выбора клиента
+    function selectClient(client) {
+        console.log('Выбран клиент:', client);
+        
+        // Обновляем информацию о клиенте в боковом окне
+        const clientNameElement = document.querySelector('.client-name');
+        const clientPlaceholderElement = document.querySelector('.client-placeholder');
+        
+        if (clientNameElement && clientPlaceholderElement) {
+            clientNameElement.textContent = client.name;
+            clientPlaceholderElement.textContent = `${client.phone || ''} ${client.email || ''}`.trim();
+        }
+        
+        // Закрываем модальное окно
+        closeClientModal();
+        
+        // Очищаем поля ввода
+        const contactInput = document.getElementById('contact-input');
+        const companyInput = document.getElementById('company-input');
+        if (contactInput) contactInput.value = '';
+        if (companyInput) companyInput.value = '';
+        
+        // Очищаем результаты поиска
+        clearSearchResults();
+    }
 
     // Делаем функции доступными глобально для использования в HTML
     window.closeEditEventModal = closeEditEventModal;
