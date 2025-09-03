@@ -1030,4 +1030,4 @@ $totalDays = 42; // 6 недель * 7 дней
             closeTimezoneModal();
         }
     });
-</script> 
+</script>

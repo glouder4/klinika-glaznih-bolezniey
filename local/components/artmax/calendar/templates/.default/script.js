@@ -5,6 +5,11 @@
 (function() {
     'use strict';
 
+    // Универсальная функция для получения CSRF токена
+    function getCSRFToken() {
+        return BX.bitrix_sessid();
+    }
+
     // Инициализация модуля
     document.addEventListener('DOMContentLoaded', function() {
         initCalendar();
@@ -530,11 +535,16 @@
         console.log('submitEventForm: Отправляем данные:', postData);
         console.log('submitEventForm: Цвет события:', postData.eventColor);
         
+        // Добавляем CSRF токен
+        const csrfToken = getCSRFToken();
+        postData.sessid = csrfToken;
+        
         fetch('/local/components/artmax/calendar/ajax.php', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/x-www-form-urlencoded',
-                'X-Requested-With': 'XMLHttpRequest'
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-Bitrix-Csrf-Token': csrfToken
             },
             body: new URLSearchParams(postData)
         })
@@ -669,11 +679,16 @@
             branchId: getBranchId() || 1
         };
         
+        // Добавляем CSRF токен
+        const csrfToken = getCSRFToken();
+        postData.sessid = csrfToken;
+        
         fetch('/local/components/artmax/calendar/ajax.php', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/x-www-form-urlencoded',
-                'X-Requested-With': 'XMLHttpRequest'
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-Bitrix-Csrf-Token': csrfToken
             },
             body: new URLSearchParams(postData)
         })
@@ -875,15 +890,18 @@
         sidePanel.style.visibility = 'visible';
         
         // Получаем данные события и заполняем боковое окно
+        const csrfToken = getCSRFToken();
         fetch('/local/components/artmax/calendar/ajax.php', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/x-www-form-urlencoded',
-                'X-Requested-With': 'XMLHttpRequest'
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-Bitrix-Csrf-Token': csrfToken
             },
             body: new URLSearchParams({
                 action: 'getEvent',
-                eventId: eventId
+                eventId: eventId,
+                sessid: csrfToken
             })
         })
         .then(response => response.json())
@@ -974,15 +992,18 @@
 
     function openEditEventModal(eventId) {
         // Получаем данные события по AJAX
+        const csrfToken = getCSRFToken();
         fetch('/local/components/artmax/calendar/ajax.php', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/x-www-form-urlencoded',
-                'X-Requested-With': 'XMLHttpRequest'
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-Bitrix-Csrf-Token': csrfToken
             },
             body: new URLSearchParams({
                 action: 'getEvent',
-                eventId: eventId
+                eventId: eventId,
+                sessid: csrfToken
             })
         })
         .then(response => response.json())
@@ -1444,11 +1465,15 @@
         console.log('Цвет события в postData:', postData.eventColor);
         
         // Отправляем AJAX запрос
+        const csrfToken = getCSRFToken();
+        postData.sessid = csrfToken;
+        
         fetch('/local/components/artmax/calendar/ajax.php', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/x-www-form-urlencoded',
-                'X-Requested-With': 'XMLHttpRequest'
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-Bitrix-Csrf-Token': csrfToken
             },
             body: new URLSearchParams(postData)
         })
@@ -1813,26 +1838,46 @@
         // Показываем индикатор загрузки
         showSearchLoading();
         
-        // AJAX запрос к серверу для поиска контактов
-        fetch('/local/components/artmax/calendar/ajax.php', {
+        // Используем только стандартный сервис поиска
+        searchContactsViaStandardService(query);
+    }
+    
+
+    
+
+    
+    // Поиск через стандартный сервис Bitrix
+    function searchContactsViaStandardService(query) {
+        console.log('Используем стандартный сервис crm.api.entity.search для поиска контактов');
+        
+        // Получаем CSRF токен
+        const csrfToken = getCSRFToken();
+        
+        // Используем стандартный сервис поиска Bitrix
+        fetch('/bitrix/services/main/ajax.php?action=crm.api.entity.search', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/x-www-form-urlencoded',
-                'X-Requested-With': 'XMLHttpRequest'
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-Bitrix-Csrf-Token': csrfToken
             },
             body: new URLSearchParams({
-                action: 'searchClients',
-                query: query,
-                type: 'contact'
+                searchQuery: query,
+                'options[types][0]': 'CONTACT',
+                'options[scope]': 'index',
+                'sessid': csrfToken
             })
         })
         .then(response => response.json())
         .then(data => {
-            if (data.success) {
-                updateSearchResults(data.clients);
+            if (data && data.status === 'success' && data.data) {
+                const processedContacts = processStandardServiceContacts(data.data);
+                updateSearchResults(processedContacts);
+            } else if (data && data.status === 'error') {
+                console.error('Ошибка поиска контактов:', data.message);
+                showSearchError(data.message || 'Ошибка поиска');
             } else {
-                console.error('Ошибка поиска контактов:', data.error);
-                showSearchError(data.error);
+                updateSearchResults([]);
             }
         })
         .catch(error => {
@@ -1840,6 +1885,70 @@
             showSearchError('Ошибка соединения с сервером');
         });
     }
+    
+    // Обработка результатов стандартного сервиса crm.api.entity.search
+    function processStandardServiceContacts(data) {
+        if (!data || !data.items) {
+            return [];
+        }
+        
+        return data.items.map(item => {
+            // Формируем полное имя
+            const fullName = item.title || item.name || 'Контакт #' + item.id;
+            
+            // Собираем телефоны и email из дополнительной информации
+            let phones = [];
+            let emails = [];
+            
+            // Проверяем наличие телефонов в разных полях
+            if (item.phone) {
+                phones.push(item.phone);
+            }
+            if (item.mobile) {
+                phones.push(item.mobile);
+            }
+            if (item.workPhone) {
+                phones.push(item.workPhone);
+            }
+            
+            // Проверяем наличие email
+            if (item.email) {
+                emails.push(item.email);
+            }
+            if (item.workEmail) {
+                emails.push(item.workEmail);
+            }
+            
+            // Проверяем дополнительные поля
+            if (item.additionalInfo) {
+                if (item.additionalInfo.phone) {
+                    phones = phones.concat(item.additionalInfo.phone);
+                }
+                if (item.additionalInfo.email) {
+                    emails = emails.concat(item.additionalInfo.email);
+                }
+            }
+            
+            // Убираем дубликаты
+            phones = [...new Set(phones.filter(phone => phone && phone.trim()))];
+            emails = [...new Set(emails.filter(email => email && email.trim()))];
+            
+            return {
+                id: item.id,
+                name: fullName,
+                firstName: item.firstName || '',
+                lastName: item.lastName || '',
+                secondName: item.secondName || '',
+                phone: phones.join(', '),
+                email: emails.join(', '),
+                company: item.company || item.companyTitle || '',
+                post: item.post || item.position || '',
+                address: item.address || ''
+            };
+        });
+    }
+    
+
     
     // Функция показа индикатора загрузки
     function showSearchLoading() {
@@ -1966,16 +2075,19 @@
         console.log('Поиск клиентов:', query, 'тип:', type);
         
         // AJAX запрос к серверу для поиска клиентов
+        const csrfToken = getCSRFToken();
         fetch('/local/components/artmax/calendar/ajax.php', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/x-www-form-urlencoded',
-                'X-Requested-With': 'XMLHttpRequest'
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-Bitrix-Csrf-Token': csrfToken
             },
             body: new URLSearchParams({
                 action: 'searchClients',
                 query: query,
-                type: type
+                type: type,
+                sessid: csrfToken
             })
         })
         .then(response => response.json())
@@ -2290,15 +2402,18 @@
     function refreshCalendarEvents() {
         const branchId = getBranchId() || 1;
         
+        const csrfToken = getCSRFToken();
         fetch('/local/components/artmax/calendar/ajax.php', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/x-www-form-urlencoded',
-                'X-Requested-With': 'XMLHttpRequest'
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-Bitrix-Csrf-Token': csrfToken
             },
             body: new URLSearchParams({
                 action: 'getEvents',
-                branchId: branchId
+                branchId: branchId,
+                sessid: csrfToken
             })
         })
         .then(response => response.json())
@@ -2573,15 +2688,18 @@
             return;
         }
 
+        const csrfToken = getCSRFToken();
         fetch('/local/components/artmax/calendar/ajax.php', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/x-www-form-urlencoded',
-                'X-Requested-With': 'XMLHttpRequest'
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-Bitrix-Csrf-Token': csrfToken
             },
             body: new URLSearchParams({
                 action: 'deleteEvent',
-                eventId: eventId
+                eventId: eventId,
+                sessid: csrfToken
             })
         })
         .then(response => response.json())

@@ -627,6 +627,7 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
 
     /**
      * Поиск клиентов в Bitrix 24 CRM
+     * Использует стандартный сервис crm.api.entity.search
      */
     public function searchClientsAction($query, $type = 'contact')
     {
@@ -643,8 +644,8 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                     return ['success' => false, 'error' => 'Модуль CRM не установлен'];
                 }
                 
-                // Поиск контактов в Bitrix 24
-                $clients = $this->searchBitrix24Contacts($query);
+                // Используем стандартный сервис для поиска
+                $clients = $this->searchContactsViaStandardService($query);
             }
             
             return ['success' => true, 'clients' => $clients];
@@ -654,45 +655,122 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
     }
     
     /**
-     * Поиск контактов в Bitrix 24 CRM
+     * Поиск контактов через стандартный сервис crm.api.entity.search
      */
-    private function searchBitrix24Contacts($query)
+    private function searchContactsViaStandardService($query)
     {
         $contacts = [];
         
         try {
-            // Подготавливаем фильтр для поиска
-            $filter = [
-                'LOGIC' => 'OR',
-                ['NAME' => '%' . $query . '%'],
-                ['LAST_NAME' => '%' . $query . '%'],
-                ['SECOND_NAME' => '%' . $query . '%'],
-                ['EMAIL' => '%' . $query . '%'],
-                ['PHONE' => '%' . $query . '%'],
-                ['COMPANY_TITLE' => '%' . $query . '%']
+            // Используем стандартный сервис поиска Bitrix
+            $searchService = new \Bitrix\Crm\Search\SearchService();
+            
+            // Подготавливаем параметры поиска
+            $searchParams = [
+                'query' => $query,
+                'types' => ['CONTACT'],
+                'scope' => 'index',
+                'limit' => 10
             ];
             
-            // Параметры для выборки
-            $select = [
-                'ID',
-                'NAME',
-                'LAST_NAME', 
-                'SECOND_NAME',
-                'EMAIL',
-                'PHONE',
-                'COMPANY_TITLE',
-                'POST',
-                'ADDRESS'
+            // Выполняем поиск
+            $searchResult = $searchService->search($searchParams);
+            
+            if ($searchResult && isset($searchResult['items'])) {
+                foreach ($searchResult['items'] as $item) {
+                    // Формируем полное имя
+                    $fullName = trim($item['NAME'] . ' ' . $item['LAST_NAME'] . ' ' . $item['SECOND_NAME']);
+                    if (empty($fullName)) {
+                        $fullName = 'Контакт #' . $item['ID'];
+                    }
+                    
+                    // Собираем телефоны и email
+                    $phones = [];
+                    $emails = [];
+                    
+                    if (!empty($item['PHONE'])) {
+                        $phones[] = $item['PHONE'];
+                    }
+                    if (!empty($item['EMAIL'])) {
+                        $emails[] = $item['EMAIL'];
+                    }
+                    
+                    // Проверяем дополнительные поля
+                    if (isset($item['ADDITIONAL_INFO'])) {
+                        $additionalInfo = $item['ADDITIONAL_INFO'];
+                        if (isset($additionalInfo['PHONE'])) {
+                            $phones = array_merge($phones, (array)$additionalInfo['PHONE']);
+                        }
+                        if (isset($additionalInfo['EMAIL'])) {
+                            $emails = array_merge($emails, (array)$additionalInfo['EMAIL']);
+                        }
+                    }
+                    
+                    // Убираем дубликаты
+                    $phones = array_unique(array_filter($phones));
+                    $emails = array_unique(array_filter($emails));
+                    
+                    $contacts[] = [
+                        'id' => $item['ID'],
+                        'name' => $fullName,
+                        'firstName' => $item['NAME'] ?? '',
+                        'lastName' => $item['LAST_NAME'] ?? '',
+                        'secondName' => $item['SECOND_NAME'] ?? '',
+                        'phone' => implode(', ', $phones),
+                        'email' => implode(', ', $emails),
+                        'company' => $item['COMPANY_TITLE'] ?? '',
+                        'post' => $item['POST'] ?? '',
+                        'address' => $item['ADDRESS'] ?? ''
+                    ];
+                }
+            }
+            
+        } catch (\Exception $e) {
+            error_log('Ошибка поиска контактов через стандартный сервис: ' . $e->getMessage());
+            
+            // Fallback к прямому поиску через CCrmContact
+            $contacts = $this->searchContactsViaDirectQuery($query);
+        }
+        
+        return $contacts;
+    }
+    
+    /**
+     * Fallback поиск контактов через прямой запрос к CCrmContact
+     */
+    private function searchContactsViaDirectQuery($query)
+    {
+        $contacts = [];
+        
+        try {
+            // Подготавливаем фильтр
+            $arFilter = [];
+            $searchParts = preg_split('/[\s]+/', $query, 2, PREG_SPLIT_NO_EMPTY);
+            
+            if (count($searchParts) < 2) {
+                $arFilter['LOGIC'] = 'OR';
+                $arFilter['%NAME'] = $query;
+                $arFilter['%LAST_NAME'] = $query;
+                $arFilter['%SECOND_NAME'] = $query;
+                $arFilter['%EMAIL'] = $query;
+                $arFilter['%PHONE'] = $query;
+                $arFilter['%COMPANY_TITLE'] = $query;
+            } else {
+                $arFilter['LOGIC'] = 'OR';
+                $arFilter["__INNER_FILTER_NAME_1"] = ['%NAME' => $searchParts[0], '%LAST_NAME' => $searchParts[1]];
+                $arFilter["__INNER_FILTER_NAME_2"] = ['%LAST_NAME' => $searchParts[0], '%NAME' => $searchParts[1]];
+                $arFilter["__INNER_FILTER_NAME_3"] = ['%NAME' => $searchParts[0], '%SECOND_NAME' => $searchParts[1]];
+            }
+            
+            $arSelect = [
+                'ID', 'NAME', 'SECOND_NAME', 'LAST_NAME', 
+                'EMAIL', 'PHONE', 'COMPANY_TITLE', 'POST', 'ADDRESS'
             ];
             
-            // Выполняем поиск контактов
-            $dbContacts = \CCrmContact::GetList(
-                ['LAST_NAME' => 'ASC', 'NAME' => 'ASC'],
-                $filter,
-                $select,
-                false,
-                ['nTopCount' => 10] // Ограничиваем до 10 результатов
-            );
+            $arOrder = ['LAST_NAME' => 'ASC', 'NAME' => 'ASC'];
+            
+            // Выполняем поиск
+            $dbContacts = \CCrmContact::GetListEx($arOrder, $arFilter, false, ['nTopCount' => 10], $arSelect);
             
             while ($contact = $dbContacts->Fetch()) {
                 // Формируем полное имя
@@ -701,53 +779,179 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                     $fullName = 'Контакт #' . $contact['ID'];
                 }
                 
-                // Получаем телефоны
-                $phones = [];
-                if (!empty($contact['PHONE'])) {
-                    $phones[] = $contact['PHONE'];
-                }
-                
-                // Получаем дополнительные телефоны
-                $phoneFields = \CCrmContact::GetFields();
-                foreach ($phoneFields as $fieldCode => $fieldInfo) {
-                    if (strpos($fieldCode, 'PHONE') !== false && !empty($contact[$fieldCode])) {
-                        $phones[] = $contact[$fieldCode];
-                    }
-                }
-                
-                // Получаем email адреса
-                $emails = [];
-                if (!empty($contact['EMAIL'])) {
-                    $emails[] = $contact['EMAIL'];
-                }
-                
-                // Получаем дополнительные email
-                foreach ($phoneFields as $fieldCode => $fieldInfo) {
-                    if (strpos($fieldCode, 'EMAIL') !== false && !empty($contact[$fieldCode])) {
-                        $emails[] = $contact[$fieldCode];
-                    }
-                }
-                
                 $contacts[] = [
                     'id' => $contact['ID'],
                     'name' => $fullName,
                     'firstName' => $contact['NAME'],
                     'lastName' => $contact['LAST_NAME'],
                     'secondName' => $contact['SECOND_NAME'],
-                    'phone' => implode(', ', $phones),
-                    'email' => implode(', ', $emails),
-                    'company' => $contact['COMPANY_TITLE'],
-                    'post' => $contact['POST'],
-                    'address' => $contact['ADDRESS']
+                    'phone' => $contact['PHONE'] ?? '',
+                    'email' => $contact['EMAIL'] ?? '',
+                    'company' => $contact['COMPANY_TITLE'] ?? '',
+                    'post' => $contact['POST'] ?? '',
+                    'address' => $contact['ADDRESS'] ?? ''
                 ];
             }
             
         } catch (\Exception $e) {
-            // В случае ошибки возвращаем пустой массив
-            error_log('Ошибка поиска контактов в Bitrix 24: ' . $e->getMessage());
+            error_log('Ошибка fallback поиска контактов: ' . $e->getMessage());
         }
         
         return $contacts;
+    }
+    
+    /**
+     * Поиск контактов в Bitrix 24 CRM через REST API
+     */
+    private function searchBitrix24Contacts($query)
+    {
+        $contacts = [];
+        
+        try {
+            // Подключаем модуль REST API
+            if (!CModule::IncludeModule('rest')) {
+                error_log('Модуль REST API не установлен');
+                return $contacts;
+            }
+            
+            // Получаем токен приложения
+            $appId = 'local.1'; // ID локального приложения
+            $appSecret = ''; // Секрет приложения (если нужен)
+            
+            // Создаем клиент REST API
+            $restClient = new \CRestServer();
+            
+            // Подготавливаем параметры для поиска
+            $searchParams = [
+                'filter' => [
+                    'LOGIC' => 'OR',
+                    ['NAME' => '%' . $query . '%'],
+                    ['LAST_NAME' => '%' . $query . '%'],
+                    ['SECOND_NAME' => '%' . $query . '%'],
+                    ['EMAIL' => '%' . $query . '%'],
+                    ['PHONE' => '%' . $query . '%'],
+                    ['COMPANY_TITLE' => '%' . $query . '%']
+                ],
+                'select' => [
+                    'ID',
+                    'NAME',
+                    'LAST_NAME',
+                    'SECOND_NAME',
+                    'EMAIL',
+                    'PHONE',
+                    'COMPANY_TITLE',
+                    'POST',
+                    'ADDRESS'
+                ],
+                'order' => ['LAST_NAME' => 'ASC', 'NAME' => 'ASC'],
+                'start' => 0,
+                'limit' => 10
+            ];
+            
+            // Если запрос похож на телефон, добавляем поиск по всем UF полям
+            if (preg_match('/^[\d\s\-\+\(\)]+$/', $query)) {
+                // Получаем список всех UF полей контакта
+                $ufFields = $this->getContactUFFields();
+                
+                // Добавляем поиск по всем UF полям
+                foreach ($ufFields as $ufField) {
+                    $searchParams['filter'][] = [$ufField => '%' . $query . '%'];
+                    $searchParams['select'][] = $ufField;
+                }
+            }
+            
+            // Выполняем REST API запрос
+            $result = $restClient->callMethod('crm.contact.list', $searchParams);
+            
+            if ($result && isset($result['result'])) {
+                foreach ($result['result'] as $contact) {
+                    // Формируем полное имя
+                    $fullName = trim(($contact['NAME'] ?? '') . ' ' . ($contact['LAST_NAME'] ?? '') . ' ' . ($contact['SECOND_NAME'] ?? ''));
+                    if (empty($fullName)) {
+                        $fullName = 'Контакт #' . $contact['ID'];
+                    }
+                    
+                    // Собираем телефоны
+                    $phones = [];
+                    if (!empty($contact['PHONE'])) {
+                        $phones[] = $contact['PHONE'];
+                    }
+                    
+                    // Проверяем все UF поля на наличие телефонов
+                    foreach ($contact as $fieldCode => $fieldValue) {
+                        if (strpos($fieldCode, 'UF_') === 0 && 
+                            !empty($fieldValue) && 
+                            is_string($fieldValue) &&
+                            preg_match('/[\d\s\-\+\(\)]{7,}/', $fieldValue) && // Содержит паттерн телефона
+                            !in_array($fieldValue, $phones)) {
+                            $phones[] = $fieldValue;
+                        }
+                    }
+                    
+                    // Собираем email адреса
+                    $emails = [];
+                    if (!empty($contact['EMAIL'])) {
+                        $emails[] = $contact['EMAIL'];
+                    }
+                    
+                    // Проверяем UF поля на наличие email
+                    foreach ($contact as $fieldCode => $fieldValue) {
+                        if (strpos($fieldCode, 'UF_') === 0 && 
+                            !empty($fieldValue) && 
+                            is_string($fieldValue) &&
+                            filter_var($fieldValue, FILTER_VALIDATE_EMAIL) && // Валидный email
+                            !in_array($fieldValue, $emails)) {
+                            $emails[] = $fieldValue;
+                        }
+                    }
+                    
+                    $contacts[] = [
+                        'id' => $contact['ID'],
+                        'name' => $fullName,
+                        'firstName' => $contact['NAME'] ?? '',
+                        'lastName' => $contact['LAST_NAME'] ?? '',
+                        'secondName' => $contact['SECOND_NAME'] ?? '',
+                        'phone' => implode(', ', $phones),
+                        'email' => implode(', ', $emails),
+                        'company' => $contact['COMPANY_TITLE'] ?? '',
+                        'post' => $contact['POST'] ?? '',
+                        'address' => $contact['ADDRESS'] ?? ''
+                    ];
+                }
+            }
+            
+        } catch (\Exception $e) {
+            error_log('Ошибка поиска контактов через REST API: ' . $e->getMessage());
+        }
+        
+        return $contacts;
+    }
+    
+    /**
+     * Получение списка UF полей контакта
+     */
+    private function getContactUFFields()
+    {
+        $ufFields = [];
+        
+        try {
+            if (CModule::IncludeModule('rest')) {
+                $restClient = new \CRestServer();
+                $result = $restClient->callMethod('crm.contact.userfield.list');
+                
+                if ($result && isset($result['result'])) {
+                    foreach ($result['result'] as $field) {
+                        if (isset($field['FIELD_NAME'])) {
+                            $ufFields[] = $field['FIELD_NAME'];
+                        }
+                    }
+                }
+            }
+        } catch (\Exception $e) {
+            error_log('Ошибка получения UF полей: ' . $e->getMessage());
+        }
+        
+        return $ufFields;
     }
 
     /**
