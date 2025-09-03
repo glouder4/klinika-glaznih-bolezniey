@@ -926,6 +926,9 @@
                     // Сбрасываем информацию о клиенте, если контакта нет
                     resetClientInfoInSidePanel();
                 }
+                
+                // Загружаем и отображаем статус подтверждения
+                loadEventConfirmationStatus(eventId);
             } else {
                 showNotification('Ошибка при загрузке события', 'error');
             }
@@ -1881,6 +1884,23 @@
                 hideContactDropdown();
             }
         });
+
+        // Обработчик клика вне выпадающего меню подтверждения
+        document.addEventListener('click', function(e) {
+            const confirmationDropdown = document.getElementById('confirmation-dropdown');
+            const confirmationBtn = document.getElementById('confirmation-select-btn');
+            
+            if (confirmationDropdown && confirmationBtn) {
+                if (!confirmationDropdown.contains(e.target) && !confirmationBtn.contains(e.target)) {
+                    confirmationDropdown.classList.remove('show');
+                    // Удаляем класс dropdown-open с родительского action-card
+                    const actionCard = confirmationDropdown.closest('.action-card');
+                    if (actionCard) {
+                        actionCard.classList.remove('dropdown-open');
+                    }
+                }
+            }
+        });
     }
     
     // Функция показа выпадающего окошка
@@ -2532,6 +2552,192 @@
     window.closeEventSidePanel = closeEventSidePanel;
     window.openEditEventModalFromSidePanel = openEditEventModalFromSidePanel;
     window.deleteEventFromSidePanel = deleteEventFromSidePanel;
+
+    // Функции для работы с выпадающим меню подтверждения
+    function toggleConfirmationDropdown() {
+        const dropdown = document.getElementById('confirmation-dropdown');
+        if (!dropdown) return;
+        
+        // Закрываем все другие выпадающие меню
+        closeAllDropdowns();
+        
+        // Переключаем текущее меню
+        dropdown.classList.toggle('show');
+        
+        // Управляем z-index родительского action-card
+        const actionCard = dropdown.closest('.action-card');
+        if (actionCard) {
+            if (dropdown.classList.contains('show')) {
+                actionCard.classList.add('dropdown-open');
+            } else {
+                actionCard.classList.remove('dropdown-open');
+            }
+        }
+    }
+
+    function closeAllDropdowns() {
+        const dropdowns = document.querySelectorAll('.confirmation-dropdown');
+        dropdowns.forEach(dropdown => {
+            dropdown.classList.remove('show');
+            // Удаляем класс dropdown-open с родительского action-card
+            const actionCard = dropdown.closest('.action-card');
+            if (actionCard) {
+                actionCard.classList.remove('dropdown-open');
+            }
+        });
+    }
+
+    function setConfirmationStatus(status) {
+        const statusElement = document.getElementById('confirmation-status');
+        const dropdown = document.getElementById('confirmation-dropdown');
+        
+        if (!statusElement || !dropdown) return;
+        
+        // Обновляем текст статуса
+        if (status === 'confirmed') {
+            statusElement.textContent = 'Подтверждено';
+            statusElement.classList.add('confirmed');
+        } else if (status === 'not_confirmed') {
+            statusElement.textContent = 'Не подтверждено';
+            statusElement.classList.remove('confirmed');
+        }
+        
+        // Закрываем выпадающее меню
+        dropdown.classList.remove('show');
+        
+        // Удаляем класс dropdown-open с родительского action-card
+        const actionCard = dropdown.closest('.action-card');
+        if (actionCard) {
+            actionCard.classList.remove('dropdown-open');
+        }
+        
+        // Отправляем AJAX запрос для сохранения статуса
+        updateEventConfirmationStatus(status);
+    }
+
+    function updateEventConfirmationStatus(status) {
+        if (!window.currentEventId) {
+            console.error('ID события не найден');
+            return;
+        }
+        
+        console.log('Отправляем запрос обновления статуса подтверждения:', {
+            eventId: window.currentEventId,
+            status: status
+        });
+        
+        const params = new URLSearchParams();
+        params.append('action', 'update_confirmation_status');
+        params.append('event_id', window.currentEventId);
+        params.append('confirmation_status', status);
+        params.append('sessid', BX.bitrix_sessid());
+        
+        // Логируем данные
+        console.log('Отправляемые параметры:', params.toString());
+        
+        fetch('/local/components/artmax/calendar/ajax.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: params
+        })
+        .then(response => {
+            console.log('Ответ сервера:', response);
+            return response.json();
+        })
+        .then(data => {
+            console.log('Данные ответа:', data);
+            if (data.success) {
+                console.log('Статус подтверждения обновлен:', status);
+                updateConfirmationStatusDisplay(status);
+            } else {
+                console.error('Ошибка при обновлении статуса:', data.message);
+                // Возвращаем предыдущий статус в случае ошибки
+                revertConfirmationStatus();
+            }
+        })
+        .catch(error => {
+            console.error('Ошибка AJAX запроса:', error);
+            revertConfirmationStatus();
+        });
+    }
+
+    function revertConfirmationStatus() {
+        const statusElement = document.getElementById('confirmation-status');
+        if (statusElement) {
+            statusElement.textContent = 'Ожидается подтверждение';
+            statusElement.classList.remove('confirmed');
+        }
+    }
+
+    function loadEventConfirmationStatus(eventId) {
+        const params = new URLSearchParams();
+        params.append('action', 'get_confirmation_status');
+        params.append('event_id', eventId);
+        params.append('sessid', BX.bitrix_sessid());
+        
+        fetch('/local/components/artmax/calendar/ajax.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: params
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                updateConfirmationStatusDisplay(data.confirmation_status);
+            } else {
+                console.error('Ошибка при загрузке статуса подтверждения:', data.message);
+                // Устанавливаем статус по умолчанию
+                updateConfirmationStatusDisplay('pending');
+            }
+        })
+        .catch(error => {
+            console.error('Ошибка AJAX запроса при загрузке статуса подтверждения:', error);
+            // Устанавливаем статус по умолчанию
+            updateConfirmationStatusDisplay('pending');
+        });
+    }
+
+    function updateConfirmationStatusDisplay(status) {
+        const statusElement = document.getElementById('confirmation-status');
+        const iconElement = document.querySelector('.booking-actions-popup-item-icon');
+        
+        if (!statusElement) return;
+        
+        switch (status) {
+            case 'confirmed':
+                statusElement.textContent = 'Подтверждено';
+                statusElement.classList.add('confirmed');
+                if (iconElement) {
+                    iconElement.classList.add('--confirmed');
+                }
+                break;
+            case 'not_confirmed':
+                statusElement.textContent = 'Не подтверждено';
+                statusElement.classList.remove('confirmed');
+                if (iconElement) {
+                    iconElement.classList.remove('--confirmed');
+                }
+                break;
+            case 'pending':
+            default:
+                statusElement.textContent = 'Ожидается подтверждение';
+                statusElement.classList.remove('confirmed');
+                if (iconElement) {
+                    iconElement.classList.remove('--confirmed');
+                }
+                break;
+        }
+    }
+
+    // Экспортируем функции в глобальную область
+    window.toggleConfirmationDropdown = toggleConfirmationDropdown;
+    window.setConfirmationStatus = setConfirmationStatus;
 
     /**
      * Динамически добавляет событие в календарь с анимацией

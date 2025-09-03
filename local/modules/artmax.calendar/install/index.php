@@ -59,13 +59,15 @@ class artmax_calendar extends CModule
             BRANCH_ID int(11) NOT NULL DEFAULT 1,
             EVENT_COLOR varchar(7) DEFAULT '#3498db',
             CONTACT_ENTITY_ID int(11) DEFAULT NULL COMMENT 'ID контакта из CRM',
+            CONFIRMATION_STATUS enum('pending','confirmed','not_confirmed') DEFAULT 'pending' COMMENT 'Статус подтверждения события',
             CREATED_AT datetime DEFAULT CURRENT_TIMESTAMP,
             UPDATED_AT datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             PRIMARY KEY (ID),
             KEY USER_ID (USER_ID),
             KEY DATE_FROM (DATE_FROM),
             KEY BRANCH_ID (BRANCH_ID),
-            KEY CONTACT_ENTITY_ID (CONTACT_ENTITY_ID)
+            KEY CONTACT_ENTITY_ID (CONTACT_ENTITY_ID),
+            KEY CONFIRMATION_STATUS (CONFIRMATION_STATUS)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
         ";
         

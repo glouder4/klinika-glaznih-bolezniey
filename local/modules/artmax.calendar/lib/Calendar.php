@@ -187,6 +187,7 @@ class Calendar
                 BRANCH_ID,
                 EVENT_COLOR,
                 CONTACT_ENTITY_ID,
+                CONFIRMATION_STATUS,
                 CREATED_AT,
                 UPDATED_AT
             FROM artmax_calendar_events 
@@ -485,6 +486,35 @@ class Calendar
             return true;
         } catch (\Exception $e) {
             error_log('Ошибка обновления контакта события: ' . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Обновить статус подтверждения события
+     */
+    public function updateEventConfirmationStatus($eventId, $confirmationStatus)
+    {
+        $sql = "UPDATE artmax_calendar_events SET CONFIRMATION_STATUS = '" . 
+               $this->connection->getSqlHelper()->forSql($confirmationStatus) . "' WHERE ID = " . (int)$eventId;
+        
+        // Логируем SQL запрос
+        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+            "SQL Query: {$sql}\n", 
+            FILE_APPEND | LOCK_EX);
+        
+        try {
+            $result = $this->connection->query($sql);
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "Query executed successfully\n", 
+                FILE_APPEND | LOCK_EX);
+            return true;
+        } catch (\Exception $e) {
+            $errorMessage = 'Ошибка обновления статуса подтверждения события: ' . $e->getMessage();
+            error_log($errorMessage);
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "SQL Error: {$errorMessage}\n", 
+                FILE_APPEND | LOCK_EX);
             return false;
         }
     }

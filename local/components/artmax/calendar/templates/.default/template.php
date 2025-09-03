@@ -644,7 +644,7 @@ $totalDays = 42; // 6 недель * 7 дней
                     <div class="action-card">
                         <div class="card-icon">🤝</div>
                         <div class="card-content">
-                            <div class="card-title">Сделка <span class="question-mark">?</span></div>
+                            <div class="card-title">Сделка</div>
                             <div class="card-status">Не добавлена</div>
                         </div>
                         <button class="card-action-btn">+ Добавить</button>
@@ -652,19 +652,25 @@ $totalDays = 42; // 6 недель * 7 дней
 
                     <div class="action-card">
                         <div class="card-icon">
-                            <div class="booking-actions-popup-item-icon --confirmed"><div class="ui-icon-set --check" style="--ui-icon-set__icon-color: #ffffff;"></div></div>
+                            <div class="booking-actions-popup-item-icon">✓</div>
                         </div>
                         <div class="card-content">
-                            <div class="card-title">Подтверждение <span class="question-mark">?</span></div>
-                            <div class="card-status confirmed">Подтверждено</div>
+                            <div class="card-title">Подтверждение</div>
+                            <div class="card-status" id="confirmation-status">Ожидается подтверждение</div>
                         </div>
-                        <button class="card-action-btn">Выбрать ▼</button>
+                        <button class="card-action-btn" id="confirmation-select-btn" onclick="toggleConfirmationDropdown()">Выбрать ▼</button>
+                        
+                        <!-- Выпадающее меню подтверждения -->
+                        <div class="confirmation-dropdown" id="confirmation-dropdown">
+                            <div class="confirmation-dropdown-item" onclick="setConfirmationStatus('confirmed')">Подтверждено</div>
+                            <div class="confirmation-dropdown-item" onclick="setConfirmationStatus('not_confirmed')">Не подтверждено</div>
+                        </div>
                     </div>
 
                     <div class="action-card">
                         <div class="card-icon">👥</div>
                         <div class="card-content">
-                            <div class="card-title">Визит <span class="question-mark">?</span></div>
+                            <div class="card-title">Визит</div>
                             <div class="card-status">Клиент не добавлен</div>
                         </div>
                         <button class="card-action-btn">Выбрать ▼</button>
