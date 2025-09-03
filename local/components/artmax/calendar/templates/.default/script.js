@@ -160,11 +160,8 @@
                 closeEditEventModal();
             }
             
-            // Закрытие бокового окна при клике вне его
-            const sidePanel = document.getElementById('eventSidePanel');
-            if (sidePanel && sidePanel.classList.contains('open') && !sidePanel.contains(event.target)) {
-                closeEventSidePanel();
-            }
+            // Убираем автоматическое закрытие бокового окна при клике вне его
+            // Боковое окно теперь закрывается только по кнопке крестика
         });
 
         // Закрытие по Escape
@@ -931,6 +928,45 @@
         });
     }
 
+    function updateSidePanelPosition(eventElement) {
+        if (!eventElement) return;
+        
+        const sidePanel = document.getElementById('eventSidePanel');
+        if (!sidePanel || !sidePanel.classList.contains('open')) return;
+        
+        // Получаем позицию события
+        const eventRect = eventElement.getBoundingClientRect();
+        
+        // Вычисляем позицию бокового окна
+        const panelWidth = 400;
+        const panelHeight = window.innerHeight * 0.8; // 80% высоты экрана
+        const viewportWidth = window.innerWidth;
+        const viewportHeight = window.innerHeight;
+        
+        let left = eventRect.right + 10; // Справа от события
+        let top = Math.max(20, eventRect.top - 50); // Поднимаем выше события
+        
+        // Если не помещается справа, показываем слева
+        if (left + panelWidth > viewportWidth) {
+            left = eventRect.left - panelWidth - 10;
+        }
+        
+        // Если не помещается снизу, корректируем по вертикали
+        if (top + panelHeight > viewportHeight) {
+            top = viewportHeight - panelHeight - 20;
+        }
+        
+        // Если не помещается сверху, показываем от верха экрана
+        if (top < 20) {
+            top = 20;
+        }
+        
+        // Применяем позицию
+        sidePanel.style.left = left + 'px';
+        sidePanel.style.top = top + 'px';
+        sidePanel.style.height = panelHeight + 'px';
+    }
+
     function closeEventSidePanel() {
         const sidePanel = document.getElementById('eventSidePanel');
         if (sidePanel) {
@@ -948,6 +984,9 @@
                 if (sidePanelHeader) {
                     sidePanelHeader.style.background = '';
                 }
+                
+                // Очищаем ID текущего события
+                window.currentEventId = null;
             }, 300);
         }
     }
@@ -1709,8 +1748,12 @@
         if (window.currentEventId) {
             const sidePanel = document.getElementById('eventSidePanel');
             if (sidePanel && sidePanel.classList.contains('open')) {
-                // Закрываем боковое окно при изменении размера окна
-                closeEventSidePanel();
+                // Обновляем позицию бокового окна при изменении размера окна
+                // Боковое окно больше не закрывается автоматически
+                const eventElement = document.querySelector(`[data-event-id="${window.currentEventId}"]`);
+                if (eventElement) {
+                    updateSidePanelPosition(eventElement);
+                }
             }
         }
     });
@@ -2220,8 +2263,7 @@
             if (data.success) {
                 showNotification('Контакт успешно сохранен', 'success');
                 closeClientModal();
-                // Обновляем отображение события с контактом
-                refreshCalendarEvents();
+                // Не обновляем календарь, так как сохранение контакта не влияет на отображение событий
             } else {
                 showNotification('Ошибка сохранения: ' + (data.error || 'Неизвестная ошибка'), 'error');
             }
