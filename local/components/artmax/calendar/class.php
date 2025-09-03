@@ -313,12 +313,45 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
             $eventId = $calendarObj->addEvent($title, '', $dateFrom->format('Y-m-d H:i:s'), $dateTo->format('Y-m-d H:i:s'), $userId, 1, $eventColor);
 
             if ($eventId) {
+                $eventsCreated = 1; // Основное событие
+                $createdEvents = [];
+                
+                // Получаем основное событие
+                $mainEvent = $calendarObj->getEvent($eventId);
+                if ($mainEvent) {
+                    $mainEvent['EVENT_COLOR'] = $eventColor;
+                    // Конвертируем даты в стандартный формат
+                    $mainEvent['DATE_FROM'] = $this->convertRussianDateToStandard($mainEvent['DATE_FROM']);
+                    $mainEvent['DATE_TO'] = $this->convertRussianDateToStandard($mainEvent['DATE_TO']);
+                    $createdEvents[] = $mainEvent;
+                }
+                
                 // Если событие повторяемое, создаем повторения
                 if ($repeat && $frequency) {
-                    $this->createRecurringEvents($eventId, $frequency, $weekdays, $repeatEnd, $repeatCount, $repeatEndDate, $eventColor);
+                    $recurringResult = $this->createRecurringEvents($eventId, $frequency, $weekdays, $repeatEnd, $repeatCount, $repeatEndDate, $eventColor);
+                    if ($recurringResult && $recurringResult['count'] > 0) {
+                        $eventsCreated += $recurringResult['count'];
+                        
+                        // Получаем все созданные повторяющиеся события
+                        foreach ($recurringResult['ids'] as $recurringEventId) {
+                            $recurringEvent = $calendarObj->getEvent($recurringEventId);
+                            if ($recurringEvent) {
+                                $recurringEvent['EVENT_COLOR'] = $eventColor;
+                                // Конвертируем даты в стандартный формат
+                                $recurringEvent['DATE_FROM'] = $this->convertRussianDateToStandard($recurringEvent['DATE_FROM']);
+                                $recurringEvent['DATE_TO'] = $this->convertRussianDateToStandard($recurringEvent['DATE_TO']);
+                                $createdEvents[] = $recurringEvent;
+                            }
+                        }
+                    }
                 }
 
-                return ['success' => true, 'eventId' => $eventId];
+                return [
+                    'success' => true, 
+                    'eventId' => $eventId, 
+                    'eventsCreated' => $eventsCreated,
+                    'events' => $createdEvents
+                ];
             } else {
                 return ['success' => false, 'error' => 'Ошибка добавления расписания'];
             }
@@ -334,14 +367,14 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
     {
         try {
             if (!CModule::IncludeModule('artmax.calendar')) {
-                return false;
+                return ['count' => 0, 'ids' => []];
             }
             
             $calendarObj = new \Artmax\Calendar\Calendar();
             $originalEvent = $calendarObj->getEvent($originalEventId);
             
             if (!$originalEvent) {
-                return false;
+                return ['count' => 0, 'ids' => []];
             }
 
             $dateFrom = new \DateTime($originalEvent['DATE_FROM']);
@@ -349,67 +382,127 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
             $duration = $dateFrom->diff($dateTo);
 
             $eventsCreated = 0;
+            $createdEventIds = [];
             $maxEvents = ($repeatEnd === 'after' && $repeatCount) ? $repeatCount : 100; // Максимум 100 событий
             $endDate = ($repeatEnd === 'date' && $repeatEndDate) ? new \DateTime($repeatEndDate) : null;
 
-            for ($i = 1; $i <= $maxEvents; $i++) {
-                $newDateFrom = clone $dateFrom;
-                $newDateTo = clone $dateTo;
-
-                // Вычисляем следующую дату в зависимости от частоты
-                switch ($frequency) {
-                    case 'daily':
-                        $newDateFrom->add(new \DateInterval('P' . $i . 'D'));
-                        $newDateTo->add(new \DateInterval('P' . $i . 'D'));
-                        break;
+            if ($frequency === 'weekly' && !empty($weekdays)) {
+                // Специальная обработка для еженедельного повторения с выбранными днями недели
+                $currentDate = clone $dateFrom;
+                $weekNumber = 0;
+                
+                while ($eventsCreated < $maxEvents) {
+                    // Находим понедельник текущей недели
+                    $dayOfWeek = $currentDate->format('N'); // 1 = понедельник, 7 = воскресенье
+                    $mondayOffset = $dayOfWeek - 1;
+                    $weekStart = clone $currentDate;
+                    $weekStart->sub(new \DateInterval('P' . $mondayOffset . 'D'));
                     
-                    case 'weekly':
-                        if (!empty($weekdays)) {
-                            // Для еженедельного повторения с выбранными днями недели
-                            $nextWeekday = $this->getNextWeekday($dateFrom, $weekdays);
-                            if ($nextWeekday) {
-                                $newDateFrom = $nextWeekday;
-                                $newDateTo = clone $nextWeekday;
-                                $newDateTo->add($duration);
-                            } else {
-                                break; // Пропускаем, если нет подходящего дня недели
+                    // Создаем события для каждого выбранного дня недели в текущей неделе
+                    foreach ($weekdays as $weekday) {
+                        $eventDate = clone $weekStart;
+                        $eventDate->add(new \DateInterval('P' . ($weekday - 1) . 'D'));
+                        
+                        // Проверяем, что дата события не раньше исходной даты
+                        if ($eventDate >= $dateFrom) {
+                            // Проверяем ограничение по дате
+                            if ($endDate && $eventDate > $endDate) {
+                                break 2; // Выходим из обоих циклов
                             }
-                        } else {
+                            
+                            // Проверяем ограничение по количеству
+                            if ($eventsCreated >= $maxEvents) {
+                                break 2; // Выходим из обоих циклов
+                            }
+                            
+                            $eventDateTo = clone $eventDate;
+                            $eventDateTo->add($duration);
+                            
+                            // Проверяем доступность времени для повторяющегося события
+                            if ($calendarObj->isTimeAvailable($eventDate->format('Y-m-d H:i:s'), $eventDateTo->format('Y-m-d H:i:s'), $originalEvent['USER_ID'])) {
+                                // Создаем повторяющееся событие
+                                $recurringEventId = $calendarObj->addEvent(
+                                    $originalEvent['TITLE'],
+                                    $originalEvent['DESCRIPTION'],
+                                    $eventDate->format('Y-m-d H:i:s'),
+                                    $eventDateTo->format('Y-m-d H:i:s'),
+                                    $originalEvent['USER_ID'],
+                                    1,
+                                    $eventColor
+                                );
+
+                                if ($recurringEventId) {
+                                    $eventsCreated++;
+                                    $createdEventIds[] = $recurringEventId;
+                                }
+                            }
+                            // Если время занято, просто пропускаем этот день
+                        }
+                    }
+                    
+                    // Переходим к следующей неделе
+                    $currentDate->add(new \DateInterval('P7D'));
+                    $weekNumber++;
+                    
+                    // Защита от бесконечного цикла
+                    if ($weekNumber > 100) {
+                        break;
+                    }
+                }
+            } else {
+                // Обычная обработка для других типов повторений
+                for ($i = 1; $i <= $maxEvents; $i++) {
+                    $newDateFrom = clone $dateFrom;
+                    $newDateTo = clone $dateTo;
+
+                    // Вычисляем следующую дату в зависимости от частоты
+                    switch ($frequency) {
+                        case 'daily':
+                            $newDateFrom->add(new \DateInterval('P' . $i . 'D'));
+                            $newDateTo->add(new \DateInterval('P' . $i . 'D'));
+                            break;
+                        
+                        case 'weekly':
                             $newDateFrom->add(new \DateInterval('P' . ($i * 7) . 'D'));
                             $newDateTo->add(new \DateInterval('P' . ($i * 7) . 'D'));
+                            break;
+                        
+                        case 'monthly':
+                            $newDateFrom->add(new \DateInterval('P' . $i . 'M'));
+                            $newDateTo->add(new \DateInterval('P' . $i . 'M'));
+                            break;
+                    }
+
+                    // Проверяем ограничение по дате
+                    if ($endDate && $newDateFrom > $endDate) {
+                        break;
+                    }
+
+                    // Проверяем доступность времени для повторяющегося события
+                    if ($calendarObj->isTimeAvailable($newDateFrom->format('Y-m-d H:i:s'), $newDateTo->format('Y-m-d H:i:s'), $originalEvent['USER_ID'])) {
+                        // Создаем повторяющееся событие
+                        $recurringEventId = $calendarObj->addEvent(
+                            $originalEvent['TITLE'],
+                            $originalEvent['DESCRIPTION'],
+                            $newDateFrom->format('Y-m-d H:i:s'),
+                            $newDateTo->format('Y-m-d H:i:s'),
+                            $originalEvent['USER_ID'],
+                            1,
+                            $eventColor
+                        );
+
+                        if ($recurringEventId) {
+                            $eventsCreated++;
+                            $createdEventIds[] = $recurringEventId;
                         }
-                        break;
-                    
-                    case 'monthly':
-                        $newDateFrom->add(new \DateInterval('P' . $i . 'M'));
-                        $newDateTo->add(new \DateInterval('P' . $i . 'M'));
-                        break;
-                }
-
-                // Проверяем ограничение по дате
-                if ($endDate && $newDateFrom > $endDate) {
-                    break;
-                }
-
-                // Создаем повторяющееся событие
-                $recurringEventId = $calendarObj->addEvent(
-                    $originalEvent['TITLE'],
-                    $originalEvent['DESCRIPTION'],
-                    $newDateFrom->format('Y-m-d H:i:s'),
-                    $newDateTo->format('Y-m-d H:i:s'),
-                    $originalEvent['USER_ID'],
-                    1,
-                    $eventColor
-                );
-
-                if ($recurringEventId) {
-                    $eventsCreated++;
+                    }
+                    // Если время занято, просто пропускаем этот день
                 }
             }
 
-            return $eventsCreated;
+            return ['count' => $eventsCreated, 'ids' => $createdEventIds];
         } catch (\Exception $e) {
-            return false;
+            return ['count' => 0, 'ids' => []];
         }
     }
 
@@ -494,16 +587,31 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
     /**
      * Получение следующего дня недели для еженедельного повторения
      */
-    private function getNextWeekday($startDate, $weekdays)
+    private function getNextWeekday($startDate, $weekdays, $iteration = 1)
     {
         $currentDate = clone $startDate;
         
-        for ($i = 1; $i <= 7; $i++) {
-            $currentDate->add(new \DateInterval('P1D'));
-            $currentWeekday = $currentDate->format('N'); // 1 (понедельник) - 7 (воскресенье)
+        // Для первой итерации ищем следующий день недели
+        if ($iteration == 1) {
+            for ($i = 1; $i <= 7; $i++) {
+                $currentDate->add(new \DateInterval('P1D'));
+                $currentWeekday = $currentDate->format('N'); // 1 (понедельник) - 7 (воскресенье)
+                
+                if (in_array($currentWeekday, $weekdays)) {
+                    return $currentDate;
+                }
+            }
+        } else {
+            // Для последующих итераций добавляем недели
+            $currentDate->add(new \DateInterval('P' . (($iteration - 1) * 7) . 'D'));
             
-            if (in_array($currentWeekday, $weekdays)) {
-                return $currentDate;
+            // Ищем первый подходящий день недели в этой неделе
+            for ($i = 0; $i < 7; $i++) {
+                $currentWeekday = $currentDate->format('N');
+                if (in_array($currentWeekday, $weekdays)) {
+                    return $currentDate;
+                }
+                $currentDate->add(new \DateInterval('P1D'));
             }
         }
         

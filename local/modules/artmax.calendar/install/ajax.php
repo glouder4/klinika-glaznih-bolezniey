@@ -7,6 +7,166 @@
 // Подключаем Bitrix
 require($_SERVER['DOCUMENT_ROOT'].'/bitrix/modules/main/include/prolog_before.php');
 
+/**
+ * Создание повторяющихся событий
+ */
+function createRecurringEvents($originalEventId, $frequency, $weekdays = [], $repeatEnd = 'never', $repeatCount = null, $repeatEndDate = null, $eventColor = '#3498db')
+{
+    try {
+        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+            "=== CREATE_RECURRING_EVENTS DEBUG ===\n", 
+            FILE_APPEND | LOCK_EX);
+        
+        if (!CModule::IncludeModule('artmax.calendar')) {
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "CREATE_RECURRING_EVENTS: Module not included\n", 
+                FILE_APPEND | LOCK_EX);
+            return false;
+        }
+        
+        $calendarObj = new \Artmax\Calendar\Calendar();
+        $originalEvent = $calendarObj->getEvent($originalEventId);
+        
+        if (!$originalEvent) {
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "CREATE_RECURRING_EVENTS: Original event not found\n", 
+                FILE_APPEND | LOCK_EX);
+            return false;
+        }
+        
+        $dateFrom = new \DateTime($originalEvent['DATE_FROM']);
+        $dateTo = new \DateTime($originalEvent['DATE_TO']);
+        $duration = $dateFrom->diff($dateTo);
+
+        $eventsCreated = 0;
+        $maxEvents = ($repeatEnd === 'after' && $repeatCount) ? $repeatCount : 100; // Максимум 100 событий
+        $endDate = ($repeatEnd === 'date' && $repeatEndDate) ? new \DateTime($repeatEndDate) : null;
+
+        if ($frequency === 'weekly' && !empty($weekdays)) {
+            // Специальная обработка для еженедельного повторения с выбранными днями недели
+            $currentDate = clone $dateFrom;
+            $weekNumber = 0;
+            
+            while ($eventsCreated < $maxEvents) {
+                // Находим понедельник текущей недели
+                $dayOfWeek = $currentDate->format('N'); // 1 = понедельник, 7 = воскресенье
+                $mondayOffset = $dayOfWeek - 1;
+                $weekStart = clone $currentDate;
+                $weekStart->sub(new \DateInterval('P' . $mondayOffset . 'D'));
+                
+                // Создаем события для каждого выбранного дня недели в текущей неделе
+                foreach ($weekdays as $weekday) {
+                    $eventDate = clone $weekStart;
+                    $eventDate->add(new \DateInterval('P' . ($weekday - 1) . 'D'));
+                    
+                    // Проверяем, что дата события не раньше исходной даты
+                    if ($eventDate >= $dateFrom) {
+                        // Проверяем ограничение по дате
+                        if ($endDate && $eventDate > $endDate) {
+                            break 2; // Выходим из обоих циклов
+                        }
+                        
+                        // Проверяем ограничение по количеству
+                        if ($eventsCreated >= $maxEvents) {
+                            break 2; // Выходим из обоих циклов
+                        }
+                        
+                        $eventDateTo = clone $eventDate;
+                        $eventDateTo->add($duration);
+                        
+                        // Проверяем доступность времени для повторяющегося события
+                        if ($calendarObj->isTimeAvailable($eventDate->format('Y-m-d H:i:s'), $eventDateTo->format('Y-m-d H:i:s'), $originalEvent['USER_ID'])) {
+                            // Создаем повторяющееся событие
+                            $recurringEventId = $calendarObj->addEvent(
+                                $originalEvent['TITLE'],
+                                $originalEvent['DESCRIPTION'],
+                                $eventDate->format('Y-m-d H:i:s'),
+                                $eventDateTo->format('Y-m-d H:i:s'),
+                                $originalEvent['USER_ID'],
+                                1,
+                                $eventColor
+                            );
+
+                            if ($recurringEventId) {
+                                $eventsCreated++;
+                            }
+                        }
+                        // Если время занято, просто пропускаем этот день
+                    }
+                }
+                
+                // Переходим к следующей неделе
+                $currentDate->add(new \DateInterval('P7D'));
+                $weekNumber++;
+                
+                // Защита от бесконечного цикла
+                if ($weekNumber > 100) {
+                    break;
+                }
+            }
+        } else {
+            // Обычная обработка для других типов повторений
+            for ($i = 1; $i <= $maxEvents; $i++) {
+                $newDateFrom = clone $dateFrom;
+                $newDateTo = clone $dateTo;
+
+                // Вычисляем следующую дату в зависимости от частоты
+                switch ($frequency) {
+                    case 'daily':
+                        $newDateFrom->add(new \DateInterval('P' . $i . 'D'));
+                        $newDateTo->add(new \DateInterval('P' . $i . 'D'));
+                        break;
+                    
+                    case 'weekly':
+                        $newDateFrom->add(new \DateInterval('P' . ($i * 7) . 'D'));
+                        $newDateTo->add(new \DateInterval('P' . ($i * 7) . 'D'));
+                        break;
+                    
+                    case 'monthly':
+                        $newDateFrom->add(new \DateInterval('P' . $i . 'M'));
+                        $newDateTo->add(new \DateInterval('P' . $i . 'M'));
+                        break;
+                }
+
+                // Проверяем ограничение по дате
+                if ($endDate && $newDateFrom > $endDate) {
+                    break;
+                }
+
+                // Проверяем доступность времени для повторяющегося события
+                if ($calendarObj->isTimeAvailable($newDateFrom->format('Y-m-d H:i:s'), $newDateTo->format('Y-m-d H:i:s'), $originalEvent['USER_ID'])) {
+                    // Создаем повторяющееся событие
+                    $recurringEventId = $calendarObj->addEvent(
+                        $originalEvent['TITLE'],
+                        $originalEvent['DESCRIPTION'],
+                        $newDateFrom->format('Y-m-d H:i:s'),
+                        $newDateTo->format('Y-m-d H:i:s'),
+                        $originalEvent['USER_ID'],
+                        1,
+                        $eventColor
+                    );
+
+                    if ($recurringEventId) {
+                        $eventsCreated++;
+                    }
+                }
+                // Если время занято, просто пропускаем этот день
+            }
+        }
+
+        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+            "CREATE_RECURRING_EVENTS: Total events created: {$eventsCreated}\n", 
+            FILE_APPEND | LOCK_EX);
+        
+        return $eventsCreated;
+    } catch (\Exception $e) {
+        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+            "CREATE_RECURRING_EVENTS: Exception: " . $e->getMessage() . "\n", 
+            FILE_APPEND | LOCK_EX);
+        return false;
+    }
+}
+
 // Проверяем, что это AJAX запрос
 if (!isset($_SERVER['HTTP_X_REQUESTED_WITH']) || 
     strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) !== 'xmlhttprequest') {
@@ -116,19 +276,46 @@ switch ($action) {
         break;
         
     case 'addSchedule':
+        // Логируем начало обработки
+        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+            "=== ADD_SCHEDULE START (install/ajax.php) ===\n", 
+            FILE_APPEND | LOCK_EX);
+        
         $title = $_POST['title'] ?? '';
         $date = $_POST['date'] ?? '';
         $time = $_POST['time'] ?? '';
         $repeat = $_POST['repeat'] === 'on' || $_POST['repeat'] === 'true';
         $frequency = $_POST['frequency'] ?? null;
         $weekdays = [];
-        if (isset($_POST['weekdays']) && is_array($_POST['weekdays'])) {
-            $weekdays = array_map('intval', $_POST['weekdays']);
+        if (isset($_POST['weekdays'])) {
+            if (is_array($_POST['weekdays'])) {
+                $weekdays = array_map('intval', $_POST['weekdays']);
+            } elseif (is_string($_POST['weekdays']) && !empty($_POST['weekdays'])) {
+                // Если weekdays приходит как строка "1,2", разбиваем её на массив
+                $weekdays = array_map('intval', explode(',', $_POST['weekdays']));
+            }
         }
         $repeatEnd = $_POST['repeatEnd'] ?? 'never';
         $repeatCount = !empty($_POST['repeatCount']) ? (int)$_POST['repeatCount'] : null;
         $repeatEndDate = $_POST['repeatEndDate'] ?? null;
+        if ($repeatEndDate === 'null' || $repeatEndDate === '') {
+            $repeatEndDate = null;
+        }
         $eventColor = $_POST['eventColor'] ?? '#3498db';
+        
+        // Логируем параметры
+        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+            "ADD_SCHEDULE: Parameters:\n", 
+            FILE_APPEND | LOCK_EX);
+        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+            "  - repeat: " . ($repeat ? 'true' : 'false') . "\n", 
+            FILE_APPEND | LOCK_EX);
+        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+            "  - frequency: {$frequency}\n", 
+            FILE_APPEND | LOCK_EX);
+        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+            "  - weekdays: " . json_encode($weekdays) . "\n", 
+            FILE_APPEND | LOCK_EX);
         
         if (empty($title) || empty($date) || empty($time)) {
             http_response_code(400);
@@ -139,9 +326,9 @@ switch ($action) {
         
         // Формируем дату и время
         $dateTime = $date . ' ' . $time;
-        $dateFrom = new DateTime($dateTime);
+        $dateFrom = new \DateTime($dateTime);
         $dateTo = clone $dateFrom;
-        $dateTo->add(new DateInterval('PT1H')); // Добавляем 1 час по умолчанию
+        $dateTo->add(new \DateInterval('PT1H')); // Добавляем 1 час по умолчанию
         
         // Проверяем доступность времени
         if (!$calendarObj->isTimeAvailable($dateFrom->format('Y-m-d H:i:s'), $dateTo->format('Y-m-d H:i:s'), $userId)) {

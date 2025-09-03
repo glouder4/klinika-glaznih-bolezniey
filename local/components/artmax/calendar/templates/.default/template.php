@@ -177,10 +177,15 @@ $totalDays = 42; // 6 недель * 7 дней
                                 // Получаем время напрямую из БД, избегая проблем с часовыми поясами
                                 $eventTime = extractTimeFromDate($event['DATE_FROM']);
                                 
-                                echo '<div class="calendar-event" data-event-id="' . $event['ID'] . '" style="' . $style . '">';
-                                echo '<div class="event-dot"></div>';
-                                echo '<span class="event-title">' . htmlspecialchars($event['TITLE']) . '</span>';
-                                echo '<span class="event-time">' . $eventTime . '</span>';
+                                // Получаем время окончания
+                                $eventEndTime = extractTimeFromDate($event['DATE_TO']);
+                                
+                                echo '<div class="calendar-event" data-event-id="' . $event['ID'] . '" style="' . $style . '" onclick="event.stopPropagation();">';
+                                echo '<div class="event-content">';
+                                echo '<div class="event-title">' . htmlspecialchars($event['TITLE']) . '</div>';
+                                echo '<div class="event-time">' . $eventTime . ' – ' . $eventEndTime . '</div>';
+                                echo '</div>';
+                                echo '<div class="event-arrow" onclick="event.stopPropagation(); showEventSidePanel(' . $event['ID'] . ');">▼</div>';
                                 echo '</div>';
                             }
                         }
@@ -595,6 +600,126 @@ $totalDays = 42; // 6 недель * 7 дней
                     <button type="submit" class="btn btn-primary">СОХРАНИТЬ</button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <!-- Боковое окно для просмотра деталей события -->
+    <div id="eventSidePanel" class="event-side-panel" style="display: none;">
+        <div class="side-panel-content">
+            <div class="side-panel-header">
+                <h3 id="sidePanelTitle">Детали записи</h3>
+                <button class="close-side-panel" onclick="closeEventSidePanel()">×</button>
+            </div>
+            
+            <div class="side-panel-body">
+                <!-- Информация о клиенте -->
+                <div class="client-section">
+                    <div class="client-info">
+                        <div class="client-icon">👤</div>
+                        <div class="client-details">
+                            <div class="client-name">Нет клиента</div>
+                            <div class="client-placeholder">Добавьте информацию о клиенте</div>
+                        </div>
+                        <div class="client-actions">
+                            <button class="action-btn add-contact-btn" title="Позвонить">📞</button>
+                            <button class="action-btn sms-btn" title="СМС">💬</button>
+                        </div>
+                    </div>
+                    <button class="add-client-btn" onclick="openClientModal()">+ Добавить или выбрать</button>
+                    <div class="add-note-section">
+                        <button class="add-note-btn">+ Добавить заметку к записи</button>
+                    </div>
+                </div>
+
+                <!-- Карточки действий -->
+                <div class="action-cards">
+                    <div class="action-card">
+                        <div class="card-badge">СКОРО</div>
+                        <div class="card-icon">🛡️</div>
+                        <div class="card-content">
+                            <div class="card-title">Сделка <span class="question-mark">?</span></div>
+                            <div class="card-status">Не добавлена</div>
+                        </div>
+                        <button class="card-action-btn">+ Добавить</button>
+                    </div>
+
+                    <div class="action-card">
+                        <div class="card-badge">СКОРО</div>
+                        <div class="card-icon">📄</div>
+                        <div class="card-content">
+                            <div class="card-title">Документы <span class="question-mark">?</span></div>
+                            <div class="card-status">Не добавлены</div>
+                        </div>
+                        <button class="card-action-btn">+ Добавить</button>
+                    </div>
+
+                    <div class="action-card">
+                        <div class="card-badge">СКОРО</div>
+                        <div class="card-icon">💬</div>
+                        <div class="card-content">
+                            <div class="card-title">СМС клиенту <span class="question-mark">?</span></div>
+                            <div class="card-status">Клиент не добавлен</div>
+                        </div>
+                        <button class="card-action-btn">Отправить ▼</button>
+                    </div>
+
+                    <div class="action-card">
+                        <div class="card-icon">✅</div>
+                        <div class="card-content">
+                            <div class="card-title">Подтверждение <span class="question-mark">?</span></div>
+                            <div class="card-status confirmed">Подтверждено</div>
+                        </div>
+                        <button class="card-action-btn">Выбрать ▼</button>
+                    </div>
+
+                    <div class="action-card">
+                        <div class="card-icon">📅</div>
+                        <div class="card-content">
+                            <div class="card-title">Визит <span class="question-mark">?</span></div>
+                            <div class="card-status">Клиент не добавлен</div>
+                        </div>
+                        <button class="card-action-btn">Выбрать ▼</button>
+                    </div>
+                </div>
+
+                <!-- Кнопки действий -->
+                <div class="side-panel-actions">
+                    <button class="full-form-btn">Полная форма ></button>
+                    <button class="edit-event-btn" onclick="openEditEventModalFromSidePanel()">Редактировать</button>
+                    <button class="delete-event-btn" onclick="deleteEventFromSidePanel()">🗑️ Удалить</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно для выбора клиента -->
+    <div id="clientModal" class="client-modal" style="display: none;">
+        <div class="client-modal-content">
+            <div class="client-modal-header">
+                <h3>Добавить или выбрать клиента</h3>
+                <button class="close-client-modal" onclick="closeClientModal()">×</button>
+            </div>
+            <div class="client-modal-body">
+                <div class="form-group">
+                    <label for="contact-input">Контакт</label>
+                    <div class="input-with-icons">
+                        <div class="input-icon left">👤</div>
+                        <input type="text" id="contact-input" placeholder="Имя контакта">
+                        <div class="input-icon right">🔍</div>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="company-input">Компания</label>
+                    <div class="input-with-icons">
+                        <div class="input-icon left">📄</div>
+                        <input type="text" id="company-input" placeholder="Название компании">
+                        <div class="input-icon right">🔍</div>
+                    </div>
+                </div>
+                <div class="modal-instruction">
+                    Чтобы выбрать клиента из CRM, начните вводить имя, телефон, e-mail или название компании
+                </div>
+            </div>
         </div>
     </div>
 </div>

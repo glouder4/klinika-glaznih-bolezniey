@@ -56,17 +56,7 @@
                 }
             });
 
-            // Добавляем обработчик для событий
-            const events = day.querySelectorAll('.calendar-event');
-            events.forEach(event => {
-                event.addEventListener('click', function(e) {
-                    e.stopPropagation();
-                    const eventId = this.getAttribute('data-event-id');
-                    if (eventId) {
-                        showEventDetails(eventId);
-                    }
-                });
-            });
+            // Обработчики для событий теперь не нужны - клик только по стрелочке
 
             // Добавляем hover эффекты
             day.addEventListener('mouseenter', function() {
@@ -161,6 +151,12 @@
             if (event.target === editModal) {
                 closeEditEventModal();
             }
+            
+            // Закрытие бокового окна при клике вне его
+            const sidePanel = document.getElementById('eventSidePanel');
+            if (sidePanel && sidePanel.classList.contains('open') && !sidePanel.contains(event.target)) {
+                closeEventSidePanel();
+            }
         });
 
         // Закрытие по Escape
@@ -168,6 +164,7 @@
             if (e.key === 'Escape') {
                 closeEventForm();
                 closeEditEventModal();
+                closeEventSidePanel();
             }
         });
     }
@@ -815,6 +812,141 @@
         openEditEventModal(eventId);
     }
 
+    function showEventSidePanel(eventId) {
+        console.log('showEventSidePanel: Показываем боковое окно для события:', eventId);
+        
+        // Сохраняем ID текущего события
+        window.currentEventId = eventId;
+        
+        // Находим элемент события
+        const eventElement = document.querySelector(`[data-event-id="${eventId}"]`);
+        if (!eventElement) {
+            console.error('Элемент события не найден:', eventId);
+            return;
+        }
+        
+        // Получаем позицию события
+        const eventRect = eventElement.getBoundingClientRect();
+        const sidePanel = document.getElementById('eventSidePanel');
+        
+        if (!sidePanel) {
+            console.error('Боковое окно не найдено');
+            return;
+        }
+        
+        // Показываем боковое окно сначала невидимым для вычисления размеров
+        sidePanel.style.display = 'block';
+        sidePanel.style.visibility = 'hidden';
+        sidePanel.classList.add('open');
+        
+        // Вычисляем позицию бокового окна
+        const panelWidth = 400;
+        const panelHeight = window.innerHeight * 0.9; // 90% высоты экрана
+        const viewportWidth = window.innerWidth;
+        const viewportHeight = window.innerHeight;
+        
+        let left = eventRect.right + 10; // Справа от события
+        let top = Math.max(20, eventRect.top - 50); // Поднимаем выше события
+        
+        // Если не помещается справа, показываем слева
+        if (left + panelWidth > viewportWidth) {
+            left = eventRect.left - panelWidth - 10;
+        }
+        
+        // Если не помещается снизу, корректируем по вертикали
+        if (top + panelHeight > viewportHeight) {
+            top = viewportHeight - panelHeight - 20;
+        }
+        
+        // Если не помещается сверху, показываем от верха экрана
+        if (top < 20) {
+            top = 20;
+        }
+        
+        // Устанавливаем позицию
+        sidePanel.style.left = left + 'px';
+        sidePanel.style.top = top + 'px';
+        sidePanel.style.height = panelHeight + 'px';
+        
+        // Делаем видимым
+        sidePanel.style.visibility = 'visible';
+        
+        // Получаем данные события и заполняем боковое окно
+        fetch('/local/components/artmax/calendar/ajax.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: new URLSearchParams({
+                action: 'getEvent',
+                eventId: eventId
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.event) {
+                const event = data.event;
+                
+                // Обновляем заголовок бокового окна
+                const titleElement = document.getElementById('sidePanelTitle');
+                if (titleElement) {
+                    titleElement.textContent = event.TITLE || 'Детали записи';
+                }
+                
+                // Применяем цвет события к шапке
+                const eventColor = event.EVENT_COLOR || '#3498db';
+                const sidePanelHeader = document.querySelector('.side-panel-header');
+                if (sidePanelHeader) {
+                    sidePanelHeader.style.background = `linear-gradient(135deg, ${eventColor}, ${eventColor}dd)`;
+                }
+            } else {
+                showNotification('Ошибка при загрузке события', 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Ошибка при загрузке события:', error);
+            showNotification('Ошибка при загрузке события', 'error');
+        });
+    }
+
+    function closeEventSidePanel() {
+        const sidePanel = document.getElementById('eventSidePanel');
+        if (sidePanel) {
+            sidePanel.classList.remove('open');
+            setTimeout(() => {
+                sidePanel.style.display = 'none';
+                sidePanel.style.visibility = 'hidden';
+                sidePanel.style.left = '';
+                sidePanel.style.top = '';
+                sidePanel.style.height = '';
+                document.body.style.overflow = 'auto';
+                
+                // Сбрасываем цвет шапки
+                const sidePanelHeader = document.querySelector('.side-panel-header');
+                if (sidePanelHeader) {
+                    sidePanelHeader.style.background = '';
+                }
+            }, 300);
+        }
+    }
+
+    function openEditEventModalFromSidePanel() {
+        if (window.currentEventId) {
+            closeEventSidePanel();
+            openEditEventModal(window.currentEventId);
+        }
+    }
+
+    function deleteEventFromSidePanel() {
+        if (window.currentEventId) {
+            if (confirm('Вы уверены, что хотите удалить это событие?')) {
+                deleteEventAjax(window.currentEventId);
+                closeEventSidePanel();
+            }
+        }
+    }
+
     function openEditEventModal(eventId) {
         // Получаем данные события по AJAX
         fetch('/local/components/artmax/calendar/ajax.php', {
@@ -1187,6 +1319,7 @@
     
     // Функция для выбора предустановленного цвета
     function selectPresetColor(color) {
+        console.log('selectPresetColor вызвана с цветом:', color);
         document.getElementById('selected-color').value = color;
         document.getElementById('custom-color-input').value = color;
         
@@ -1195,16 +1328,21 @@
             preset.classList.remove('active');
         });
         event.target.classList.add('active');
+        
+        console.log('selected-color установлен в:', document.getElementById('selected-color').value);
     }
     
     // Функция для выбора кастомного цвета
     function selectCustomColor(color) {
+        console.log('selectCustomColor вызвана с цветом:', color);
         document.getElementById('selected-color').value = color;
         
         // Убираем активный класс со всех пресетов
         document.querySelectorAll('.color-preset').forEach(preset => {
             preset.classList.remove('active');
         });
+        
+        console.log('selected-color установлен в:', document.getElementById('selected-color').value);
     }
 
     // Функция для выбора предустановленного цвета в форме редактирования
@@ -1236,16 +1374,21 @@
     }
     
     function initColorPicker() {
+        console.log('initColorPicker вызвана');
         // Устанавливаем первый цвет как активный по умолчанию
         const firstPreset = document.querySelector('.color-preset');
         if (firstPreset) {
             firstPreset.classList.add('active');
+            console.log('Первый пресет установлен как активный:', firstPreset.dataset.color);
         }
         
         // Устанавливаем значение по умолчанию для скрытого поля
         const selectedColorInput = document.getElementById('selected-color');
         if (selectedColorInput) {
             selectedColorInput.value = '#3498db';
+            console.log('selected-color установлен в значение по умолчанию:', selectedColorInput.value);
+        } else {
+            console.error('Элемент selected-color не найден!');
         }
     }
     
@@ -1272,6 +1415,9 @@
             eventColor: scheduleData.eventColor || '#3498db'
         };
         
+        console.log('Отправляемые данные:', postData);
+        console.log('Цвет события в postData:', postData.eventColor);
+        
         // Отправляем AJAX запрос
         fetch('/local/components/artmax/calendar/ajax.php', {
             method: 'POST',
@@ -1283,19 +1429,28 @@
         })
         .then(response => response.json())
         .then(data => {
+            console.log('Ответ сервера:', data);
             if (data.success) {
-                showNotification('Расписание успешно создано!', 'success');
+                const eventsCount = data.eventsCreated || 1;
+                const message = eventsCount > 1 
+                    ? `Расписание успешно создано! Создано ${eventsCount} событий.`
+                    : 'Расписание успешно создано!';
+                showNotification(message, 'success');
                 closeScheduleModal();
                 
                 // Динамически добавляем события расписания в календарь
                 if (data.events && Array.isArray(data.events)) {
+                    console.log('Добавляем события в календарь:', data.events);
                     data.events.forEach(event => {
+                        console.log('Добавляем событие:', event);
+                        console.log('Цвет события:', event.EVENT_COLOR);
                         addEventToCalendar({
                             id: event.ID,
                             title: event.TITLE,
                             description: event.DESCRIPTION,
                             dateFrom: event.DATE_FROM,
-                            dateTo: event.DATE_TO
+                            dateTo: event.DATE_TO,
+                            eventColor: event.EVENT_COLOR || scheduleData.eventColor || '#3498db'
                         });
                     });
                 }
@@ -1322,6 +1477,13 @@
                 e.preventDefault();
                 
                 const formData = new FormData(this);
+                // Проверяем значение скрытого поля перед отправкой
+                const selectedColorInput = document.getElementById('selected-color');
+                console.log('Значение selected-color перед отправкой:', selectedColorInput ? selectedColorInput.value : 'ЭЛЕМЕНТ НЕ НАЙДЕН');
+                
+                // Получаем цвет напрямую из элемента, так как FormData может не работать с скрытыми полями
+                const eventColor = selectedColorInput ? selectedColorInput.value : '#3498db';
+                
                 const scheduleData = {
                     title: formData.get('title'),
                     date: formData.get('date'),
@@ -1332,10 +1494,11 @@
                     repeatEnd: formData.get('repeat-end'),
                     repeatCount: formData.get('repeat-count'),
                     repeatEndDate: formData.get('repeat-end-date'),
-                    eventColor: formData.get('event-color')
+                    eventColor: eventColor
                 };
 
                 console.log('Данные расписания:', scheduleData);
+                console.log('Цвет события из формы:', scheduleData.eventColor);
                 
                 // Отправляем AJAX запрос для сохранения расписания
                 saveSchedule(scheduleData);
@@ -1380,7 +1543,11 @@
         addEventToCalendar: addEventToCalendar,
         updateEventInCalendar: updateEventInCalendar,
         deleteEvent: deleteEvent,
-        deleteEventAjax: deleteEventAjax
+        deleteEventAjax: deleteEventAjax,
+        showEventSidePanel: showEventSidePanel,
+        closeEventSidePanel: closeEventSidePanel,
+        openEditEventModalFromSidePanel: openEditEventModalFromSidePanel,
+        deleteEventFromSidePanel: deleteEventFromSidePanel
     };
 
     // Тестовая функция для проверки извлечения даты
@@ -1427,6 +1594,52 @@
         console.log('=== КОНЕЦ ТЕСТА ===');
     };
 
+    // Добавляем обработчики для обновления позиции бокового окна
+    window.addEventListener('scroll', function() {
+        if (window.currentEventId) {
+            const sidePanel = document.getElementById('eventSidePanel');
+            if (sidePanel && sidePanel.classList.contains('open')) {
+                // Обновляем позицию при прокрутке
+                const eventElement = document.querySelector(`[data-event-id="${window.currentEventId}"]`);
+                if (eventElement) {
+                    const eventRect = eventElement.getBoundingClientRect();
+                    const panelWidth = 400;
+                    const panelHeight = window.innerHeight * 0.9;
+                    const viewportWidth = window.innerWidth;
+                    const viewportHeight = window.innerHeight;
+                    
+                    let left = eventRect.right + 10;
+                    let top = Math.max(20, eventRect.top - 50); // Поднимаем выше события
+                    
+                    if (left + panelWidth > viewportWidth) {
+                        left = eventRect.left - panelWidth - 10;
+                    }
+                    
+                    if (top + panelHeight > viewportHeight) {
+                        top = viewportHeight - panelHeight - 20;
+                    }
+                    
+                    if (top < 20) {
+                        top = 20;
+                    }
+                    
+                    sidePanel.style.left = left + 'px';
+                    sidePanel.style.top = top + 'px';
+                }
+            }
+        }
+    });
+
+    window.addEventListener('resize', function() {
+        if (window.currentEventId) {
+            const sidePanel = document.getElementById('eventSidePanel');
+            if (sidePanel && sidePanel.classList.contains('open')) {
+                // Закрываем боковое окно при изменении размера окна
+                closeEventSidePanel();
+            }
+        }
+    });
+
     // Делаем функции доступными глобально для использования в HTML
     window.closeEditEventModal = closeEditEventModal;
     window.closeEventForm = closeEventForm;
@@ -1445,6 +1658,10 @@
     window.goToToday = goToToday;
     window.refreshCalendarEvents = refreshCalendarEvents;
     window.deleteEventAjax = deleteEventAjax;
+    window.showEventSidePanel = showEventSidePanel;
+    window.closeEventSidePanel = closeEventSidePanel;
+    window.openEditEventModalFromSidePanel = openEditEventModalFromSidePanel;
+    window.deleteEventFromSidePanel = deleteEventFromSidePanel;
 
     /**
      * Динамически добавляет событие в календарь с анимацией
@@ -1533,17 +1750,57 @@
             console.log('addEventToCalendar: Время извлечено через toLocaleTimeString (fallback):', timeString);
         }
         
+        // Получаем время окончания
+        let endTimeString;
+        if (typeof eventData.dateTo === 'string') {
+            // Если дата в формате "2025-08-04 12:00:00", извлекаем время напрямую
+            const endTimeMatch = eventData.dateTo.match(/(\d{2}):(\d{2}):(\d{2})$/);
+            if (endTimeMatch) {
+                endTimeString = `${endTimeMatch[1]}:${endTimeMatch[2]}`;
+            } else {
+                // Если дата в ISO формате (с T), извлекаем время
+                const isoEndTimeMatch = eventData.dateTo.match(/T(\d{2}):(\d{2}):/);
+                if (isoEndTimeMatch) {
+                    endTimeString = `${isoEndTimeMatch[1]}:${isoEndTimeMatch[2]}`;
+                } else {
+                    // Fallback на локальное время
+                    endTimeString = new Date(eventData.dateTo).toLocaleTimeString('ru-RU', { 
+                        hour: '2-digit', 
+                        minute: '2-digit',
+                        hour12: false
+                    });
+                }
+            }
+        } else {
+            // Fallback на локальное время
+            endTimeString = new Date(eventData.dateTo).toLocaleTimeString('ru-RU', { 
+                hour: '2-digit', 
+                minute: '2-digit',
+                hour12: false
+            });
+        }
+
         eventElement.innerHTML = `
-            <div class="event-dot"></div>
-            <span class="event-title">${eventData.title}</span>
-            <span class="event-time">${timeString}</span>
+            <div class="event-content">
+                <div class="event-title">${eventData.title}</div>
+                <div class="event-time">${timeString} – ${endTimeString}</div>
+            </div>
+            <div class="event-arrow">▼</div>
         `;
         
-        // Добавляем обработчик клика для просмотра деталей
+        // Добавляем обработчик клика по событию для предотвращения всплытия
         eventElement.addEventListener('click', function(e) {
             e.stopPropagation();
-            showEventDetails(eventData.id);
         });
+        
+        // Добавляем обработчик клика на стрелочку для вызова бокового окна
+        const arrowElement = eventElement.querySelector('.event-arrow');
+        if (arrowElement) {
+            arrowElement.addEventListener('click', function(e) {
+                e.stopPropagation();
+                showEventSidePanel(eventData.id);
+            });
+        }
         
         // Добавляем событие в ячейку календаря
         calendarDay.appendChild(eventElement);
@@ -1572,7 +1829,12 @@
             }
             
             if (blinkCount % 2 === 0) {
-                eventElement.style.boxShadow = '0 0 20px rgba(52, 152, 219, 0.8)';
+                const color = eventData.eventColor || '#3498db';
+                // Конвертируем hex в rgba для эффекта свечения
+                const r = parseInt(color.slice(1, 3), 16);
+                const g = parseInt(color.slice(3, 5), 16);
+                const b = parseInt(color.slice(5, 7), 16);
+                eventElement.style.boxShadow = `0 0 20px rgba(${r}, ${g}, ${b}, 0.8)`;
             } else {
                 eventElement.style.boxShadow = 'none';
             }
@@ -1759,7 +2021,7 @@
                 if (timeElement) {
                     console.log('updateEventInCalendar: eventData.dateFrom =', eventData.dateFrom);
                     
-                    // Форматируем время, избегая проблем с часовыми поясами
+                    // Форматируем время начала, избегая проблем с часовыми поясами
                     let timeString;
                     if (typeof eventData.dateFrom === 'string') {
                         // Если дата в формате "2025-08-04 12:00:00", извлекаем время напрямую
@@ -1792,7 +2054,38 @@
                         });
                         console.log('updateEventInCalendar: Время извлечено через toLocaleTimeString (fallback):', timeString);
                     }
-                    timeElement.textContent = timeString;
+                    
+                    // Форматируем время окончания
+                    let endTimeString;
+                    if (typeof eventData.dateTo === 'string') {
+                        // Если дата в формате "2025-08-04 12:00:00", извлекаем время напрямую
+                        const endTimeMatch = eventData.dateTo.match(/(\d{2}):(\d{2}):(\d{2})$/);
+                        if (endTimeMatch) {
+                            endTimeString = `${endTimeMatch[1]}:${endTimeMatch[2]}`;
+                        } else {
+                            // Если дата в ISO формате (с T), извлекаем время
+                            const isoEndTimeMatch = eventData.dateTo.match(/T(\d{2}):(\d{2}):/);
+                            if (isoEndTimeMatch) {
+                                endTimeString = `${isoEndTimeMatch[1]}:${isoEndTimeMatch[2]}`;
+                            } else {
+                                // Fallback на локальное время
+                                endTimeString = new Date(eventData.dateTo).toLocaleTimeString('ru-RU', { 
+                                    hour: '2-digit', 
+                                    minute: '2-digit',
+                                    hour12: false
+                                });
+                            }
+                        }
+                    } else {
+                        // Fallback на локальное время
+                        endTimeString = new Date(eventData.dateTo).toLocaleTimeString('ru-RU', { 
+                            hour: '2-digit', 
+                            minute: '2-digit',
+                            hour12: false
+                        });
+                    }
+                    
+                    timeElement.textContent = `${timeString} – ${endTimeString}`;
                 }
                 
                 // Обновляем цвет события
@@ -1921,17 +2214,57 @@
             console.log('createEventElement: Время извлечено через toLocaleTimeString (fallback):', timeString);
         }
         
+        // Получаем время окончания
+        let endTimeString;
+        if (typeof event.DATE_TO === 'string') {
+            // Если дата в формате "2025-08-04 12:00:00", извлекаем время напрямую
+            const endTimeMatch = event.DATE_TO.match(/(\d{2}):(\d{2}):(\d{2})$/);
+            if (endTimeMatch) {
+                endTimeString = `${endTimeMatch[1]}:${endTimeMatch[2]}`;
+            } else {
+                // Если дата в ISO формате (с T), извлекаем время
+                const isoEndTimeMatch = event.DATE_TO.match(/T(\d{2}):(\d{2}):/);
+                if (isoEndTimeMatch) {
+                    endTimeString = `${isoEndTimeMatch[1]}:${isoEndTimeMatch[2]}`;
+                } else {
+                    // Fallback на локальное время
+                    endTimeString = new Date(event.DATE_TO).toLocaleTimeString('ru-RU', { 
+                        hour: '2-digit', 
+                        minute: '2-digit',
+                        hour12: false
+                    });
+                }
+            }
+        } else {
+            // Fallback на локальное время
+            endTimeString = new Date(event.DATE_TO).toLocaleTimeString('ru-RU', { 
+                hour: '2-digit', 
+                minute: '2-digit',
+                hour12: false
+            });
+        }
+
         eventElement.innerHTML = `
-            <div class="event-dot"></div>
-            <span class="event-title">${event.TITLE}</span>
-            <span class="event-time">${timeString}</span>
+            <div class="event-content">
+                <div class="event-title">${event.TITLE}</div>
+                <div class="event-time">${timeString} – ${endTimeString}</div>
+            </div>
+            <div class="event-arrow">▼</div>
         `;
         
-        // Добавляем обработчик клика
+        // Добавляем обработчик клика по событию для предотвращения всплытия
         eventElement.addEventListener('click', function(e) {
             e.stopPropagation();
-            showEventDetails(event.ID);
         });
+        
+        // Добавляем обработчик клика на стрелочку для вызова бокового окна
+        const arrowElement = eventElement.querySelector('.event-arrow');
+        if (arrowElement) {
+            arrowElement.addEventListener('click', function(e) {
+                e.stopPropagation();
+                showEventSidePanel(event.ID);
+            });
+        }
         
         return eventElement;
     }

@@ -7,6 +7,45 @@
 // Подключаем Bitrix
 require($_SERVER['DOCUMENT_ROOT'].'/bitrix/modules/main/include/prolog_before.php');
 
+// Подключаем класс компонента
+require_once($_SERVER['DOCUMENT_ROOT'].'/local/components/artmax/calendar/class.php');
+
+
+
+/**
+ * Получение следующего дня недели для еженедельного повторения
+ */
+function getNextWeekday($startDate, $weekdays, $iteration = 1)
+{
+    $currentDate = clone $startDate;
+    
+    // Для первой итерации ищем следующий день недели
+    if ($iteration == 1) {
+        for ($i = 1; $i <= 7; $i++) {
+            $currentDate->add(new \DateInterval('P1D'));
+            $currentWeekday = $currentDate->format('N'); // 1 (понедельник) - 7 (воскресенье)
+            
+            if (in_array($currentWeekday, $weekdays)) {
+                return $currentDate;
+            }
+        }
+    } else {
+        // Для последующих итераций добавляем недели
+        $currentDate->add(new \DateInterval('P' . (($iteration - 1) * 7) . 'D'));
+        
+        // Ищем первый подходящий день недели в этой неделе
+        for ($i = 0; $i < 7; $i++) {
+            $currentWeekday = $currentDate->format('N');
+            if (in_array($currentWeekday, $weekdays)) {
+                return $currentDate;
+            }
+            $currentDate->add(new \DateInterval('P1D'));
+        }
+    }
+    
+    return null;
+}
+
 // Проверяем, что это AJAX запрос (более мягкая проверка)
 $isAjax = isset($_SERVER['HTTP_X_REQUESTED_WITH']) && 
           strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest';
@@ -323,46 +362,49 @@ switch ($action) {
         break;
         
     case 'addSchedule':
-        $title = $_POST['title'] ?? '';
-        $date = $_POST['date'] ?? '';
-        $time = $_POST['time'] ?? '';
-        $repeat = $_POST['repeat'] === 'on' || $_POST['repeat'] === 'true';
-        $frequency = $_POST['frequency'] ?? null;
+        // Правильно обрабатываем массив weekdays
         $weekdays = [];
         if (isset($_POST['weekdays']) && is_array($_POST['weekdays'])) {
-            $weekdays = array_map('intval', $_POST['weekdays']);
-        }
-        $repeatEnd = $_POST['repeatEnd'] ?? 'never';
-        $repeatCount = !empty($_POST['repeatCount']) ? (int)$_POST['repeatCount'] : null;
-        $repeatEndDate = $_POST['repeatEndDate'] ?? null;
-        $eventColor = $_POST['eventColor'] ?? '#3498db';
-        
-        if (empty($title) || empty($date) || empty($time)) {
-            http_response_code(400);
-            die(json_encode(['success' => false, 'error' => 'Не все обязательные поля заполнены']));
+                $weekdays = array_map('intval', $_POST['weekdays']);
+        } elseif (isset($_POST['weekdays']) && is_string($_POST['weekdays']) && !empty($_POST['weekdays'])) {
+                // Если weekdays приходит как строка "1,2", разбиваем её на массив
+                $weekdays = array_map('intval', explode(',', $_POST['weekdays']));
         }
         
-        $userId = $GLOBALS['USER']->GetID();
+        // Логируем полученные данные
+        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+            "=== ADD_SCHEDULE AJAX DEBUG ===\n", 
+            FILE_APPEND | LOCK_EX);
+        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+            "POST data: " . json_encode($_POST) . "\n", 
+            FILE_APPEND | LOCK_EX);
+        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+            "eventColor from POST: " . ($_POST['eventColor'] ?? 'NOT SET') . "\n", 
+            FILE_APPEND | LOCK_EX);
         
-        // Формируем дату и время
-        $dateTime = $date . ' ' . $time;
-        $dateFrom = new DateTime($dateTime);
-        $dateTo = clone $dateFrom;
-        $dateTo->add(new DateInterval('PT1H')); // Добавляем 1 час по умолчанию
+        // Создаем экземпляр компонента для вызова метода
+        $component = new ArtmaxCalendarComponent();
+        $result = $component->addScheduleAction(
+            $_POST['title'] ?? '',
+            $_POST['date'] ?? '',
+            $_POST['time'] ?? '',
+            $_POST['repeat'] === 'on' || $_POST['repeat'] === 'true',
+            $_POST['frequency'] ?? null,
+            $weekdays,
+            $_POST['repeatEnd'] ?? 'never',
+            !empty($_POST['repeatCount']) ? (int)$_POST['repeatCount'] : null,
+            !empty($_POST['repeatEndDate']) ? $_POST['repeatEndDate'] : null,
+            $_POST['eventColor'] ?? '#3498db'
+        );
         
-        // Проверяем доступность времени
-        if (!$calendarObj->isTimeAvailable($dateFrom->format('Y-m-d H:i:s'), $dateTo->format('Y-m-d H:i:s'), $userId)) {
-            die(json_encode(['success' => false, 'error' => 'Время уже занято']));
-        }
+        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+            "Result: " . json_encode($result) . "\n", 
+            FILE_APPEND | LOCK_EX);
+        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+            "=== END ADD_SCHEDULE AJAX DEBUG ===\n", 
+            FILE_APPEND | LOCK_EX);
         
-        // Создаем событие
-        $eventId = $calendarObj->addEvent($title, '', $dateFrom->format('Y-m-d H:i:s'), $dateTo->format('Y-m-d H:i:s'), $userId, 1, $eventColor);
-        
-        if ($eventId) {
-            die(json_encode(['success' => true, 'eventId' => $eventId]));
-        } else {
-            die(json_encode(['success' => false, 'error' => 'Ошибка добавления расписания']));
-        }
+        die(json_encode($result));
         break;
         
     case 'update_timezone':

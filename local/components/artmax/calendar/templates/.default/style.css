@@ -390,39 +390,68 @@ input:checked + .toggle-slider:before {
 .calendar-event {
     background: #27ae60;
     color: white;
-    padding: 4px 8px;
-    border-radius: 4px;
-    margin-bottom: 3px;
+    padding: 8px;
+    border-radius: 6px;
+    margin-bottom: 4px;
     font-size: 12px;
     display: flex;
     align-items: center;
-    gap: 5px;
+    justify-content: space-between;
     cursor: pointer;
     transition: all 0.3s ease;
+    min-height: 35px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
 
 .calendar-event:hover {
     background: #229954;
     transform: scale(1.02);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.15);
 }
 
-.event-dot {
-    width: 6px;
-    height: 6px;
-    background: white;
-    border-radius: 50%;
+.event-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
 }
 
 .event-title {
-    flex: 1;
+    font-weight: 600;
+    font-size: 13px;
+    line-height: 1.2;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
 }
 
 .event-time {
-    font-size: 10px;
+    font-size: 11px;
     opacity: 0.9;
+    font-weight: 400;
+}
+
+.event-arrow {
+    font-size: 12px;
+    opacity: 0.7;
+    margin-left: 8px;
+    transition: all 0.3s ease;
+    flex-shrink: 0;
+    cursor: pointer;
+    padding: 2px 4px;
+    border-radius: 3px;
+    background: rgba(255,255,255,0.1);
+}
+
+.event-arrow:hover {
+    opacity: 1;
+    background: rgba(255,255,255,0.2);
+    transform: translateY(1px);
+}
+
+.calendar-event:hover .event-arrow {
+    opacity: 0.9;
+    background: rgba(255,255,255,0.15);
 }
 
 /* Модальное окно формы */
@@ -1182,4 +1211,353 @@ input:checked + .toggle-slider:before {
 .calendar-event.added {
     opacity: 1;
     transform: scale(1);
+}
+
+/* Боковое окно */
+.event-side-panel {
+    position: fixed;
+    width: 400px;
+    height: 90vh;
+    max-height: 90vh;
+    background: white;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+    border-radius: 12px;
+    z-index: 10001;
+    opacity: 0;
+    transform: scale(0.8) translateY(-20px);
+    transition: all 0.3s ease;
+    overflow: hidden;
+    pointer-events: none;
+}
+
+.event-side-panel.open {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+    pointer-events: auto;
+}
+
+.side-panel-content {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.side-panel-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); /* Дефолтный цвет, будет перезаписан динамически */
+    color: white;
+    padding: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+
+.side-panel-header h3 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+}
+
+.close-side-panel {
+    background: none;
+    border: none;
+    color: white;
+    font-size: 24px;
+    cursor: pointer;
+    padding: 0;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: all 0.3s ease;
+}
+
+.close-side-panel:hover {
+    background: rgba(255,255,255,0.2);
+}
+
+.side-panel-body {
+    flex: 1;
+    padding: 20px;
+    overflow-y: auto;
+    max-height: calc(90vh - 80px); /* Вычитаем высоту заголовка */
+}
+
+/* Кастомный скроллбар для бокового окна */
+.side-panel-body::-webkit-scrollbar {
+    width: 6px;
+}
+
+.side-panel-body::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 3px;
+}
+
+.side-panel-body::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 3px;
+}
+
+.side-panel-body::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
+}
+
+/* Секция клиента */
+.client-section {
+    margin-bottom: 30px;
+}
+
+.add-client-btn {
+    width: 100%;
+    background: #e3f2fd;
+    color: #1976d2;
+    border: none;
+    padding: 12px 16px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    margin: 16px 0;
+    transition: all 0.2s ease;
+}
+
+.add-client-btn:hover {
+    background: #bbdefb;
+}
+
+.client-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    margin-bottom: 15px;
+}
+
+.client-icon {
+    font-size: 24px;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #e9ecef;
+    border-radius: 50%;
+}
+
+.client-details {
+    flex: 1;
+}
+
+.client-name {
+    font-weight: 600;
+    color: #2c3e50;
+    margin-bottom: 4px;
+}
+
+.client-placeholder {
+    font-size: 12px;
+    color: #6c757d;
+}
+
+.client-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.action-btn {
+    background: #e9ecef;
+    border: none;
+    border-radius: 6px;
+    padding: 8px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-size: 16px;
+}
+
+.action-btn:hover {
+    background: #dee2e6;
+    transform: scale(1.05);
+}
+
+.add-client-btn {
+    width: 100%;
+    background: #007bff;
+    color: white;
+    border: none;
+    padding: 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    margin-bottom: 15px;
+}
+
+.add-client-btn:hover {
+    background: #0056b3;
+    transform: translateY(-1px);
+}
+
+.add-note-section {
+    background: #fff3cd;
+    border: 1px solid #ffeaa7;
+    border-radius: 6px;
+    padding: 12px;
+}
+
+.add-note-btn {
+    background: none;
+    border: none;
+    color: #856404;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.add-note-btn:hover {
+    text-decoration: underline;
+}
+
+/* Карточки действий */
+.action-cards {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+    margin-bottom: 30px;
+}
+
+.action-card {
+    background: white;
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    padding: 15px;
+    position: relative;
+    transition: all 0.3s ease;
+}
+
+.action-card:hover {
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    transform: translateY(-2px);
+}
+
+.card-icon {
+    font-size: 20px;
+    margin-bottom: 8px;
+}
+
+.card-title {
+    font-weight: 600;
+    color: #2c3e50;
+    margin-bottom: 4px;
+    font-size: 14px;
+}
+
+.question-mark {
+    color: #6c757d;
+    font-size: 12px;
+}
+
+.card-status {
+    font-size: 12px;
+    color: #6c757d;
+    margin-bottom: 10px;
+}
+
+.card-status.confirmed {
+    color: #28a745;
+    font-weight: 600;
+}
+
+.card-action-btn {
+    background: #007bff;
+    color: white;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 4px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    width: 100%;
+}
+
+.card-action-btn:hover {
+    background: #0056b3;
+}
+
+.card-badge {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: #ffc107;
+    color: #212529;
+    font-size: 10px;
+    font-weight: 600;
+    padding: 2px 6px;
+    border-radius: 3px;
+}
+
+/* Кнопки действий */
+.side-panel-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.full-form-btn {
+    background: #6c757d;
+    color: white;
+    border: none;
+    padding: 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+.full-form-btn:hover {
+    background: #5a6268;
+}
+
+.edit-event-btn {
+    background: #28a745;
+    color: white;
+    border: none;
+    padding: 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+.edit-event-btn:hover {
+    background: #218838;
+}
+
+.delete-event-btn {
+    background: #dc3545;
+    color: white;
+    border: none;
+    padding: 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+.delete-event-btn:hover {
+    background: #c82333;
+}
+
+/* Адаптивность для бокового окна */
+@media (max-width: 768px) {
+    .event-side-panel {
+        width: 100%;
+    }
+    
+    .action-cards {
+        grid-template-columns: 1fr;
+    }
 }
