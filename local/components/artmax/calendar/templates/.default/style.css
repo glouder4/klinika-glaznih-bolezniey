@@ -1814,3 +1814,63 @@ input:checked + .toggle-slider:before {
     border-radius: 8px;
     border: 1px solid #edeef0;
 }
+
+/* Выпадающее окошко с результатами поиска */
+.search-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: white;
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    z-index: 1000;
+    margin-top: 4px;
+}
+
+.search-suggestion {
+    padding: 12px 16px;
+    background: #e3f2fd;
+    border-bottom: 1px solid #e9ecef;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.search-suggestion:hover {
+    background: #bbdefb;
+}
+
+.search-text {
+    color: #1976d2;
+    font-weight: 500;
+}
+
+.create-new-contact-btn {
+    width: 100%;
+    background: #e3f2fd;
+    border: none;
+    padding: 12px 16px;
+    color: #1976d2;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-radius: 0 0 8px 8px;
+}
+
+.create-new-contact-btn:hover {
+    background: #bbdefb;
+}
+
+.plus-icon {
+    font-size: 16px;
+    font-weight: bold;
+}
+
+/* Позиционирование для выпадающего окошка */
+.form-group {
+    position: relative;
+}

@@ -683,16 +683,18 @@ $totalDays = 42; // 6 недель * 7 дней
                         <label for="contact-input">Контакт</label>
                         <div class="input-with-icons">
                             <div class="input-icon left">👤</div>
-                            <input type="text" id="contact-input" placeholder="Имя контакта">
+                            <input type="text" id="contact-input" placeholder="Имя, email или номер телефона">
                             <div class="input-icon right">🔍</div>
                         </div>
-                    </div>
-                    <div class="form-group">
-                        <label for="company-input">Компания</label>
-                        <div class="input-with-icons">
-                            <div class="input-icon left">📄</div>
-                            <input type="text" id="company-input" placeholder="Название компании">
-                            <div class="input-icon right">🔍</div>
+                        <!-- Выпадающее окошко с результатами поиска -->
+                        <div id="contact-search-dropdown" class="search-dropdown" style="display: none;">
+                            <div class="search-suggestion">
+                                <span class="search-text">«Поиск»</span>
+                            </div>
+                            <button class="create-new-contact-btn">
+                                <span class="plus-icon">+</span>
+                                создать новый контакт
+                            </button>
                         </div>
                     </div>
                 </div>

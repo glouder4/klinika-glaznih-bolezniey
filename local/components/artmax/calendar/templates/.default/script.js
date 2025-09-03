@@ -1698,21 +1698,52 @@
     function initClientModal() {
         const contactInput = document.getElementById('contact-input');
         const companyInput = document.getElementById('company-input');
+        const contactDropdown = document.getElementById('contact-search-dropdown');
         
         if (contactInput) {
-            let searchTimeout;
+            // Обработчик ввода в поле контакта
             contactInput.addEventListener('input', function() {
-                clearTimeout(searchTimeout);
                 const query = this.value.trim();
                 
-                if (query.length >= 2) {
-                    searchTimeout = setTimeout(() => {
-                        searchClients(query, 'contact');
-                    }, 300);
+                if (query.length > 0) {
+                    updateSearchText(query);
+                    showContactDropdown();
                 } else {
-                    clearSearchResults();
+                    hideContactDropdown();
                 }
             });
+            
+            // Обработчик фокуса
+            contactInput.addEventListener('focus', function() {
+                const query = this.value.trim();
+                if (query.length > 0) {
+                    updateSearchText(query);
+                    showContactDropdown();
+                }
+            });
+            
+            // Обработчик клика на предложение поиска
+            const searchSuggestion = contactDropdown?.querySelector('.search-suggestion');
+            if (searchSuggestion) {
+                searchSuggestion.addEventListener('click', function() {
+                    const query = contactInput.value.trim();
+                    if (query) {
+                        // Здесь будет логика поиска по введенному тексту
+                        console.log('Поиск по запросу:', query);
+                        hideContactDropdown();
+                    }
+                });
+            }
+            
+            // Обработчик клика на кнопку создания нового контакта
+            const createBtn = contactDropdown?.querySelector('.create-new-contact-btn');
+            if (createBtn) {
+                createBtn.addEventListener('click', function() {
+                    const query = contactInput.value.trim();
+                    console.log('Создание нового контакта:', query);
+                    hideContactDropdown();
+                });
+            }
         }
         
         if (companyInput) {
@@ -1729,6 +1760,37 @@
                     clearSearchResults();
                 }
             });
+        }
+        
+        // Обработчик клика вне выпадающего окошка
+        document.addEventListener('click', function(e) {
+            if (!contactInput?.contains(e.target) && !contactDropdown?.contains(e.target)) {
+                hideContactDropdown();
+            }
+        });
+    }
+    
+    // Функция показа выпадающего окошка
+    function showContactDropdown() {
+        const dropdown = document.getElementById('contact-search-dropdown');
+        if (dropdown) {
+            dropdown.style.display = 'block';
+        }
+    }
+    
+    // Функция скрытия выпадающего окошка
+    function hideContactDropdown() {
+        const dropdown = document.getElementById('contact-search-dropdown');
+        if (dropdown) {
+            dropdown.style.display = 'none';
+        }
+    }
+    
+    // Функция обновления текста поиска
+    function updateSearchText(query) {
+        const searchTextElement = document.querySelector('.search-text');
+        if (searchTextElement) {
+            searchTextElement.textContent = `«${query}»`;
         }
     }
 
