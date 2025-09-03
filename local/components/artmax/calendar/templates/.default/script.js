@@ -841,7 +841,7 @@
         
         // Вычисляем позицию бокового окна
         const panelWidth = 400;
-        const panelHeight = window.innerHeight * 0.9; // 90% высоты экрана
+        const panelHeight = window.innerHeight * 0.8; // 80% высоты экрана
         const viewportWidth = window.innerWidth;
         const viewportHeight = window.innerHeight;
         
@@ -944,6 +944,28 @@
                 deleteEventAjax(window.currentEventId);
                 closeEventSidePanel();
             }
+        }
+    }
+
+    function openClientModal() {
+        const modal = document.getElementById('clientModal');
+        if (modal) {
+            modal.style.display = 'flex';
+            setTimeout(() => {
+                modal.classList.add('show');
+            }, 10);
+            document.body.style.overflow = 'hidden';
+        }
+    }
+
+    function closeClientModal() {
+        const modal = document.getElementById('clientModal');
+        if (modal) {
+            modal.classList.remove('show');
+            setTimeout(() => {
+                modal.style.display = 'none';
+                document.body.style.overflow = 'auto';
+            }, 300);
         }
     }
 
@@ -1604,7 +1626,7 @@
                 if (eventElement) {
                     const eventRect = eventElement.getBoundingClientRect();
                     const panelWidth = 400;
-                    const panelHeight = window.innerHeight * 0.9;
+                    const panelHeight = window.innerHeight * 0.8;
                     const viewportWidth = window.innerWidth;
                     const viewportHeight = window.innerHeight;
                     
@@ -1640,10 +1662,32 @@
         }
     });
 
+    // Обработчик клика вне модального окна выбора клиента
+    document.addEventListener('click', function(e) {
+        const clientModal = document.getElementById('clientModal');
+        if (clientModal && clientModal.classList.contains('show')) {
+            if (e.target === clientModal) {
+                closeClientModal();
+            }
+        }
+    });
+
+    // Обработчик нажатия Escape для закрытия модального окна
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            const clientModal = document.getElementById('clientModal');
+            if (clientModal && clientModal.classList.contains('show')) {
+                closeClientModal();
+            }
+        }
+    });
+
     // Делаем функции доступными глобально для использования в HTML
     window.closeEditEventModal = closeEditEventModal;
     window.closeEventForm = closeEventForm;
     window.openEventForm = openEventForm;
+    window.openClientModal = openClientModal;
+    window.closeClientModal = closeClientModal;
     window.openEditEventModal = openEditEventModal;
     window.openScheduleModal = openScheduleModal;
     window.closeScheduleModal = closeScheduleModal;

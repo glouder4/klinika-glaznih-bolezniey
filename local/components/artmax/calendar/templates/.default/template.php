@@ -621,11 +621,9 @@ $totalDays = 42; // 6 недель * 7 дней
                             <div class="client-placeholder">Добавьте информацию о клиенте</div>
                         </div>
                         <div class="client-actions">
-                            <button class="action-btn add-contact-btn" title="Позвонить">📞</button>
-                            <button class="action-btn sms-btn" title="СМС">💬</button>
+                            <button class="action-btn add-contact-btn" title="Добавить">➕</button>
                         </div>
                     </div>
-                    <button class="add-client-btn" onclick="openClientModal()">+ Добавить или выбрать</button>
                     <div class="add-note-section">
                         <button class="add-note-btn">+ Добавить заметку к записи</button>
                     </div>
@@ -634,8 +632,7 @@ $totalDays = 42; // 6 недель * 7 дней
                 <!-- Карточки действий -->
                 <div class="action-cards">
                     <div class="action-card">
-                        <div class="card-badge">СКОРО</div>
-                        <div class="card-icon">🛡️</div>
+                        <div class="card-icon">🤝</div>
                         <div class="card-content">
                             <div class="card-title">Сделка <span class="question-mark">?</span></div>
                             <div class="card-status">Не добавлена</div>
@@ -644,27 +641,9 @@ $totalDays = 42; // 6 недель * 7 дней
                     </div>
 
                     <div class="action-card">
-                        <div class="card-badge">СКОРО</div>
-                        <div class="card-icon">📄</div>
-                        <div class="card-content">
-                            <div class="card-title">Документы <span class="question-mark">?</span></div>
-                            <div class="card-status">Не добавлены</div>
+                        <div class="card-icon">
+                            <div class="booking-actions-popup-item-icon --confirmed"><div class="ui-icon-set --check" style="--ui-icon-set__icon-color: #ffffff;"></div></div>
                         </div>
-                        <button class="card-action-btn">+ Добавить</button>
-                    </div>
-
-                    <div class="action-card">
-                        <div class="card-badge">СКОРО</div>
-                        <div class="card-icon">💬</div>
-                        <div class="card-content">
-                            <div class="card-title">СМС клиенту <span class="question-mark">?</span></div>
-                            <div class="card-status">Клиент не добавлен</div>
-                        </div>
-                        <button class="card-action-btn">Отправить ▼</button>
-                    </div>
-
-                    <div class="action-card">
-                        <div class="card-icon">✅</div>
                         <div class="card-content">
                             <div class="card-title">Подтверждение <span class="question-mark">?</span></div>
                             <div class="card-status confirmed">Подтверждено</div>
@@ -673,7 +652,7 @@ $totalDays = 42; // 6 недель * 7 дней
                     </div>
 
                     <div class="action-card">
-                        <div class="card-icon">📅</div>
+                        <div class="card-icon">👥</div>
                         <div class="card-content">
                             <div class="card-title">Визит <span class="question-mark">?</span></div>
                             <div class="card-status">Клиент не добавлен</div>
@@ -684,7 +663,6 @@ $totalDays = 42; // 6 недель * 7 дней
 
                 <!-- Кнопки действий -->
                 <div class="side-panel-actions">
-                    <button class="full-form-btn">Полная форма ></button>
                     <button class="edit-event-btn" onclick="openEditEventModalFromSidePanel()">Редактировать</button>
                     <button class="delete-event-btn" onclick="deleteEventFromSidePanel()">🗑️ Удалить</button>
                 </div>
