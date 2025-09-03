@@ -183,7 +183,17 @@ $totalDays = 42; // 6 недель * 7 дней
                                 echo '<div class="calendar-event" data-event-id="' . $event['ID'] . '" style="' . $style . '" onclick="event.stopPropagation();">';
                                 echo '<div class="event-content">';
                                 echo '<div class="event-title">' . htmlspecialchars($event['TITLE']) . '</div>';
-                                echo '<div class="event-time">' . $eventTime . ' – ' . $eventEndTime . '</div>';
+                                echo '<div class="event-time">';
+                                echo '<span>';
+                                echo $eventTime . ' – ' . $eventEndTime;
+                                echo '</span>';
+                                echo '<div class="event-icons">';
+                                echo '<span class="event-icon contact-icon ' . ($event['CONTACT_ENTITY_ID'] ? 'active' : '') . '" title="Контакт">👤</span>';
+                                echo '<span class="event-icon deal-icon" title="Сделка">💼</span>';
+                                echo '<span class="event-icon visit-icon" title="Визит">🏥</span>';
+                                echo '<span class="event-icon confirmation-icon" title="Подтверждение">✅</span>';
+                                echo '</div>';
+                                echo '</div>';
                                 echo '</div>';
                                 echo '<div class="event-arrow" onclick="event.stopPropagation(); showEventSidePanel(' . $event['ID'] . ');">▼</div>';
                                 echo '</div>';

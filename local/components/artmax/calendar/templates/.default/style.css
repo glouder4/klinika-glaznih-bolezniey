@@ -330,6 +330,7 @@ input:checked + .toggle-slider:before {
     font-weight: 600;
     color: #6c757d;
     border-right: 1px solid #e9ecef;
+    box-sizing: border-box;
 }
 
 .weekday:last-child {
@@ -339,6 +340,7 @@ input:checked + .toggle-slider:before {
 .calendar-days {
     display: grid;
     grid-template-columns: repeat(7, 1fr);
+    grid-auto-rows: minmax(120px, auto);
 }
 
 .calendar-week {
@@ -353,10 +355,35 @@ input:checked + .toggle-slider:before {
     cursor: pointer;
     transition: all 0.3s ease;
     position: relative;
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+    overflow-y: auto;
+    overflow-x: hidden;
+    max-height: 300px;
+    gap: 0;
 }
 
 .calendar-day:hover {
     background: #f8f9fa;
+}
+
+/* Стили для скроллбара в ячейках календаря */
+.calendar-day::-webkit-scrollbar {
+    width: 4px;
+}
+
+.calendar-day::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.calendar-day::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 2px;
+}
+
+.calendar-day::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 0, 0, 0.3);
 }
 
 .calendar-day:last-child {
@@ -392,15 +419,19 @@ input:checked + .toggle-slider:before {
     color: white;
     padding: 8px;
     border-radius: 6px;
-    margin-bottom: 4px;
+    margin-bottom: 6px;
     font-size: 12px;
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: space-between;
     cursor: pointer;
     transition: all 0.3s ease;
-    min-height: 35px;
+    height: auto;
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    width: 100%;
+    box-sizing: border-box;
+    position: relative;
+    z-index: 1;
 }
 
 .calendar-event:hover {
@@ -414,22 +445,71 @@ input:checked + .toggle-slider:before {
     display: flex;
     flex-direction: column;
     gap: 2px;
+    min-height: 0;
+    overflow: visible;
 }
 
 .event-title {
     font-weight: 600;
     font-size: 13px;
     line-height: 1.2;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    word-wrap: break-word;
+    word-break: break-word;
+    hyphens: auto;
 }
 
 .event-time {
     font-size: 11px;
-    opacity: 0.9;
     font-weight: 400;
+    display: flex;
+    align-items: center;
+    gap: 5px;
 }
+.event-time>span{
+    display: block;
+    width: 65px; 
+}
+.event-icons {
+    display: flex;
+    gap: 2px;
+    align-items: center;
+}
+
+.event-icon {
+    font-size: 10px;
+    opacity: 0.3;
+    transition: all 0.3s ease;
+    cursor: pointer;
+    padding: 1px;
+    border-radius: 2px;
+}
+
+.event-icon:hover {
+    opacity: 0.6;
+    transform: scale(1.1);
+}
+
+.event-icon.active {
+    opacity: 1;
+    /*background: rgba(255, 255, 255, 0.2);*/
+    border-radius: 2px;
+}
+
+/*.event-icon.contact-icon.active {
+    background: rgba(52, 152, 219, 0.3);
+}
+
+.event-icon.deal-icon.active {
+    background: rgba(46, 204, 113, 0.3);
+}
+
+.event-icon.visit-icon.active {
+    background: rgba(231, 76, 60, 0.3);
+}
+
+.event-icon.confirmation-icon.active {
+    background: rgba(241, 196, 15, 0.3);
+}*/
 
 .event-arrow {
     font-size: 12px;

@@ -2653,7 +2653,15 @@
         eventElement.innerHTML = `
             <div class="event-content">
                 <div class="event-title">${eventData.title}</div>
-                <div class="event-time">${timeString} – ${endTimeString}</div>
+                <div class="event-time">
+                    ${timeString} – ${endTimeString}
+                    <div class="event-icons">
+                        <span class="event-icon contact-icon ${eventData.contactEntityId ? 'active' : ''}" title="Контакт">👤</span>
+                        <span class="event-icon deal-icon" title="Сделка">💼</span>
+                        <span class="event-icon visit-icon" title="Визит">🏥</span>
+                        <span class="event-icon confirmation-icon" title="Подтверждение">✅</span>
+                    </div>
+                </div>
             </div>
             <div class="event-arrow">▼</div>
         `;
@@ -3123,7 +3131,15 @@
         eventElement.innerHTML = `
             <div class="event-content">
                 <div class="event-title">${event.TITLE}</div>
-                <div class="event-time">${timeString} – ${endTimeString}</div>
+                <div class="event-time">
+                    ${timeString} – ${endTimeString}
+                    <div class="event-icons">
+                        <span class="event-icon contact-icon ${event.CONTACT_ENTITY_ID ? 'active' : ''}" title="Контакт">👤</span>
+                        <span class="event-icon deal-icon" title="Сделка">💼</span>
+                        <span class="event-icon visit-icon" title="Визит">🏥</span>
+                        <span class="event-icon confirmation-icon" title="Подтверждение">✅</span>
+                    </div>
+                </div>
             </div>
             <div class="event-arrow">▼</div>
         `;
