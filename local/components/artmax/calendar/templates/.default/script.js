@@ -918,6 +918,14 @@
                 if (sidePanelHeader) {
                     sidePanelHeader.style.background = `linear-gradient(135deg, ${eventColor}, ${eventColor}dd)`;
                 }
+                
+                // Загружаем данные контакта, если есть CONTACT_ENTITY_ID
+                if (event.CONTACT_ENTITY_ID) {
+                    loadEventContact(event.CONTACT_ENTITY_ID);
+                } else {
+                    // Сбрасываем информацию о клиенте, если контакта нет
+                    resetClientInfoInSidePanel();
+                }
             } else {
                 showNotification('Ошибка при загрузке события', 'error');
             }
@@ -2263,7 +2271,9 @@
             if (data.success) {
                 showNotification('Контакт успешно сохранен', 'success');
                 closeClientModal();
-                // Не обновляем календарь, так как сохранение контакта не влияет на отображение событий
+                
+                // Обновляем информацию о клиенте в боковом окне
+                updateClientInfoInSidePanel(clientData);
             } else {
                 showNotification('Ошибка сохранения: ' + (data.error || 'Неизвестная ошибка'), 'error');
             }
@@ -2421,13 +2431,7 @@
         console.log('Выбран клиент:', client);
         
         // Обновляем информацию о клиенте в боковом окне
-        const clientNameElement = document.querySelector('.client-name');
-        const clientPlaceholderElement = document.querySelector('.client-placeholder');
-        
-        if (clientNameElement && clientPlaceholderElement) {
-            clientNameElement.textContent = client.name;
-            clientPlaceholderElement.textContent = `${client.phone || ''} ${client.email || ''}`.trim();
-        }
+        updateClientInfoInSidePanel(client);
         
         // Закрываем модальное окно
         closeClientModal();
@@ -2440,6 +2444,68 @@
         
         // Очищаем результаты поиска
         clearSearchResults();
+    }
+
+    function updateClientInfoInSidePanel(client) {
+        const clientNameElement = document.querySelector('.client-name');
+        const clientPlaceholderElement = document.querySelector('.client-placeholder');
+        
+        if (clientNameElement && clientPlaceholderElement) {
+            clientNameElement.textContent = client.name || client.contact || 'Неизвестный клиент';
+            
+            // Формируем строку с контактной информацией
+            const contactInfo = [];
+            if (client.phone) contactInfo.push(`📞 ${client.phone}`);
+            if (client.email) contactInfo.push(`✉️ ${client.email}`);
+            if (client.company) contactInfo.push(`🏢 ${client.company}`);
+            
+            clientPlaceholderElement.textContent = contactInfo.length > 0 
+                ? contactInfo.join(' • ') 
+                : 'Контактная информация не указана';
+        }
+    }
+
+    function loadEventContact(contactId) {
+        console.log('loadEventContact: Загружаем контакт с ID:', contactId);
+        
+        const csrfToken = getCSRFToken();
+        fetch('/local/components/artmax/calendar/ajax.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-Bitrix-Csrf-Token': csrfToken
+            },
+            body: new URLSearchParams({
+                action: 'getEventContacts',
+                eventId: window.currentEventId,
+                sessid: csrfToken
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.contact) {
+                console.log('loadEventContact: Получены данные контакта:', data.contact);
+                updateClientInfoInSidePanel(data.contact);
+            } else {
+                console.log('loadEventContact: Контакт не найден или ошибка:', data.error);
+                resetClientInfoInSidePanel();
+            }
+        })
+        .catch(error => {
+            console.error('loadEventContact: Ошибка при загрузке контакта:', error);
+            resetClientInfoInSidePanel();
+        });
+    }
+
+    function resetClientInfoInSidePanel() {
+        const clientNameElement = document.querySelector('.client-name');
+        const clientPlaceholderElement = document.querySelector('.client-placeholder');
+        
+        if (clientNameElement && clientPlaceholderElement) {
+            clientNameElement.textContent = 'Нет клиента';
+            clientPlaceholderElement.textContent = 'Добавьте информацию о клиенте';
+        }
     }
 
     // Делаем функции доступными глобально для использования в HTML
