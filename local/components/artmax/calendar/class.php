@@ -626,7 +626,7 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
     }
 
     /**
-     * Поиск клиентов в CRM
+     * Поиск клиентов в Bitrix 24 CRM
      */
     public function searchClientsAction($query, $type = 'contact')
     {
@@ -635,52 +635,119 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
         }
 
         try {
-            // Здесь должен быть код для поиска клиентов в CRM
-            // Пока что возвращаем заглушку с тестовыми данными
-            
             $clients = [];
             
             if (strlen($query) >= 2) {
-                // Имитируем поиск в CRM
-                $testClients = [
-                    [
-                        'id' => 1,
-                        'name' => 'Иван Петров',
-                        'phone' => '+7 (999) 123-45-67',
-                        'email' => 'ivan@example.com',
-                        'company' => 'ООО "Пример"'
-                    ],
-                    [
-                        'id' => 2,
-                        'name' => 'Мария Сидорова',
-                        'phone' => '+7 (999) 765-43-21',
-                        'email' => 'maria@example.com',
-                        'company' => 'ИП Сидорова'
-                    ],
-                    [
-                        'id' => 3,
-                        'name' => 'Алексей Козлов',
-                        'phone' => '+7 (999) 111-22-33',
-                        'email' => 'alexey@example.com',
-                        'company' => 'ООО "Тест"'
-                    ]
-                ];
-                
-                // Фильтруем клиентов по запросу
-                foreach ($testClients as $client) {
-                    if (stripos($client['name'], $query) !== false ||
-                        stripos($client['phone'], $query) !== false ||
-                        stripos($client['email'], $query) !== false ||
-                        stripos($client['company'], $query) !== false) {
-                        $clients[] = $client;
-                    }
+                // Подключаем модуль CRM
+                if (!CModule::IncludeModule('crm')) {
+                    return ['success' => false, 'error' => 'Модуль CRM не установлен'];
                 }
+                
+                // Поиск контактов в Bitrix 24
+                $clients = $this->searchBitrix24Contacts($query);
             }
             
             return ['success' => true, 'clients' => $clients];
         } catch (\Exception $e) {
             return ['success' => false, 'error' => $e->getMessage()];
         }
+    }
+    
+    /**
+     * Поиск контактов в Bitrix 24 CRM
+     */
+    private function searchBitrix24Contacts($query)
+    {
+        $contacts = [];
+        
+        try {
+            // Подготавливаем фильтр для поиска
+            $filter = [
+                'LOGIC' => 'OR',
+                ['NAME' => '%' . $query . '%'],
+                ['LAST_NAME' => '%' . $query . '%'],
+                ['SECOND_NAME' => '%' . $query . '%'],
+                ['EMAIL' => '%' . $query . '%'],
+                ['PHONE' => '%' . $query . '%'],
+                ['COMPANY_TITLE' => '%' . $query . '%']
+            ];
+            
+            // Параметры для выборки
+            $select = [
+                'ID',
+                'NAME',
+                'LAST_NAME', 
+                'SECOND_NAME',
+                'EMAIL',
+                'PHONE',
+                'COMPANY_TITLE',
+                'POST',
+                'ADDRESS'
+            ];
+            
+            // Выполняем поиск контактов
+            $dbContacts = \CCrmContact::GetList(
+                ['LAST_NAME' => 'ASC', 'NAME' => 'ASC'],
+                $filter,
+                $select,
+                false,
+                ['nTopCount' => 10] // Ограничиваем до 10 результатов
+            );
+            
+            while ($contact = $dbContacts->Fetch()) {
+                // Формируем полное имя
+                $fullName = trim($contact['NAME'] . ' ' . $contact['LAST_NAME'] . ' ' . $contact['SECOND_NAME']);
+                if (empty($fullName)) {
+                    $fullName = 'Контакт #' . $contact['ID'];
+                }
+                
+                // Получаем телефоны
+                $phones = [];
+                if (!empty($contact['PHONE'])) {
+                    $phones[] = $contact['PHONE'];
+                }
+                
+                // Получаем дополнительные телефоны
+                $phoneFields = \CCrmContact::GetFields();
+                foreach ($phoneFields as $fieldCode => $fieldInfo) {
+                    if (strpos($fieldCode, 'PHONE') !== false && !empty($contact[$fieldCode])) {
+                        $phones[] = $contact[$fieldCode];
+                    }
+                }
+                
+                // Получаем email адреса
+                $emails = [];
+                if (!empty($contact['EMAIL'])) {
+                    $emails[] = $contact['EMAIL'];
+                }
+                
+                // Получаем дополнительные email
+                foreach ($phoneFields as $fieldCode => $fieldInfo) {
+                    if (strpos($fieldCode, 'EMAIL') !== false && !empty($contact[$fieldCode])) {
+                        $emails[] = $contact[$fieldCode];
+                    }
+                }
+                
+                $contacts[] = [
+                    'id' => $contact['ID'],
+                    'name' => $fullName,
+                    'firstName' => $contact['NAME'],
+                    'lastName' => $contact['LAST_NAME'],
+                    'secondName' => $contact['SECOND_NAME'],
+                    'phone' => implode(', ', $phones),
+                    'email' => implode(', ', $emails),
+                    'company' => $contact['COMPANY_TITLE'],
+                    'post' => $contact['POST'],
+                    'address' => $contact['ADDRESS']
+                ];
+            }
+            
+        } catch (\Exception $e) {
+            // В случае ошибки возвращаем пустой массив
+            error_log('Ошибка поиска контактов в Bitrix 24: ' . $e->getMessage());
+        }
+        
+        return $contacts;
     }
 
     /**

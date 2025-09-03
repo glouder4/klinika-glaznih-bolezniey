@@ -407,6 +407,43 @@ switch ($action) {
         die(json_encode($result));
         break;
         
+    case 'searchClients':
+        $query = $_POST['query'] ?? '';
+        $type = $_POST['type'] ?? 'contact';
+        
+        // Логируем запрос поиска
+        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+            "=== AJAX SEARCH_CLIENTS ===\n", 
+            FILE_APPEND | LOCK_EX);
+        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+            "Query: {$query}, Type: {$type}\n", 
+            FILE_APPEND | LOCK_EX);
+        
+        if (empty($query)) {
+            die(json_encode(['success' => false, 'error' => 'Запрос не может быть пустым']));
+        }
+        
+        try {
+            // Создаем экземпляр компонента для вызова метода поиска
+            $component = new ArtmaxCalendarComponent();
+            $result = $component->searchClientsAction($query, $type);
+            
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "Search result: " . json_encode($result) . "\n", 
+                FILE_APPEND | LOCK_EX);
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "=== END AJAX SEARCH_CLIENTS ===\n", 
+                FILE_APPEND | LOCK_EX);
+            
+            die(json_encode($result));
+        } catch (Exception $e) {
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "Search error: " . $e->getMessage() . "\n", 
+                FILE_APPEND | LOCK_EX);
+            die(json_encode(['success' => false, 'error' => 'Ошибка поиска: ' . $e->getMessage()]));
+        }
+        break;
+        
     case 'update_timezone':
         $branchId = (int)($_POST['branch_id'] ?? 0);
         $timezoneName = $_POST['timezone_name'] ?? '';

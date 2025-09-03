@@ -1701,13 +1701,25 @@
         const contactDropdown = document.getElementById('contact-search-dropdown');
         
         if (contactInput) {
-            // Обработчик ввода в поле контакта
+            let searchTimeout;
+            
+                
             contactInput.addEventListener('input', function() {
                 const query = this.value.trim();
+                
+                // Очищаем предыдущий таймер
+                clearTimeout(searchTimeout);
                 
                 if (query.length > 0) {
                     updateSearchText(query);
                     showContactDropdown();
+                    
+                    // Запускаем поиск с задержкой 300мс
+                    if (query.length >= 2) {
+                        searchTimeout = setTimeout(() => {
+                            searchContactsInBitrix24(query);
+                        }, 300);
+                    }
                 } else {
                     hideContactDropdown();
                 }
@@ -1793,13 +1805,168 @@
             searchTextElement.textContent = `«${query}»`;
         }
     }
+    
+    // Функция поиска контактов в Bitrix 24
+    function searchContactsInBitrix24(query) {
+        console.log('Поиск контактов в Bitrix 24:', query);
+        
+        // Показываем индикатор загрузки
+        showSearchLoading();
+        
+        // AJAX запрос к серверу для поиска контактов
+        fetch('/local/components/artmax/calendar/ajax.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: new URLSearchParams({
+                action: 'searchClients',
+                query: query,
+                type: 'contact'
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                updateSearchResults(data.clients);
+            } else {
+                console.error('Ошибка поиска контактов:', data.error);
+                showSearchError(data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Ошибка AJAX запроса:', error);
+            showSearchError('Ошибка соединения с сервером');
+        });
+    }
+    
+    // Функция показа индикатора загрузки
+    function showSearchLoading() {
+        const dropdown = document.getElementById('contact-search-dropdown');
+        if (dropdown) {
+            dropdown.innerHTML = `
+                <div class="search-loading">
+                    <div class="loading-spinner"></div>
+                    <span>Поиск контактов...</span>
+                </div>
+                <button class="create-new-contact-btn">
+                    <span class="plus-icon">+</span>
+                    создать новый контакт
+                </button>
+            `;
+            
+            // Добавляем обработчик для кнопки создания
+            const createBtn = dropdown.querySelector('.create-new-contact-btn');
+            if (createBtn) {
+                createBtn.addEventListener('click', function() {
+                    const contactInput = document.getElementById('contact-input');
+                    const query = contactInput.value.trim();
+                    console.log('Создание нового контакта:', query);
+                    hideContactDropdown();
+                });
+            }
+        }
+    }
+    
+    // Функция обновления результатов поиска
+    function updateSearchResults(contacts) {
+        const dropdown = document.getElementById('contact-search-dropdown');
+        if (!dropdown) return;
+        
+        if (contacts.length === 0) {
+            dropdown.innerHTML = `
+                <div class="search-no-results">
+                    <span>Контакты не найдены</span>
+                </div>
+                <button class="create-new-contact-btn">
+                    <span class="plus-icon">+</span>
+                    создать новый контакт
+                </button>
+            `;
+        } else {
+            let resultsHtml = '';
+            
+            contacts.forEach(contact => {
+                resultsHtml += `
+                    <div class="search-contact-item" data-contact-id="${contact.id}">
+                        <div class="contact-info">
+                            <div class="contact-name">${contact.name}</div>
+                            <div class="contact-details">
+                                ${contact.phone ? `<div class="contact-phone">📞 ${contact.phone}</div>` : ''}
+                                ${contact.email ? `<div class="contact-email">✉️ ${contact.email}</div>` : ''}
+                                ${contact.company ? `<div class="contact-company">🏢 ${contact.company}</div>` : ''}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            dropdown.innerHTML = resultsHtml + `
+                <button class="create-new-contact-btn">
+                    <span class="plus-icon">+</span>
+                    создать новый контакт
+                </button>
+            `;
+            
+            // Добавляем обработчики клика для контактов
+            const contactItems = dropdown.querySelectorAll('.search-contact-item');
+            contactItems.forEach(item => {
+                item.addEventListener('click', function() {
+                    const contactId = this.getAttribute('data-contact-id');
+                    const contact = contacts.find(c => c.id == contactId);
+                    if (contact) {
+                        selectContact(contact);
+                    }
+                });
+            });
+            
+            // Добавляем обработчик для кнопки создания
+            const createBtn = dropdown.querySelector('.create-new-contact-btn');
+            if (createBtn) {
+                createBtn.addEventListener('click', function() {
+                    const contactInput = document.getElementById('contact-input');
+                    const query = contactInput.value.trim();
+                    console.log('Создание нового контакта:', query);
+                    hideContactDropdown();
+                });
+            }
+        }
+    }
+    
+    // Функция показа ошибки поиска
+    function showSearchError(errorMessage) {
+        const dropdown = document.getElementById('contact-search-dropdown');
+        if (dropdown) {
+            dropdown.innerHTML = `
+                <div class="search-error">
+                    <span>❌ ${errorMessage}</span>
+                </div>
+                <button class="create-new-contact-btn">
+                    <span class="plus-icon">+</span>
+                    создать новый контакт
+                </button>
+            `;
+            
+            // Добавляем обработчик для кнопки создания
+            const createBtn = dropdown.querySelector('.create-new-contact-btn');
+            if (createBtn) {
+                createBtn.addEventListener('click', function() {
+                    const contactInput = document.getElementById('contact-input');
+                    const query = contactInput.value.trim();
+                    console.log('Создание нового контакта:', query);
+                    hideContactDropdown();
+                });
+            }
+        }
+    }
 
     // Функция поиска клиентов
     function searchClients(query, type) {
         console.log('Поиск клиентов:', query, 'тип:', type);
         
         // AJAX запрос к серверу для поиска клиентов
-        fetch(window.location.href, {
+        fetch('/local/components/artmax/calendar/ajax.php', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/x-www-form-urlencoded',
