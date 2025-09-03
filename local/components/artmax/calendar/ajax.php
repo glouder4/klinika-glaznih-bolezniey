@@ -480,6 +480,62 @@ switch ($action) {
         }
         break;
         
+    case 'saveEventContact':
+        $eventId = $_POST['eventId'] ?? 0;
+        $contactData = $_POST['contactData'] ?? array();
+        
+        // Логируем запрос
+        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+            "=== AJAX SAVE_EVENT_CONTACT ===\n", 
+            FILE_APPEND | LOCK_EX);
+        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+            "EventId: {$eventId}, ContactData: " . json_encode($contactData) . "\n", 
+            FILE_APPEND | LOCK_EX);
+        
+        if (empty($eventId) || empty($contactData)) {
+            die(json_encode(['success' => false, 'error' => 'Недостаточно данных для сохранения']));
+        }
+        
+        try {
+            $component = new ArtmaxCalendarComponent();
+            $result = $component->saveEventContactAction($eventId, $contactData);
+            
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "Save result: " . json_encode($result) . "\n", 
+                FILE_APPEND | LOCK_EX);
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "=== END AJAX SAVE_EVENT_CONTACT ===\n", 
+                FILE_APPEND | LOCK_EX);
+            
+            die(json_encode($result));
+        } catch (Exception $e) {
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "Save error: " . $e->getMessage() . "\n", 
+                FILE_APPEND | LOCK_EX);
+            die(json_encode(['success' => false, 'error' => 'Ошибка сохранения: ' . $e->getMessage()]));
+        }
+        break;
+        
+    case 'getEventContacts':
+        $eventId = $_POST['eventId'] ?? 0;
+        
+        if (empty($eventId)) {
+            die(json_encode(['success' => false, 'error' => 'ID события не указан']));
+        }
+        
+        try {
+            $component = new ArtmaxCalendarComponent();
+            $result = $component->getEventContactsAction($eventId);
+            
+            die(json_encode($result));
+        } catch (Exception $e) {
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "Get contacts error: " . $e->getMessage() . "\n", 
+                FILE_APPEND | LOCK_EX);
+            die(json_encode(['success' => false, 'error' => 'Ошибка получения контактов: ' . $e->getMessage()]));
+        }
+        break;
+        
     default:
         file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
             "Unknown action: {$action}\n", 

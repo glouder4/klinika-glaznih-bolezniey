@@ -801,6 +801,117 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
     }
     
     /**
+     * Сохранение связи события с контактом
+     */
+    public function saveEventContactAction($eventId, $contactData)
+    {
+        if (!$GLOBALS['USER'] || !$GLOBALS['USER']->IsAuthorized()) {
+            return ['success' => false, 'error' => 'Необходима авторизация'];
+        }
+
+        try {
+            // Подключаем модуль
+            if (!CModule::IncludeModule('artmax.calendar')) {
+                return ['success' => false, 'error' => 'Модуль artmax.calendar не установлен'];
+            }
+
+            // Проверяем, что событие существует
+            $calendar = new \Artmax\Calendar\Calendar();
+            $event = $calendar->getEvent($eventId);
+            
+            if (!$event) {
+                return ['success' => false, 'error' => 'Событие не найдено'];
+            }
+
+            // Проверяем права на редактирование события
+            if ($event['USER_ID'] != $GLOBALS['USER']->GetID()) {
+                return ['success' => false, 'error' => 'Нет прав на редактирование события'];
+            }
+
+            // Декодируем JSON данные контакта
+            $contactDataArray = json_decode($contactData, true);
+            if (!$contactDataArray || !isset($contactDataArray['id'])) {
+                return ['success' => false, 'error' => 'Неверные данные контакта'];
+            }
+            
+            // Обновляем событие, добавляя ID контакта
+            $result = $calendar->updateEventContact($eventId, $contactDataArray['id']);
+
+            if ($result) {
+                return ['success' => true, 'message' => 'Контакт сохранен'];
+            } else {
+                return ['success' => false, 'error' => 'Ошибка сохранения контакта'];
+            }
+
+        } catch (\Exception $e) {
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+    
+    /**
+     * Получение контакта для события
+     */
+    public function getEventContactsAction($eventId)
+    {
+        if (!$GLOBALS['USER'] || !$GLOBALS['USER']->IsAuthorized()) {
+            return ['success' => false, 'error' => 'Необходима авторизация'];
+        }
+
+        try {
+            // Подключаем модуль
+            if (!CModule::IncludeModule('artmax.calendar')) {
+                return ['success' => false, 'error' => 'Модуль artmax.calendar не установлен'];
+            }
+
+            // Получаем событие с контактом
+            $calendar = new \Artmax\Calendar\Calendar();
+            $event = $calendar->getEvent($eventId);
+            
+            if (!$event) {
+                return ['success' => false, 'error' => 'Событие не найдено'];
+            }
+
+            $contact = null;
+            if (!empty($event['CONTACT_ENTITY_ID'])) {
+                // Получаем данные контакта из CRM
+                $contact = $this->getContactFromCRM($event['CONTACT_ENTITY_ID']);
+            }
+
+            return ['success' => true, 'contact' => $contact];
+
+        } catch (\Exception $e) {
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+    
+    /**
+     * Получение контакта из CRM по ID
+     */
+    private function getContactFromCRM($contactId)
+    {
+        if (!CModule::IncludeModule('crm')) {
+            return null;
+        }
+
+        try {
+            $contact = \CCrmContact::GetByID($contactId);
+            if ($contact) {
+                return [
+                    'id' => $contact['ID'],
+                    'name' => trim($contact['NAME'] . ' ' . $contact['LAST_NAME']),
+                    'phone' => $contact['PHONE'] ?? '',
+                    'email' => $contact['EMAIL'] ?? '',
+                    'company' => $contact['COMPANY_TITLE'] ?? ''
+                ];
+            }
+        } catch (\Exception $e) {
+            error_log('Ошибка получения контакта из CRM: ' . $e->getMessage());
+        }
+
+        return null;
+    }
+    
+    /**
      * Поиск контактов в Bitrix 24 CRM через REST API
      */
     private function searchBitrix24Contacts($query)

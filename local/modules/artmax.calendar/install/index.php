@@ -58,12 +58,14 @@ class artmax_calendar extends CModule
             USER_ID int(11) NOT NULL,
             BRANCH_ID int(11) NOT NULL DEFAULT 1,
             EVENT_COLOR varchar(7) DEFAULT '#3498db',
+            CONTACT_ENTITY_ID int(11) DEFAULT NULL COMMENT 'ID контакта из CRM',
             CREATED_AT datetime DEFAULT CURRENT_TIMESTAMP,
             UPDATED_AT datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             PRIMARY KEY (ID),
             KEY USER_ID (USER_ID),
             KEY DATE_FROM (DATE_FROM),
-            KEY BRANCH_ID (BRANCH_ID)
+            KEY BRANCH_ID (BRANCH_ID),
+            KEY CONTACT_ENTITY_ID (CONTACT_ENTITY_ID)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
         ";
         
@@ -115,6 +117,7 @@ class artmax_calendar extends CModule
         $connection->query($sqlBranches);
         $connection->query($sqlBranchesSettings);
         $connection->query($sqlModifier);
+        
         
         // Добавляем тестовые филиалы, если таблица пустая
         $result = $connection->query("SELECT COUNT(*) as cnt FROM artmax_calendar_branches");

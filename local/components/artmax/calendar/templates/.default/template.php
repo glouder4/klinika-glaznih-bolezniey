@@ -679,6 +679,9 @@ $totalDays = 42; // 6 недель * 7 дней
             </div>
             <div class="client-modal-body">
                 <div class="client-modal-form-wrapper">
+                    <!-- Скрытое поле для ID контакта -->
+                    <input type="hidden" id="contact-id" value="">
+                    
                     <div class="form-group">
                         <label for="contact-input">Контакт</label>
                         <div class="input-with-icons">
@@ -697,10 +700,39 @@ $totalDays = 42; // 6 недель * 7 дней
                             </button>
                         </div>
                     </div>
+                    
+                    <div class="form-group contact-details-field" style="display: none;">
+                        <label for="phone-input">Телефон</label>
+                        <div class="input-with-icons">
+                            <div class="input-icon left">🇷🇺</div>
+                            <input type="tel" id="phone-input" placeholder="Номер телефона">
+                        </div>
+                    </div>
+                    
+                    <div class="form-group contact-details-field" style="display: none;">
+                        <label for="email-input">E-mail</label>
+                        <div class="input-with-icons">
+                            <div class="input-icon left">✉️</div>
+                            <input type="email" id="email-input" placeholder="Адрес электронной почты">
+                        </div>
+                    </div>
+                    
+                    <!--<div class="form-group contact-details-field" style="display: none;">
+                        <label for="company-input">Компания</label>
+                        <div class="input-with-icons">
+                            <div class="input-icon left">🏢</div>
+                            <input type="text" id="company-input" placeholder="Название компании">
+                            <div class="input-icon right">🔍</div>
+                        </div>
+                    </div>-->
                 </div>
                 <div class="modal-instruction">
                     Чтобы выбрать клиента из CRM, начните вводить имя, телефон, e-mail или название компании
                 </div>
+            </div>
+            <div class="client-modal-footer" style="display: none;">
+                <button type="button" class="btn btn-secondary" onclick="closeClientModal()">ОТМЕНА</button>
+                <button type="button" class="btn btn-primary" onclick="saveClientData()">СОХРАНИТЬ</button>
             </div>
         </div>
     </div>

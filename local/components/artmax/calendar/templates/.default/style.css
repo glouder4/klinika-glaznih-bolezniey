@@ -1670,6 +1670,67 @@ input:checked + .toggle-slider:before {
     padding: 20px;
 }
 
+.client-modal-footer {
+    padding: 20px;
+    border-top: 1px solid #e9ecef;
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+.client-modal-footer .btn {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 6px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-size: 14px;
+}
+
+.client-modal-footer .btn-secondary {
+    background: #6c757d;
+    color: white;
+}
+
+.client-modal-footer .btn-secondary:hover {
+    background: #5a6268;
+}
+
+.client-modal-footer .btn-primary {
+    background: #007bff;
+    color: white;
+}
+
+.client-modal-footer .btn-primary:hover {
+    background: #0056b3;
+}
+
+/* Анимация для дополнительных полей */
+.contact-details-field {
+    opacity: 0;
+    max-height: 0;
+    overflow: hidden;
+    transition: all 0.3s ease;
+}
+
+.contact-details-field.show {
+    opacity: 1;
+    max-height: 100px;
+}
+
+.client-modal-footer {
+    opacity: 0;
+    max-height: 0;
+    overflow: hidden;
+    transition: all 0.3s ease;
+}
+
+.client-modal-footer.show {
+    opacity: 1;
+    max-height: 100px;
+}
+
 .input-with-icons {
     position: relative;
     display: flex;

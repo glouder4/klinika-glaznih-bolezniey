@@ -186,6 +186,7 @@ class Calendar
                 USER_ID,
                 BRANCH_ID,
                 EVENT_COLOR,
+                CONTACT_ENTITY_ID,
                 CREATED_AT,
                 UPDATED_AT
             FROM artmax_calendar_events 
@@ -333,6 +334,7 @@ class Calendar
             USER_ID,
             BRANCH_ID,
             EVENT_COLOR,
+            CONTACT_ENTITY_ID,
             DATE_FORMAT(CREATED_AT, '%d.%m.%Y %H:%i:%s') AS CREATED_AT,
             DATE_FORMAT(UPDATED_AT, '%d.%m.%Y %H:%i:%s') AS UPDATED_AT
         FROM artmax_calendar_events 
@@ -469,5 +471,21 @@ class Calendar
             "CONVERT_DATE: No conversion possible, returning original: " . $dateString . "\n", 
             FILE_APPEND | LOCK_EX);
         return $dateString;
+    }
+
+    /**
+     * Обновить контакт для события
+     */
+    public function updateEventContact($eventId, $contactId)
+    {
+        $sql = "UPDATE artmax_calendar_events SET CONTACT_ENTITY_ID = " . (int)$contactId . " WHERE ID = " . (int)$eventId;
+        
+        try {
+            $this->connection->query($sql);
+            return true;
+        } catch (\Exception $e) {
+            error_log('Ошибка обновления контакта события: ' . $e->getMessage());
+            return false;
+        }
     }
 }

@@ -979,16 +979,41 @@
         }
     }
 
-    function closeClientModal() {
+    window.closeClientModal = function() {
         const modal = document.getElementById('clientModal');
         if (modal) {
             modal.classList.remove('show');
             setTimeout(() => {
                 modal.style.display = 'none';
                 document.body.style.overflow = 'auto';
+                
+                // Сбрасываем состояние модального окна
+                resetClientModal();
             }, 300);
         }
-    }
+    };
+    
+    // Функция сброса состояния модального окна
+    window.resetClientModal = function() {
+        // Очищаем поля
+        const contactInput = document.getElementById('contact-input');
+        const phoneInput = document.getElementById('phone-input');
+        const emailInput = document.getElementById('email-input');
+        const companyInput = document.getElementById('company-input');
+        const contactIdInput = document.getElementById('contact-id');
+        
+        if (contactInput) contactInput.value = '';
+        if (phoneInput) phoneInput.value = '';
+        if (emailInput) emailInput.value = '';
+        if (companyInput) companyInput.value = '';
+        if (contactIdInput) contactIdInput.value = '';
+        
+        // Скрываем дополнительные поля и кнопки
+        hideContactDetailsFields();
+        
+        // Скрываем выпадающий список
+        hideContactDropdown();
+    };
 
     function openEditEventModal(eventId) {
         // Получаем данные события по AJAX
@@ -1888,63 +1913,51 @@
     
     // Обработка результатов стандартного сервиса crm.api.entity.search
     function processStandardServiceContacts(data) {
+        console.log('Обрабатываем данные от стандартного сервиса:', data);
+        
         if (!data || !data.items) {
             return [];
         }
         
         return data.items.map(item => {
+            console.log('Обрабатываем элемент:', item);
+            
             // Формируем полное имя
-            const fullName = item.title || item.name || 'Контакт #' + item.id;
+            const fullName = item.title || 'Контакт #' + item.id;
             
-            // Собираем телефоны и email из дополнительной информации
+            // Собираем телефоны из attributes.phone
             let phones = [];
+            if (item.attributes && item.attributes.phone) {
+                phones = item.attributes.phone.map(phone => phone.value);
+                console.log('Найдены телефоны:', phones);
+            }
+            
+            // Собираем email из attributes.email
             let emails = [];
-            
-            // Проверяем наличие телефонов в разных полях
-            if (item.phone) {
-                phones.push(item.phone);
-            }
-            if (item.mobile) {
-                phones.push(item.mobile);
-            }
-            if (item.workPhone) {
-                phones.push(item.workPhone);
-            }
-            
-            // Проверяем наличие email
-            if (item.email) {
-                emails.push(item.email);
-            }
-            if (item.workEmail) {
-                emails.push(item.workEmail);
-            }
-            
-            // Проверяем дополнительные поля
-            if (item.additionalInfo) {
-                if (item.additionalInfo.phone) {
-                    phones = phones.concat(item.additionalInfo.phone);
-                }
-                if (item.additionalInfo.email) {
-                    emails = emails.concat(item.additionalInfo.email);
-                }
+            if (item.attributes && item.attributes.email) {
+                emails = item.attributes.email.map(email => email.value);
+                console.log('Найдены email:', emails);
             }
             
             // Убираем дубликаты
             phones = [...new Set(phones.filter(phone => phone && phone.trim()))];
             emails = [...new Set(emails.filter(email => email && email.trim()))];
             
-            return {
+            const processedContact = {
                 id: item.id,
                 name: fullName,
-                firstName: item.firstName || '',
-                lastName: item.lastName || '',
-                secondName: item.secondName || '',
+                firstName: '',
+                lastName: '',
+                secondName: '',
                 phone: phones.join(', '),
                 email: emails.join(', '),
-                company: item.company || item.companyTitle || '',
-                post: item.post || item.position || '',
-                address: item.address || ''
+                company: '',
+                post: '',
+                address: ''
             };
+            
+            console.log('Обработанный контакт:', processedContact);
+            return processedContact;
         });
     }
     
@@ -2042,6 +2055,207 @@
             }
         }
     }
+    
+    // Функция выбора контакта и заполнения полей
+    function selectContact(contact) {
+        console.log('Выбран контакт:', contact);
+        
+        // Сохраняем ID контакта в скрытом поле
+        const contactIdInput = document.getElementById('contact-id');
+        if (contactIdInput) {
+            contactIdInput.value = contact.id;
+        }
+        
+        // Заполняем поле контакта
+        const contactInput = document.getElementById('contact-input');
+        if (contactInput) {
+            contactInput.value = contact.name;
+        }
+        
+        // Заполняем поле телефона
+        const phoneInput = document.getElementById('phone-input');
+        if (phoneInput && contact.phone) {
+            phoneInput.value = contact.phone;
+        }
+        
+        // Заполняем поле email
+        const emailInput = document.getElementById('email-input');
+        if (emailInput && contact.email) {
+            emailInput.value = contact.email;
+        }
+        
+        // Заполняем поле компании
+        const companyInput = document.getElementById('company-input');
+        if (companyInput && contact.company) {
+            companyInput.value = contact.company;
+        }
+        
+        // Показываем дополнительные поля
+        showContactDetailsFields();
+        
+        // Скрываем выпадающий список
+        hideContactDropdown();
+        
+        // Показываем уведомление о выборе контакта
+        showNotification(`Выбран контакт: ${contact.name}`, 'success');
+        
+        // Логируем заполненные данные для отладки
+        console.log('Заполненные поля:', {
+            contact: contactInput ? contactInput.value : '',
+            phone: phoneInput ? phoneInput.value : '',
+            email: emailInput ? emailInput.value : '',
+            company: companyInput ? companyInput.value : ''
+        });
+    }
+    
+    // Функция показа дополнительных полей и кнопок
+    function showContactDetailsFields() {
+        // Показываем дополнительные поля с анимацией
+        const detailFields = document.querySelectorAll('.contact-details-field');
+        detailFields.forEach((field, index) => {
+            setTimeout(() => {
+                field.style.display = 'block';
+                field.classList.add('show');
+            }, index * 100); // Задержка для последовательного появления
+        });
+        
+        // Показываем кнопки в футере с анимацией
+        const footer = document.querySelector('.client-modal-footer');
+        if (footer) {
+            setTimeout(() => {
+                footer.style.display = 'flex';
+                footer.classList.add('show');
+            }, detailFields.length * 100 + 100);
+        }
+        
+        // Обновляем инструкцию
+        const instruction = document.querySelector('.modal-instruction');
+        if (instruction) {
+            instruction.textContent = 'Вы можете отредактировать данные контакта или сохранить их';
+        }
+    }
+    
+    // Функция скрытия дополнительных полей и кнопок
+    function hideContactDetailsFields() {
+        // Скрываем дополнительные поля
+        const detailFields = document.querySelectorAll('.contact-details-field');
+        detailFields.forEach(field => {
+            field.classList.remove('show');
+            setTimeout(() => {
+                field.style.display = 'none';
+            }, 300);
+        });
+        
+        // Скрываем кнопки в футере
+        const footer = document.querySelector('.client-modal-footer');
+        if (footer) {
+            footer.classList.remove('show');
+            setTimeout(() => {
+                footer.style.display = 'none';
+            }, 300);
+        }
+        
+        // Возвращаем исходную инструкцию
+        const instruction = document.querySelector('.modal-instruction');
+        if (instruction) {
+            instruction.textContent = 'Чтобы выбрать клиента из CRM, начните вводить имя, телефон, e-mail или название компании';
+        }
+    }
+    
+    // Функция сохранения данных клиента (будет вынесена в глобальную область)
+    window.saveClientData = function() {
+        const contactInput = document.getElementById('contact-input');
+        const phoneInput = document.getElementById('phone-input');
+        const emailInput = document.getElementById('email-input');
+        const companyInput = document.getElementById('company-input');
+        const contactIdInput = document.getElementById('contact-id');
+        
+        const clientData = {
+            id: contactIdInput ? contactIdInput.value : '',
+            contact: contactInput ? contactInput.value.trim() : '',
+            phone: phoneInput ? phoneInput.value.trim() : '',
+            email: emailInput ? emailInput.value.trim() : '',
+            company: companyInput ? companyInput.value.trim() : ''
+        };
+        
+        // Проверяем, что ID контакта указан
+        if (!clientData.id) {
+            showNotification('Не выбран контакт из списка', 'error');
+            return;
+        }
+        
+        // Проверяем, что хотя бы одно поле заполнено
+        if (!clientData.contact && !clientData.phone && !clientData.email && !clientData.company) {
+            showNotification('Заполните хотя бы одно поле', 'error');
+            return;
+        }
+        
+        console.log('Сохранение данных клиента:', clientData);
+        
+        // Получаем ID текущего события (если есть)
+        const currentEventId = getCurrentEventId();
+        if (!currentEventId) {
+            showNotification('Не удалось определить событие для сохранения контакта', 'error');
+            return;
+        }
+        
+        // Отправляем AJAX запрос для сохранения данных
+        const csrfToken = getCSRFToken();
+        fetch('/local/components/artmax/calendar/ajax.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-Bitrix-Csrf-Token': csrfToken
+            },
+            body: new URLSearchParams({
+                action: 'saveEventContact',
+                eventId: currentEventId,
+                contactData: JSON.stringify(clientData),
+                sessid: csrfToken
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showNotification('Контакт успешно сохранен', 'success');
+                closeClientModal();
+                // Обновляем отображение события с контактом
+                refreshCalendarEvents();
+            } else {
+                showNotification('Ошибка сохранения: ' + (data.error || 'Неизвестная ошибка'), 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Ошибка AJAX запроса:', error);
+            showNotification('Ошибка соединения с сервером', 'error');
+        });
+    };
+    
+    // Функция получения ID текущего события
+    window.getCurrentEventId = function() {
+        // Пытаемся получить ID события из различных источников
+        // 1. Из глобальной переменной (если есть)
+        if (typeof currentEventId !== 'undefined' && currentEventId) {
+            return currentEventId;
+        }
+        
+        // 2. Из URL параметров
+        const urlParams = new URLSearchParams(window.location.search);
+        const eventIdFromUrl = urlParams.get('eventId');
+        if (eventIdFromUrl) {
+            return eventIdFromUrl;
+        }
+        
+        // 3. Из атрибутов модального окна
+        const modal = document.getElementById('clientModal');
+        if (modal && modal.getAttribute('data-event-id')) {
+            return modal.getAttribute('data-event-id');
+        }
+        
+        // 4. Если ничего не найдено, возвращаем null
+        return null;
+    };
     
     // Функция показа ошибки поиска
     function showSearchError(errorMessage) {
