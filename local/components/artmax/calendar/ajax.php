@@ -80,6 +80,29 @@ switch ($action) {
         
         $userId = $GLOBALS['USER']->GetID();
         
+        // Логируем полученные данные
+        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+            "=== AJAX ADD_EVENT DEBUG ===\n", 
+            FILE_APPEND | LOCK_EX);
+        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+            "AJAX: Received data:\n", 
+            FILE_APPEND | LOCK_EX);
+        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+            "  - title: {$title}\n", 
+            FILE_APPEND | LOCK_EX);
+        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+            "  - dateFrom: {$dateFrom}\n", 
+            FILE_APPEND | LOCK_EX);
+        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+            "  - dateTo: {$dateTo}\n", 
+            FILE_APPEND | LOCK_EX);
+        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+            "  - eventColor: {$eventColor}\n", 
+            FILE_APPEND | LOCK_EX);
+        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+            "=== END AJAX ADD_EVENT DEBUG ===\n", 
+            FILE_APPEND | LOCK_EX);
+        
         // Сохраняем время как есть, без конвертации в UTC
         // Это позволит избежать проблем с часовыми поясами
         

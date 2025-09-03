@@ -41,6 +41,9 @@ class Calendar
         file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
             "  - branchId: {$branchId}\n", 
             FILE_APPEND | LOCK_EX);
+        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+            "  - eventColor: {$eventColor}\n", 
+            FILE_APPEND | LOCK_EX);
         
         // Используем время как есть, без всяких конвертаций
         $sql = "INSERT INTO artmax_calendar_events (TITLE, DESCRIPTION, DATE_FROM, DATE_TO, USER_ID, BRANCH_ID, EVENT_COLOR) VALUES ('" . 
@@ -71,7 +74,7 @@ class Calendar
                 FILE_APPEND | LOCK_EX);
             
             // Проверяем, что реально сохранилось в БД
-            $checkSql = "SELECT DATE_FROM, DATE_TO FROM artmax_calendar_events WHERE ID = {$eventId}";
+            $checkSql = "SELECT DATE_FROM, DATE_TO, EVENT_COLOR FROM artmax_calendar_events WHERE ID = {$eventId}";
             $checkResult = $this->connection->query($checkSql);
             if ($checkResult) {
                 $savedEvent = $checkResult->fetch();
@@ -84,6 +87,9 @@ class Calendar
                         FILE_APPEND | LOCK_EX);
                     file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
                         "  - DATE_TO: " . ($savedEvent['DATE_TO'] ?? 'NULL') . "\n", 
+                        FILE_APPEND | LOCK_EX);
+                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                        "  - EVENT_COLOR: " . ($savedEvent['EVENT_COLOR'] ?? 'NULL') . "\n", 
                         FILE_APPEND | LOCK_EX);
                 }
             }
