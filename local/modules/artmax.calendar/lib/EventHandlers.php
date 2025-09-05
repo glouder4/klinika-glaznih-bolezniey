@@ -203,6 +203,10 @@ class EventHandlers
                     document.getElementById("addBranchForm").reset();
                 }
                 
+                // Экспортируем функции в глобальную область видимости
+                window.openAddBranchModal = openAddBranchModal;
+                window.closeAddBranchModal = closeAddBranchModal;
+                
                 // Закрытие модального окна при клике вне его
                 window.onclick = function(event) {
                     var modal = document.getElementById("addBranchModal");

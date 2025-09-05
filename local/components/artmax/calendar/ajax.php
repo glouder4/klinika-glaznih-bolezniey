@@ -862,6 +862,7 @@ switch ($action) {
         $branchId = $_POST['branch_id'] ?? 0;
         $timezoneName = $_POST['timezone_name'] ?? '';
         $employeeIds = $_POST['employee_ids'] ?? '[]';
+        $branchName = $_POST['branch_name'] ?? '';
         
         if (empty($branchId)) {
             die(json_encode(['success' => false, 'error' => 'ID филиала не указан']));
@@ -869,7 +870,7 @@ switch ($action) {
         
         try {
             $component = new ArtmaxCalendarComponent();
-            $result = $component->saveBranchSettingsAction($branchId, $timezoneName, $employeeIds);
+            $result = $component->saveBranchSettingsAction($branchId, $timezoneName, $employeeIds, $branchName);
             die(json_encode($result));
         } catch (Exception $e) {
             die(json_encode(['success' => false, 'error' => 'Ошибка сохранения настроек филиала: ' . $e->getMessage()]));

@@ -154,11 +154,6 @@ $totalDays = 42; // 6 недель * 7 дней
             </h1>
         </div>
 
-        <div class="header-center">
-            <button class="btn btn-primary btn-create">
-                СОЗДАТЬ РАСПИСАНИЕ
-            </button> 
-        </div>
         
         <div class="header-right">
             <button class="btn btn-primary btn-add-branch" onclick="openAddBranchModal()" title="Добавить филиал">
@@ -177,6 +172,9 @@ $totalDays = 42; // 6 недель * 7 дней
                 <span class="current-month"><?= translateMonthToRussian($currentDate->format('F')) . ', ' . $currentDate->format('Y') ?></span>
             </div>
             <div class="calendar-controls">
+                <button class="btn btn-primary btn-create">
+                    СОЗДАТЬ РАСПИСАНИЕ
+                </button>
                 <span class="view-type">Месяц</span>
                 <button class="btn-nav" onclick="previousMonth()">◀</button>
                 <button class="btn-nav" onclick="nextMonth()">▶</button>
@@ -709,16 +707,16 @@ $totalDays = 42; // 6 недель * 7 дней
                         <label>Окончание</label>
                         <div class="radio-group">
                             <label class="radio-label">
-                                <input type="radio" name="repeat-end" value="never" checked onchange="toggleEndFields()">
-                                Никогда
-                            </label>
-                            <label class="radio-label">
-                                <input type="radio" name="repeat-end" value="after" onchange="toggleEndFields()">
+                                <input type="radio" name="repeat-end" value="after" checked onchange="toggleEndFields()">
                                 После <input type="number" name="repeat-count" min="1" value="1" class="repeat-count-input"> повторений
                             </label>
                             <label class="radio-label">
                                 <input type="radio" name="repeat-end" value="date" onchange="toggleEndFields()">
                                 Дата <input type="date" name="repeat-end-date" class="repeat-end-date-input">
+                            </label>
+                            <label class="radio-label">
+                                <input type="radio" name="repeat-end" value="never" onchange="toggleEndFields()">
+                                Никогда
                             </label>
                         </div>
                     </div>
@@ -764,6 +762,11 @@ $totalDays = 42; // 6 недель * 7 дней
             <form id="branch-form" novalidate>
                 <?= bitrix_sessid_post() ?>
                 <input type="hidden" name="branch_id" value="<?= $arResult['BRANCH']['ID'] ?>">
+                
+                <div class="form-group">
+                    <label for="branch-name">Название филиала</label>
+                    <input type="text" id="branch-name" name="branch_name" value="<?= htmlspecialchars($arResult['BRANCH']['NAME']) ?>" required>
+                </div>
                 
                 <div class="form-group">
                     <label for="timezone-name">Часовой пояс</label>

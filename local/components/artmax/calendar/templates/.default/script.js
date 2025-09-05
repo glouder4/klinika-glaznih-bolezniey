@@ -4610,6 +4610,20 @@
         .then(data => {
             if (data.success) {
                 showNotification('Настройки филиала сохранены', 'success');
+                
+                // Обновляем заголовок страницы, если изменилось название филиала
+                const branchNameInput = document.getElementById('branch-name');
+                if (branchNameInput && branchNameInput.value) {
+                    // Обновляем заголовок в шапке (если есть)
+                    const pageTitle = document.querySelector('h1');
+                    if (pageTitle) {
+                        pageTitle.textContent = 'Календарь - ' + branchNameInput.value;
+                    }
+                    
+                    // Обновляем title страницы
+                    document.title = 'Календарь - ' + branchNameInput.value;
+                }
+                
                 closeTimezoneModal();
             } else {
                 showNotification('Ошибка сохранения: ' + (data.error || 'Неизвестная ошибка'), 'error');

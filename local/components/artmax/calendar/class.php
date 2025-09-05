@@ -1464,7 +1464,7 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
     /**
      * Сохранение настроек филиала
      */
-    public function saveBranchSettingsAction($branchId, $timezoneName, $employeeIds)
+    public function saveBranchSettingsAction($branchId, $timezoneName, $employeeIds, $branchName = null)
     {
         if (!$GLOBALS['USER'] || !$GLOBALS['USER']->IsAuthorized()) {
             return ['success' => false, 'error' => 'Необходима авторизация'];
@@ -1476,6 +1476,22 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
             }
 
             $calendar = new \Artmax\Calendar\Calendar();
+            
+            // Обновляем название филиала
+            if (!empty($branchName)) {
+                $branchObj = new \Artmax\Calendar\Branch();
+                $updateResult = $branchObj->updateBranch($branchId, $branchName);
+                if (!$updateResult) {
+                    return ['success' => false, 'error' => 'Ошибка обновления названия филиала'];
+                }
+                
+                // Обновляем страницы раздела для отображения нового названия
+                try {
+                    \Artmax\Calendar\EventHandlers::updateSectionPages();
+                } catch (\Exception $e) {
+                    error_log('Ошибка обновления страниц раздела: ' . $e->getMessage());
+                }
+            }
             
             // Сохраняем часовой пояс
             if (!empty($timezoneName)) {

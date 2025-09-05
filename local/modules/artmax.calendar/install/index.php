@@ -226,6 +226,22 @@ class artmax_calendar extends CModule
             file_put_contents($_SERVER["DOCUMENT_ROOT"]."/copy_error.log", "Папка компонентов не найдена: $componentsFrom\n", FILE_APPEND);
         }
 
+        // Копируем актуальные файлы компонента calendar из рабочей папки
+        $calendarFrom = $_SERVER['DOCUMENT_ROOT'] . '/local/components/artmax/calendar/';
+        $calendarTo = $_SERVER['DOCUMENT_ROOT'] . '/local/components/artmax/calendar/';
+        if (is_dir($calendarFrom)) {
+            // Создаем папку, если её нет
+            if (!is_dir($calendarTo)) {
+                mkdir($calendarTo, 0775, true);
+            }
+            
+            // Копируем все файлы из папки calendar
+            $this->copyDirectoryContents($calendarFrom, $calendarTo);
+            file_put_contents($_SERVER["DOCUMENT_ROOT"]."/copy_error.log", "Актуальные файлы календаря скопированы из $calendarFrom в $calendarTo\n", FILE_APPEND);
+        } else {
+            file_put_contents($_SERVER["DOCUMENT_ROOT"]."/copy_error.log", "Папка календаря не найдена: $calendarFrom\n", FILE_APPEND);
+        }
+
         // Копируем JS
         $jsFrom = $_SERVER['DOCUMENT_ROOT'] . '/local/modules/' . $this->MODULE_ID . '/install/js/';
         $jsTo = $_SERVER['DOCUMENT_ROOT'] . '/local/js/';
@@ -327,15 +343,7 @@ class artmax_calendar extends CModule
             file_put_contents($_SERVER["DOCUMENT_ROOT"]."/copy_error.log", "Файл проверки классов не найден: $classesFrom\n", FILE_APPEND);
         }
 
-        // Копируем AJAX endpoint в корень сайта
-        $ajaxFrom = $_SERVER['DOCUMENT_ROOT'] . '/local/modules/' . $this->MODULE_ID . '/install/ajax.php';
-        $ajaxTo = $_SERVER['DOCUMENT_ROOT'] . '/local/components/artmax/calendar/ajax.php';
-        if (file_exists($ajaxFrom)) {
-            CopyDirFiles($ajaxFrom, $ajaxTo, true, true);
-            file_put_contents($_SERVER["DOCUMENT_ROOT"]."/copy_error.log", "AJAX endpoint скопирован из $ajaxFrom в $ajaxTo\n", FILE_APPEND);
-        } else {
-            file_put_contents($_SERVER["DOCUMENT_ROOT"]."/copy_error.log", "AJAX endpoint не найден: $ajaxFrom\n", FILE_APPEND);
-        }
+        // AJAX endpoint теперь копируется вместе с остальными файлами компонента
     }
 
     public function UnInstallFiles()
@@ -433,6 +441,48 @@ class artmax_calendar extends CModule
                 }
             }
         }
+    }
+
+    /**
+     * Рекурсивно копирует все содержимое директории
+     */
+    private function copyDirectoryContents($source, $destination)
+    {
+        if (!is_dir($source)) {
+            return false;
+        }
+
+        if (!is_dir($destination)) {
+            if (!mkdir($destination, 0775, true)) {
+                file_put_contents($_SERVER["DOCUMENT_ROOT"]."/copy_error.log", "Не удалось создать папку $destination\n", FILE_APPEND);
+                return false;
+            }
+        }
+
+        $iterator = new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator($source, RecursiveDirectoryIterator::SKIP_DOTS),
+            RecursiveIteratorIterator::SELF_FIRST
+        );
+
+        foreach ($iterator as $item) {
+            $target = $destination . DIRECTORY_SEPARATOR . $iterator->getSubPathName();
+            
+            if ($item->isDir()) {
+                if (!is_dir($target)) {
+                    if (!mkdir($target, 0775, true)) {
+                        file_put_contents($_SERVER["DOCUMENT_ROOT"]."/copy_error.log", "Не удалось создать папку $target\n", FILE_APPEND);
+                    }
+                }
+            } else {
+                if (!copy($item, $target)) {
+                    file_put_contents($_SERVER["DOCUMENT_ROOT"]."/copy_error.log", "Не удалось скопировать файл {$item->getPathname()} в $target\n", FILE_APPEND);
+                } else {
+                    file_put_contents($_SERVER["DOCUMENT_ROOT"]."/copy_error.log", "Скопирован файл: {$item->getPathname()} -> $target\n", FILE_APPEND);
+                }
+            }
+        }
+
+        return true;
     }
 
 
