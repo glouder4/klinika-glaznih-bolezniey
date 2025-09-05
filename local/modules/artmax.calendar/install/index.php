@@ -82,40 +82,31 @@ class artmax_calendar extends CModule
             ADDRESS text,
             PHONE varchar(50),
             EMAIL varchar(255),
+            TIMEZONE_NAME varchar(50) DEFAULT 'Europe/Moscow',
             CREATED_AT datetime DEFAULT CURRENT_TIMESTAMP,
             UPDATED_AT datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             PRIMARY KEY (ID)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
         ";
 
-        // Таблица настроек филиалов
+        // Таблица связи филиалов и сотрудников
         $sqlBranchesSettings = "
-        CREATE TABLE IF NOT EXISTS artmax_calendar_timezone_settings (
+        CREATE TABLE IF NOT EXISTS artmax_calendar_branch_employees (
             ID INT AUTO_INCREMENT PRIMARY KEY,
             BRANCH_ID INT NOT NULL,
-            TIMEZONE_NAME VARCHAR(50) NOT NULL,
-            TIMEZONE_OFFSET INT NOT NULL,
-            DST_ENABLED TINYINT(1) DEFAULT 1,
-            DST_START_MONTH TINYINT DEFAULT 3,
-            DST_START_DAY TINYINT DEFAULT 31,
-            DST_START_HOUR TINYINT DEFAULT 2,
-            DST_END_MONTH TINYINT DEFAULT 10,
-            DST_END_DAY TINYINT DEFAULT 27,
-            DST_END_HOUR TINYINT DEFAULT 3,
-            IS_ACTIVE TINYINT(1) DEFAULT 1,
+            EMPLOYEE_ID INT NOT NULL,
             CREATED_AT TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            UPDATED_AT TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            UNIQUE KEY unique_branch_timezone (BRANCH_ID),
+            UNIQUE KEY unique_branch_employee (BRANCH_ID, EMPLOYEE_ID),
             FOREIGN KEY (BRANCH_ID) REFERENCES artmax_calendar_branches(ID) ON DELETE CASCADE ON UPDATE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
         ";
         $sqlModifier = "
-        INSERT IGNORE INTO artmax_calendar_timezone_settings (BRANCH_ID, TIMEZONE_NAME, TIMEZONE_OFFSET, DST_ENABLED) VALUES
-        (1, 'Europe/Moscow', 3, 1),
-        (2, 'Europe/Moscow', 3, 1),
-        (3, 'Asia/Yekaterinburg', 5, 1),
-        (4, 'Asia/Novosibirsk', 7, 1),
-        (5, 'Asia/Vladivostok', 10, 1);
+        INSERT IGNORE INTO artmax_calendar_branches (ID, NAME, TIMEZONE_NAME) VALUES
+        (1, 'Главный офис', 'Europe/Moscow'),
+        (2, 'Филиал Москва', 'Europe/Moscow'),
+        (3, 'Филиал Екатеринбург', 'Asia/Yekaterinburg'),
+        (4, 'Филиал Новосибирск', 'Asia/Novosibirsk'),
+        (5, 'Филиал Владивосток', 'Asia/Vladivostok');
         ";
         
         $connection->query($sqlEvents);
@@ -128,9 +119,9 @@ class artmax_calendar extends CModule
     {
         // Удаление таблиц базы данных
         $connection = \Bitrix\Main\Application::getConnection();
+        $connection->query("DROP TABLE IF EXISTS artmax_calendar_branch_employees");
         $connection->query("DROP TABLE IF EXISTS artmax_calendar_events");
         $connection->query("DROP TABLE IF EXISTS artmax_calendar_branches");
-        $connection->query("DROP TABLE IF EXISTS artmax_calendar_timezone_settings");
         
         // Удаляем настройки модуля
         \Bitrix\Main\Config\Option::delete('artmax.calendar', ['name' => 'menu_item_id']);

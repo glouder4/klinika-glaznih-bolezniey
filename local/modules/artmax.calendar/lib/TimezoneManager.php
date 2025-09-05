@@ -29,10 +29,9 @@ class TimezoneManager
         }
 
         $sql = "
-            SELECT ts.*, b.NAME as BRANCH_NAME 
-            FROM artmax_calendar_timezone_settings ts
-            JOIN artmax_calendar_branches b ON ts.BRANCH_ID = b.ID
-            WHERE ts.BRANCH_ID = " . (int)$branchId . " AND ts.IS_ACTIVE = 1
+            SELECT ID, NAME as BRANCH_NAME, TIMEZONE_NAME
+            FROM artmax_calendar_branches
+            WHERE ID = " . (int)$branchId . "
         ";
 
         $result = $this->connection->query($sql);
@@ -46,16 +45,14 @@ class TimezoneManager
     }
 
     /**
-     * Получить все активные часовые пояса
+     * Получить все часовые пояса филиалов
      */
     public function getAllTimezones()
     {
         $sql = "
-            SELECT ts.*, b.NAME as BRANCH_NAME 
-            FROM artmax_calendar_timezone_settings ts
-            JOIN artmax_calendar_branches b ON ts.BRANCH_ID = b.ID
-            WHERE ts.IS_ACTIVE = 1
-            ORDER BY b.NAME
+            SELECT ID, NAME as BRANCH_NAME, TIMEZONE_NAME
+            FROM artmax_calendar_branches
+            ORDER BY NAME
         ";
 
         $result = $this->connection->query($sql);
@@ -109,7 +106,7 @@ class TimezoneManager
     }
 
     /**
-     * Получить текущее смещение часового пояса для филиала (с учетом DST)
+     * Получить текущее смещение часового пояса для филиала
      */
     public function getCurrentOffset($branchId)
     {
@@ -123,26 +120,7 @@ class TimezoneManager
             $dateTime = new DateTime('now', $dateTimeZone);
             return $dateTime->getOffset() / 3600; // Возвращаем в часах
         } catch (Exception $e) {
-            return $timezone['TIMEZONE_OFFSET'];
-        }
-    }
-
-    /**
-     * Проверить, активно ли летнее время для филиала
-     */
-    public function isDSTActive($branchId)
-    {
-        $timezone = $this->getBranchTimezone($branchId);
-        if (!$timezone || !$timezone['DST_ENABLED']) {
-            return false;
-        }
-
-        try {
-            $dateTimeZone = new DateTimeZone($timezone['TIMEZONE_NAME']);
-            $dateTime = new DateTime('now', $dateTimeZone);
-            return $dateTime->format('I') == '1'; // 1 = DST активен, 0 = DST неактивен
-        } catch (Exception $e) {
-            return false;
+            return 0;
         }
     }
 
@@ -172,37 +150,15 @@ class TimezoneManager
     }
 
     /**
-     * Обновить настройки часового пояса для филиала
+     * Установить часовой пояс для филиала
      */
-    public function updateBranchTimezone($branchId, $timezoneData)
+    public function setBranchTimezone($branchId, $timezoneName)
     {
         $sql = "
-            INSERT INTO artmax_calendar_timezone_settings 
-            (BRANCH_ID, TIMEZONE_NAME, TIMEZONE_OFFSET, DST_ENABLED, DST_START_MONTH, DST_START_DAY, DST_START_HOUR, DST_END_MONTH, DST_END_DAY, DST_END_HOUR, IS_ACTIVE)
-            VALUES (
-                " . (int)$branchId . ",
-                '" . $this->connection->getSqlHelper()->forSql($timezoneData['timezone_name']) . "',
-                " . (int)$timezoneData['timezone_offset'] . ",
-                " . (int)$timezoneData['dst_enabled'] . ",
-                " . (int)$timezoneData['dst_start_month'] . ",
-                " . (int)$timezoneData['dst_start_day'] . ",
-                " . (int)$timezoneData['dst_start_hour'] . ",
-                " . (int)$timezoneData['dst_end_month'] . ",
-                " . (int)$timezoneData['dst_end_day'] . ",
-                " . (int)$timezoneData['dst_end_hour'] . ",
-                1
-            )
-            ON DUPLICATE KEY UPDATE
-                TIMEZONE_NAME = VALUES(TIMEZONE_NAME),
-                TIMEZONE_OFFSET = VALUES(TIMEZONE_OFFSET),
-                DST_ENABLED = VALUES(DST_ENABLED),
-                DST_START_MONTH = VALUES(DST_START_MONTH),
-                DST_START_DAY = VALUES(DST_START_DAY),
-                DST_START_HOUR = VALUES(DST_START_HOUR),
-                DST_END_MONTH = VALUES(DST_END_MONTH),
-                DST_END_DAY = VALUES(DST_END_DAY),
-                DST_END_HOUR = VALUES(DST_END_HOUR),
+            UPDATE artmax_calendar_branches 
+            SET TIMEZONE_NAME = '" . $this->connection->getSqlHelper()->forSql($timezoneName) . "',
                 UPDATED_AT = CURRENT_TIMESTAMP
+            WHERE ID = " . (int)$branchId . "
         ";
 
         $result = $this->connection->query($sql);

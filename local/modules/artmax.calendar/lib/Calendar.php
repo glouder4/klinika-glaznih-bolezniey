@@ -138,7 +138,7 @@ class Calendar
      */
     private function getBranchTimezone($branchId)
     {
-        $sql = "SELECT TIMEZONE_NAME FROM artmax_calendar_timezone_settings WHERE BRANCH_ID = " . (int)$branchId;
+        $sql = "SELECT TIMEZONE_NAME FROM artmax_calendar_branches WHERE ID = " . (int)$branchId;
         $result = $this->connection->query($sql);
         if ($result) {
             $branch = $result->fetch();
@@ -577,6 +577,91 @@ class Calendar
                 FILE_APPEND | LOCK_EX);
             
             return false;
+        }
+    }
+
+    /**
+     * Обновить сотрудников филиала
+     */
+    public function updateBranchEmployees($branchId, $employeeIds)
+    {
+        try {
+            // Удаляем всех сотрудников филиала
+            $deleteSql = "DELETE FROM artmax_calendar_branch_employees WHERE BRANCH_ID = " . (int)$branchId;
+            $this->connection->query($deleteSql);
+            
+            // Добавляем новых сотрудников
+            if (!empty($employeeIds)) {
+                $insertValues = [];
+                foreach ($employeeIds as $employeeId) {
+                    $employeeId = (int)$employeeId;
+                    if ($employeeId > 0) {
+                        $insertValues[] = "(" . (int)$branchId . ", " . $employeeId . ")";
+                    }
+                }
+                
+                if (!empty($insertValues)) {
+                    $insertSql = "INSERT INTO artmax_calendar_branch_employees (BRANCH_ID, EMPLOYEE_ID) VALUES " . implode(', ', $insertValues);
+                    $this->connection->query($insertSql);
+                }
+            }
+            
+            return true;
+        } catch (\Exception $e) {
+            error_log('Ошибка обновления сотрудников филиала: ' . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Получить сотрудников филиала
+     */
+    public function getBranchEmployees($branchId)
+    {
+        try {
+            // Сначала получаем ID сотрудников филиала
+            $sql = "SELECT EMPLOYEE_ID FROM artmax_calendar_branch_employees WHERE BRANCH_ID = " . (int)$branchId;
+            $result = $this->connection->query($sql);
+            
+            $employeeIds = [];
+            while ($row = $result->fetch()) {
+                $employeeIds[] = $row['EMPLOYEE_ID'];
+            }
+            
+            if (empty($employeeIds)) {
+                return [];
+            }
+            
+            // Теперь получаем полную информацию о пользователях через CUser::GetList
+            $userEntity = new \CUser();
+            $employees = [];
+            
+            $users = $userEntity->GetList(
+                ($by = "ID"),
+                ($order = "ASC"),
+                [
+                    'ID' => implode('|', $employeeIds), // Фильтр по ID сотрудников
+                    'ACTIVE' => 'Y'
+                ],
+                [
+                    'FIELDS' => ['ID', 'NAME', 'LAST_NAME', 'LOGIN', 'EMAIL']
+                ]
+            );
+            
+            while ($user = $users->Fetch()) {
+                $employees[] = [
+                    'ID' => $user['ID'],
+                    'NAME' => $user['NAME'] ?: '',
+                    'LAST_NAME' => $user['LAST_NAME'] ?: '',
+                    'LOGIN' => $user['LOGIN'] ?: '',
+                    'EMAIL' => $user['EMAIL'] ?: ''
+                ];
+            }
+            
+            return $employees;
+        } catch (\Exception $e) {
+            error_log('Ошибка получения сотрудников филиала: ' . $e->getMessage());
+            return [];
         }
     }
 

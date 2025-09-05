@@ -1162,6 +1162,233 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
     }
 
     /**
+     * Получение списка сотрудников из CRM
+     */
+    public function getEmployeesAction()
+    {
+        if (!$GLOBALS['USER'] || !$GLOBALS['USER']->IsAuthorized()) {
+            return ['success' => false, 'error' => 'Необходима авторизация'];
+        }
+
+        try {
+            if (!CModule::IncludeModule('crm')) {
+                return ['success' => false, 'error' => 'Модуль CRM не установлен'];
+            }
+
+            // Получаем список пользователей из Bitrix
+            $userEntity = new \CUser();
+            $users = $userEntity->GetList(
+                ($by = "ID"),
+                ($order = "ASC"),
+                [
+                    'ACTIVE' => 'Y',
+                    'UF_DEPARTMENT' => true // Получаем только пользователей с департаментами
+                ],
+                [
+                    'FIELDS' => ['ID', 'NAME', 'LAST_NAME', 'LOGIN', 'EMAIL']
+                ]
+            );
+
+            $employees = [];
+            while ($user = $users->Fetch()) {
+                if (!empty($user['NAME']) || !empty($user['LAST_NAME'])) {
+                    $employees[] = [
+                        'ID' => $user['ID'],
+                        'NAME' => $user['NAME'] ?: '',
+                        'LAST_NAME' => $user['LAST_NAME'] ?: '',
+                        'LOGIN' => $user['LOGIN'] ?: '',
+                        'EMAIL' => $user['EMAIL'] ?: ''
+                    ];
+                }
+            }
+
+            return [
+                'success' => true,
+                'employees' => $employees
+            ];
+        } catch (\Exception $e) {
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+
+    /**
+     * Поиск сотрудников по запросу
+     */
+    public function searchEmployeesAction($query)
+    {
+        if (!$GLOBALS['USER'] || !$GLOBALS['USER']->IsAuthorized()) {
+            return ['success' => false, 'error' => 'Необходима авторизация'];
+        }
+
+        try {
+            if (!CModule::IncludeModule('crm')) {
+                return ['success' => false, 'error' => 'Модуль CRM не установлен'];
+            }
+
+            $query = trim($query);
+            if (empty($query)) {
+                return $this->getEmployeesAction();
+            }
+
+            // Получаем список пользователей из Bitrix с поиском
+            $userEntity = new \CUser();
+            $employees = [];
+            $foundIds = [];
+            
+            // Поиск по имени
+            $usersByName = $userEntity->GetList(
+                ($by = "ID"),
+                ($order = "ASC"),
+                [
+                    'ACTIVE' => 'Y',
+                    'UF_DEPARTMENT' => true, // Получаем только пользователей с департаментами
+                    'NAME' => $query . ' &' // Поиск по имени с оператором &
+                ],
+                [
+                    'FIELDS' => ['ID', 'NAME', 'LAST_NAME', 'LOGIN', 'EMAIL']
+                ]
+            );
+            
+            while ($user = $usersByName->Fetch()) {
+                if (!in_array($user['ID'], $foundIds) && (!empty($user['NAME']) || !empty($user['LAST_NAME']))) {
+                    $employees[] = [
+                        'ID' => $user['ID'],
+                        'NAME' => $user['NAME'] ?: '',
+                        'LAST_NAME' => $user['LAST_NAME'] ?: '',
+                        'LOGIN' => $user['LOGIN'] ?: '',
+                        'EMAIL' => $user['EMAIL'] ?: ''
+                    ];
+                    $foundIds[] = $user['ID'];
+                }
+            }
+            
+            // Поиск по фамилии
+            $usersByLastName = $userEntity->GetList(
+                ($by = "ID"),
+                ($order = "ASC"),
+                [
+                    'ACTIVE' => 'Y',
+                    'UF_DEPARTMENT' => true,
+                    'LAST_NAME' => $query . ' &' // Поиск по фамилии с оператором &
+                ],
+                [
+                    'FIELDS' => ['ID', 'NAME', 'LAST_NAME', 'LOGIN', 'EMAIL']
+                ]
+            );
+            
+            while ($user = $usersByLastName->Fetch()) {
+                if (!in_array($user['ID'], $foundIds) && (!empty($user['NAME']) || !empty($user['LAST_NAME']))) {
+                    $employees[] = [
+                        'ID' => $user['ID'],
+                        'NAME' => $user['NAME'] ?: '',
+                        'LAST_NAME' => $user['LAST_NAME'] ?: '',
+                        'LOGIN' => $user['LOGIN'] ?: '',
+                        'EMAIL' => $user['EMAIL'] ?: ''
+                    ];
+                    $foundIds[] = $user['ID'];
+                }
+            }
+            
+            // Поиск по логину
+            $usersByLogin = $userEntity->GetList(
+                ($by = "ID"),
+                ($order = "ASC"),
+                [
+                    'ACTIVE' => 'Y',
+                    'UF_DEPARTMENT' => true,
+                    'LOGIN' => $query . ' &' // Поиск по логину с оператором &
+                ],
+                [
+                    'FIELDS' => ['ID', 'NAME', 'LAST_NAME', 'LOGIN', 'EMAIL']
+                ]
+            );
+            
+            while ($user = $usersByLogin->Fetch()) {
+                if (!in_array($user['ID'], $foundIds) && (!empty($user['NAME']) || !empty($user['LAST_NAME']))) {
+                    $employees[] = [
+                        'ID' => $user['ID'],
+                        'NAME' => $user['NAME'] ?: '',
+                        'LAST_NAME' => $user['LAST_NAME'] ?: '',
+                        'LOGIN' => $user['LOGIN'] ?: '',
+                        'EMAIL' => $user['EMAIL'] ?: ''
+                    ];
+                    $foundIds[] = $user['ID'];
+                }
+            }
+
+            return [
+                'success' => true,
+                'employees' => $employees
+            ];
+        } catch (\Exception $e) {
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+
+    /**
+     * Сохранение настроек филиала
+     */
+    public function saveBranchSettingsAction($branchId, $timezoneName, $employeeIds)
+    {
+        if (!$GLOBALS['USER'] || !$GLOBALS['USER']->IsAuthorized()) {
+            return ['success' => false, 'error' => 'Необходима авторизация'];
+        }
+
+        try {
+            if (!CModule::IncludeModule('artmax.calendar')) {
+                return ['success' => false, 'error' => 'Модуль календаря не установлен'];
+            }
+
+            $calendar = new \Artmax\Calendar\Calendar();
+            
+            // Сохраняем часовой пояс
+            if (!empty($timezoneName)) {
+                $timezoneManager = new \Artmax\Calendar\TimezoneManager();
+                $timezoneManager->setBranchTimezone($branchId, $timezoneName);
+            }
+            
+            // Сохраняем сотрудников филиала
+            $employeeIdsArray = json_decode($employeeIds, true);
+            if (is_array($employeeIdsArray)) {
+                $calendar->updateBranchEmployees($branchId, $employeeIdsArray);
+            }
+
+            return [
+                'success' => true,
+                'message' => 'Настройки филиала успешно сохранены'
+            ];
+        } catch (\Exception $e) {
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+
+    /**
+     * Получение сотрудников филиала
+     */
+    public function getBranchEmployeesAction($branchId)
+    {
+        if (!$GLOBALS['USER'] || !$GLOBALS['USER']->IsAuthorized()) {
+            return ['success' => false, 'error' => 'Необходима авторизация'];
+        }
+
+        try {
+            if (!CModule::IncludeModule('artmax.calendar')) {
+                return ['success' => false, 'error' => 'Модуль календаря не установлен'];
+            }
+
+            $calendar = new \Artmax\Calendar\Calendar();
+            $employees = $calendar->getBranchEmployees($branchId);
+
+            return [
+                'success' => true,
+                'employees' => $employees
+            ];
+        } catch (\Exception $e) {
+            return ['success' => false, 'error' => 'Ошибка получения сотрудников филиала: ' . $e->getMessage()];
+        }
+    }
+
+    /**
      * Получение контакта из CRM по ID
      */
     public function getContactFromCRM($contactId)

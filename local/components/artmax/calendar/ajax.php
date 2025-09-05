@@ -444,41 +444,6 @@ switch ($action) {
         }
         break;
 
-    case 'update_timezone':
-        $branchId = (int)($_POST['branch_id'] ?? 0);
-        $timezoneName = $_POST['timezone_name'] ?? '';
-
-        if (!$branchId || empty($timezoneName)) {
-            http_response_code(400);
-            die(json_encode(['success' => false, 'error' => 'Не все обязательные поля заполнены']));
-        }
-
-        try {
-            $timezoneManager = new \Artmax\Calendar\TimezoneManager();
-
-            $timezoneData = [
-                'timezone_name' => $timezoneName,
-                'timezone_offset' => 0, // Автоматически определяется из timezone_name
-                'dst_enabled' => 0, // Отключаем DST
-                'dst_start_month' => 3,
-                'dst_start_day' => 1,
-                'dst_start_hour' => 2,
-                'dst_end_month' => 10,
-                'dst_end_day' => 1,
-                'dst_end_hour' => 3
-            ];
-
-            $result = $timezoneManager->updateBranchTimezone($branchId, $timezoneData);
-
-            if ($result) {
-                die(json_encode(['success' => true, 'message' => 'Часовой пояс обновлен']));
-            } else {
-                die(json_encode(['success' => false, 'error' => 'Ошибка обновления часового пояса']));
-            }
-        } catch (Exception $e) {
-            die(json_encode(['success' => false, 'error' => 'Ошибка: ' . $e->getMessage()]));
-        }
-        break;
 
 
     case 'getEventContacts':
@@ -626,6 +591,58 @@ switch ($action) {
             die(json_encode($result));
         } catch (Exception $e) {
             die(json_encode(['success' => false, 'error' => 'Ошибка сохранения заметки: ' . $e->getMessage()]));
+        }
+        break;
+
+    case 'getEmployees':
+        try {
+            $component = new ArtmaxCalendarComponent();
+            $result = $component->getEmployeesAction();
+            die(json_encode($result));
+        } catch (Exception $e) {
+            die(json_encode(['success' => false, 'error' => 'Ошибка получения сотрудников: ' . $e->getMessage()]));
+        }
+        break;
+
+    case 'searchEmployees':
+        $query = $_POST['query'] ?? '';
+        
+        try {
+            $component = new ArtmaxCalendarComponent();
+            $result = $component->searchEmployeesAction($query);
+            die(json_encode($result));
+        } catch (Exception $e) {
+            die(json_encode(['success' => false, 'error' => 'Ошибка поиска сотрудников: ' . $e->getMessage()]));
+        }
+        break;
+
+    case 'saveBranchSettings':
+        $branchId = $_POST['branch_id'] ?? 0;
+        $timezoneName = $_POST['timezone_name'] ?? '';
+        $employeeIds = $_POST['employee_ids'] ?? '[]';
+        
+        if (empty($branchId)) {
+            die(json_encode(['success' => false, 'error' => 'ID филиала не указан']));
+        }
+        
+        try {
+            $component = new ArtmaxCalendarComponent();
+            $result = $component->saveBranchSettingsAction($branchId, $timezoneName, $employeeIds);
+            die(json_encode($result));
+        } catch (Exception $e) {
+            die(json_encode(['success' => false, 'error' => 'Ошибка сохранения настроек филиала: ' . $e->getMessage()]));
+        }
+        break;
+
+    case 'getBranchEmployees':
+        $branchId = $_POST['branch_id'] ?? 0;
+        
+        try {
+            $component = new ArtmaxCalendarComponent();
+            $result = $component->getBranchEmployeesAction($branchId);
+            die(json_encode($result));
+        } catch (Exception $e) {
+            die(json_encode(['success' => false, 'error' => 'Ошибка получения сотрудников: ' . $e->getMessage()]));
         }
         break;
 

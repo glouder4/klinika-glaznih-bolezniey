@@ -107,7 +107,7 @@ $totalDays = 42; // 6 недель * 7 дней
         </div>
         
         <div class="header-right">
-            <button class="btn btn-secondary btn-timezone" id="timezone-settings-btn" title="Настройки филиала">
+            <button class="btn btn-secondary btn-branch" id="branch-settings-btn" title="Настройки филиала">
                 ⚙️ Настройки филиала
             </button>
         </div>
@@ -588,20 +588,20 @@ $totalDays = 42; // 6 недель * 7 дней
         </div>
     </div>
 
-    <!-- Модальное окно для настроек часового пояса -->
-    <div id="timezoneModal" class="event-form-modal" style="display: none;">
+    <!-- Модальное окно для настроек филиала -->
+    <div id="branchModal" class="event-form-modal" style="display: none;">
         <div class="modal-content">
             <div class="modal-header">
                 <h3>Настройки филиала</h3>
-                <button class="close-btn" id="close-timezone-modal">×</button>
+                <button class="close-btn" id="close-branch-modal">×</button>
             </div>
-            <form id="timezone-form" novalidate>
+            <form id="branch-form" novalidate>
                 <?= bitrix_sessid_post() ?>
                 <input type="hidden" name="branch_id" value="<?= $arResult['BRANCH']['ID'] ?>">
                 
                 <div class="form-group">
-                    <label for="timezone-name">Часовой пояс *</label>
-                    <select id="timezone-name" name="timezone_name" required>
+                    <label for="timezone-name">Часовой пояс</label>
+                    <select id="timezone-name" name="timezone_name" class="timezone-select">
                         <option value="">Выберите часовой пояс</option>
                         <?php
                         $timezoneManager = new \Artmax\Calendar\TimezoneManager();
@@ -619,14 +619,31 @@ $totalDays = 42; // 6 недель * 7 дней
                         }
                         ?>
                     </select>
-                    <div class="error-message" style="display: none;">
-                        <span class="error-icon">⚠️</span>
-                        <span>Выберите часовой пояс.</span>
+                </div>
+                
+                <div class="form-group">
+                    <label for="branch-employees">Сотрудники филиала</label>
+                    <div class="multiselect-container">
+                        <div class="multiselect-input" id="multiselect-input">
+                            <span class="placeholder">Выберите сотрудников</span>
+                            <span class="dropdown-arrow">▼</span>
+                        </div>
+                        <div class="multiselect-dropdown" id="multiselect-dropdown" style="display: none;">
+                            <div class="multiselect-search">
+                                <input type="text" id="employee-search" placeholder="Поиск сотрудников..." autocomplete="off">
+                            </div>
+                            <div class="multiselect-options" id="multiselect-options">
+                                <!-- Опции будут загружены через AJAX -->
+                            </div>
+                        </div>
+                    </div>
+                    <div class="selected-employees" id="selected-employees">
+                        <!-- Выбранные сотрудники будут отображаться здесь -->
                     </div>
                 </div>
                 
                 <div class="form-actions">
-                    <button type="button" class="btn btn-secondary" id="cancel-timezone-modal">ОТМЕНА</button>
+                    <button type="button" class="btn btn-secondary" id="cancel-branch-modal">ОТМЕНА</button>
                     <button type="submit" class="btn btn-primary">СОХРАНИТЬ</button>
                 </div>
             </form>
@@ -1098,26 +1115,26 @@ $totalDays = 42; // 6 недель * 7 дней
         });
 
         // Обработка кнопки настроек филиала
-        const timezoneBtn = document.getElementById('timezone-settings-btn');
-        if (timezoneBtn) {
-            timezoneBtn.addEventListener('click', function() {
-                openTimezoneModal();
+        const branchBtn = document.getElementById('branch-settings-btn');
+        if (branchBtn) {
+            branchBtn.addEventListener('click', function() {
+                openBranchModal();
             });
         }
 
         // Обработка кнопки закрытия модального окна настроек
-        const closeTimezoneBtn = document.getElementById('close-timezone-modal');
-        if (closeTimezoneBtn) {
-            closeTimezoneBtn.addEventListener('click', function() {
-                closeTimezoneModal();
+        const closeBranchBtn = document.getElementById('close-branch-modal');
+        if (closeBranchBtn) {
+            closeBranchBtn.addEventListener('click', function() {
+                closeBranchModal();
             });
         }
 
         // Обработка кнопки "ОТМЕНА" в форме настроек
-        const cancelTimezoneBtn = document.getElementById('cancel-timezone-modal');
-        if (cancelTimezoneBtn) {
-            cancelTimezoneBtn.addEventListener('click', function() {
-                closeTimezoneModal();
+        const cancelBranchBtn = document.getElementById('cancel-branch-modal');
+        if (cancelBranchBtn) {
+            cancelBranchBtn.addEventListener('click', function() {
+                closeBranchModal();
             });
         }
 
@@ -1176,53 +1193,4 @@ $totalDays = 42; // 6 недель * 7 дней
 
 
 
-    // Обработка отправки формы настроек филиала
-    document.addEventListener('DOMContentLoaded', function() {
-        const timezoneForm = document.getElementById('timezone-form');
-        if (timezoneForm) {
-            timezoneForm.addEventListener('submit', function(e) {
-                e.preventDefault();
-                
-                const formData = new FormData(this);
-                const timezoneData = {
-                    action: 'update_timezone',
-                    branch_id: formData.get('branch_id'),
-                    timezone_name: formData.get('timezone_name')
-                };
-
-                // Отправляем AJAX запрос
-                fetch('/local/components/artmax/calendar/ajax.php', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                        'X-Requested-With': 'XMLHttpRequest'
-                    },
-                    body: new URLSearchParams(timezoneData)
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        alert('Настройки часового пояса успешно обновлены!');
-                        closeTimezoneModal();
-                        // Перезагружаем страницу для применения изменений
-                        location.reload();
-                    } else {
-                        alert('Ошибка при обновлении настроек: ' + (data.message || 'Неизвестная ошибка'));
-                    }
-                })
-                .catch(error => {
-                    console.error('Ошибка:', error);
-                    alert('Произошла ошибка при отправке запроса');
-                });
-            });
-        }
-    });
-
-    // Закрытие модального окна часового пояса при клике вне его
-    window.addEventListener('click', function(event) {
-        const timezoneModal = document.getElementById('timezoneModal');
-        if (event.target === timezoneModal) {
-            closeTimezoneModal();
-        }
-    });
 </script>

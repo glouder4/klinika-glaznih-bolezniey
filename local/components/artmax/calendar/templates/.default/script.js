@@ -21,6 +21,12 @@
 
         // Инициализация навигации
         initNavigation();
+        
+        // Инициализация мультиселектора сотрудников
+        initMultiselect();
+        
+        // Инициализация обработчиков для модального окна настроек филиала
+        initBranchModal();
 
         // Инициализация поиска
         initSearch();
@@ -3598,6 +3604,421 @@
         });
     }
 
+    // Функции для работы с модальным окном настроек филиала
+    function openBranchModal() {
+        const modal = document.getElementById('branchModal');
+        if (modal) {
+            modal.style.display = 'flex';
+            setTimeout(() => {
+                modal.classList.add('show');
+            }, 10);
+            
+            // Получаем ID филиала из скрытого поля формы
+            const branchIdInput = document.querySelector('input[name="branch_id"]');
+            const branchId = branchIdInput ? branchIdInput.value : null;
+            
+            // Загружаем всех сотрудников и выбранных сотрудников филиала
+            loadEmployees();
+            if (branchId) {
+                loadBranchEmployees(branchId);
+            }
+        }
+    }
+
+    function closeBranchModal() {
+        const modal = document.getElementById('branchModal');
+        if (modal) {
+            modal.classList.remove('show');
+            setTimeout(() => {
+                modal.style.display = 'none';
+            }, 300);
+        }
+    }
+
+    // Функции для работы с мультиселектором сотрудников
+    let selectedEmployees = [];
+    let allEmployees = [];
+
+    // Загрузка выбранных сотрудников филиала
+    function loadBranchEmployees(branchId) {
+        const csrfToken = getCSRFToken();
+        fetch('/local/components/artmax/calendar/ajax.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-Bitrix-Csrf-Token': csrfToken
+            },
+            body: new URLSearchParams({
+                action: 'getBranchEmployees',
+                branch_id: branchId,
+                sessid: csrfToken
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.employees) {
+                // Очищаем текущий список выбранных сотрудников
+                selectedEmployees = [];
+                
+                // Добавляем сотрудников филиала в выбранные
+                data.employees.forEach(employee => {
+                    selectedEmployees.push(employee);
+                });
+                
+                // Обновляем отображение
+                updateSelectedEmployeesDisplay();
+                
+                // Обновляем чекбоксы в выпадающем списке (если он открыт)
+                setTimeout(() => {
+                    updateEmployeeCheckboxes();
+                }, 100);
+            }
+        })
+        .catch(error => {
+            console.error('Ошибка при загрузке сотрудников филиала:', error);
+        });
+    }
+
+    // Обновление чекбоксов сотрудников
+    function updateEmployeeCheckboxes() {
+        const checkboxes = document.querySelectorAll('.multiselect-option input[type="checkbox"]');
+        checkboxes.forEach(checkbox => {
+            const employeeId = String(checkbox.value); // Преобразуем в строку
+            const isSelected = selectedEmployees.some(emp => emp.ID === employeeId);
+            checkbox.checked = isSelected;
+            console.log('updateEmployeeCheckboxes: Сотрудник', employeeId, 'выбран:', isSelected);
+        });
+    }
+
+    function loadEmployees() {
+        const csrfToken = getCSRFToken();
+        fetch('/local/components/artmax/calendar/ajax.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-Bitrix-Csrf-Token': csrfToken
+            },
+            body: new URLSearchParams({
+                action: 'getEmployees',
+                sessid: csrfToken
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.employees) {
+                allEmployees = data.employees;
+                renderEmployeeOptions(allEmployees);
+            } else {
+                console.error('Ошибка загрузки сотрудников:', data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Ошибка при загрузке сотрудников:', error);
+        });
+    }
+
+    function searchEmployees(query) {
+        const csrfToken = getCSRFToken();
+        fetch('/local/components/artmax/calendar/ajax.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-Bitrix-Csrf-Token': csrfToken
+            },
+            body: new URLSearchParams({
+                action: 'searchEmployees',
+                query: query,
+                sessid: csrfToken
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.employees) {
+                renderEmployeeOptions(data.employees);
+            } else {
+                console.error('Ошибка поиска сотрудников:', data.error);
+                // В случае ошибки показываем всех сотрудников
+                renderEmployeeOptions(allEmployees);
+            }
+        })
+        .catch(error => {
+            console.error('Ошибка при поиске сотрудников:', error);
+            // В случае ошибки показываем всех сотрудников
+            renderEmployeeOptions(allEmployees);
+        });
+    }
+
+    function renderEmployeeOptions(employees) {
+        const optionsContainer = document.getElementById('multiselect-options');
+        if (!optionsContainer) return;
+
+        optionsContainer.innerHTML = '';
+        
+        employees.forEach(employee => {
+            const option = document.createElement('div');
+            option.className = 'multiselect-option';
+            option.innerHTML = `
+                <input type="checkbox" id="emp-${employee.ID}" value="${employee.ID}" 
+                       ${selectedEmployees.some(emp => emp.ID === employee.ID) ? 'checked' : ''}>
+                <label for="emp-${employee.ID}">${employee.NAME} ${employee.LAST_NAME}</label>
+            `;
+            
+            option.addEventListener('click', (e) => {
+                if (e.target.type !== 'checkbox') {
+                    const checkbox = option.querySelector('input[type="checkbox"]');
+                    checkbox.checked = !checkbox.checked;
+                    toggleEmployee(employee, checkbox.checked);
+                }
+            });
+            
+            const checkbox = option.querySelector('input[type="checkbox"]');
+            checkbox.addEventListener('change', (e) => {
+                toggleEmployee(employee, e.target.checked);
+            });
+            
+            optionsContainer.appendChild(option);
+        });
+    }
+
+    function toggleEmployee(employee, isSelected) {
+        if (isSelected) {
+            if (!selectedEmployees.some(emp => emp.ID === employee.ID)) {
+                selectedEmployees.push(employee);
+            }
+        } else {
+            selectedEmployees = selectedEmployees.filter(emp => emp.ID !== employee.ID);
+        }
+        updateSelectedEmployeesDisplay();
+    }
+
+    function updateSelectedEmployeesDisplay() {
+        console.log('updateSelectedEmployeesDisplay: Обновляем отображение, selectedEmployees:', selectedEmployees);
+        
+        const container = document.getElementById('selected-employees');
+        const input = document.getElementById('multiselect-input');
+        const placeholder = input ? input.querySelector('.placeholder') : null;
+        
+        console.log('updateSelectedEmployeesDisplay: container:', container);
+        console.log('updateSelectedEmployeesDisplay: placeholder:', placeholder);
+        
+        if (!container || !placeholder) {
+            console.log('updateSelectedEmployeesDisplay: Контейнер или placeholder не найден!');
+            return;
+        }
+
+        // Очищаем контейнер
+        container.innerHTML = '';
+        console.log('updateSelectedEmployeesDisplay: Контейнер очищен');
+        
+        if (selectedEmployees.length > 0) {
+            placeholder.textContent = `Выбрано: ${selectedEmployees.length}`;
+            console.log('updateSelectedEmployeesDisplay: Создаем теги для', selectedEmployees.length, 'сотрудников');
+            
+            selectedEmployees.forEach(employee => {
+                const tag = document.createElement('div');
+                tag.className = 'selected-employee';
+                tag.innerHTML = `
+                    ${employee.NAME} ${employee.LAST_NAME}
+                    <button type="button" class="remove-employee" onclick="removeEmployee(${employee.ID})">×</button>
+                `;
+                container.appendChild(tag);
+                console.log('updateSelectedEmployeesDisplay: Добавлен тег для сотрудника', employee.ID, employee.NAME, employee.LAST_NAME);
+            });
+        } else {
+            placeholder.textContent = 'Выберите сотрудников';
+            console.log('updateSelectedEmployeesDisplay: Нет выбранных сотрудников, показываем placeholder');
+        }
+    }
+
+    function removeEmployee(employeeId) {
+        console.log('removeEmployee: Удаляем сотрудника с ID:', employeeId, 'тип:', typeof employeeId);
+        console.log('removeEmployee: До удаления selectedEmployees:', selectedEmployees);
+        
+        // Преобразуем employeeId в строку для корректного сравнения
+        const stringEmployeeId = String(employeeId);
+        console.log('removeEmployee: Преобразованное ID в строку:', stringEmployeeId);
+        
+        // Детальная отладка каждого элемента
+        selectedEmployees.forEach((emp, index) => {
+            console.log(`removeEmployee: Элемент ${index}: ID=${emp.ID} (тип: ${typeof emp.ID}), сравниваем с ${stringEmployeeId}: ${emp.ID !== stringEmployeeId}`);
+        });
+        
+        // Удаляем сотрудника из массива
+        const beforeLength = selectedEmployees.length;
+        selectedEmployees = selectedEmployees.filter(emp => {
+            const shouldKeep = emp.ID !== stringEmployeeId;
+            console.log(`removeEmployee: Сотрудник ${emp.ID} ${shouldKeep ? 'остается' : 'удаляется'}`);
+            return shouldKeep;
+        });
+        
+        console.log('removeEmployee: После удаления selectedEmployees:', selectedEmployees);
+        console.log('removeEmployee: Было элементов:', beforeLength, 'Стало:', selectedEmployees.length);
+        
+        // Обновляем визуальное отображение
+        updateSelectedEmployeesDisplay();
+        
+        // Обновляем чекбокс в выпадающем списке
+        const checkbox = document.getElementById(`emp-${employeeId}`);
+        if (checkbox) {
+            checkbox.checked = false;
+        }
+        
+        // Также обновляем все чекбоксы для синхронизации
+        updateEmployeeCheckboxes();
+    }
+
+    // Обработчики для мультиселектора
+    function initMultiselect() {
+        const input = document.getElementById('multiselect-input');
+        const dropdown = document.getElementById('multiselect-dropdown');
+        const searchInput = document.getElementById('employee-search');
+        
+        if (!input || !dropdown) return;
+
+        // Открытие/закрытие dropdown
+        input.addEventListener('click', () => {
+            const isActive = input.classList.contains('active');
+            if (isActive) {
+                input.classList.remove('active');
+                dropdown.classList.remove('show');
+                setTimeout(() => {
+                    dropdown.style.display = 'none';
+                }, 300);
+            } else {
+                input.classList.add('active');
+                dropdown.style.display = 'block';
+                setTimeout(() => {
+                    dropdown.classList.add('show');
+                }, 10);
+                if (searchInput) {
+                    searchInput.focus();
+                }
+            }
+        });
+
+        // Поиск сотрудников
+        if (searchInput) {
+            let searchTimeout;
+            
+            // Предотвращаем отправку формы поиска в стандартный Bitrix UI Filter
+            searchInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                }
+            });
+            
+            searchInput.addEventListener('input', (e) => {
+                const query = e.target.value.trim();
+                
+                // Очищаем предыдущий таймаут
+                if (searchTimeout) {
+                    clearTimeout(searchTimeout);
+                }
+                
+                // Если запрос пустой, показываем всех сотрудников
+                if (!query) {
+                    renderEmployeeOptions(allEmployees);
+                    return;
+                }
+                
+                // Делаем поиск с задержкой для оптимизации
+                searchTimeout = setTimeout(() => {
+                    searchEmployees(query);
+                }, 300);
+            });
+        }
+
+        // Закрытие при клике вне элемента
+        document.addEventListener('click', (e) => {
+            if (!input.contains(e.target) && !dropdown.contains(e.target)) {
+                input.classList.remove('active');
+                dropdown.classList.remove('show');
+                setTimeout(() => {
+                    dropdown.style.display = 'none';
+                }, 300);
+            }
+        });
+    }
+
+    // Инициализация обработчиков для модального окна настроек филиала
+    function initBranchModal() {
+        // Кнопка открытия модального окна
+        const branchBtn = document.getElementById('branch-settings-btn');
+        if (branchBtn) {
+            branchBtn.addEventListener('click', openBranchModal);
+        }
+
+        // Кнопка закрытия модального окна
+        const closeBtn = document.getElementById('close-branch-modal');
+        if (closeBtn) {
+            closeBtn.addEventListener('click', closeBranchModal);
+        }
+
+        // Кнопка отмены
+        const cancelBtn = document.getElementById('cancel-branch-modal');
+        if (cancelBtn) {
+            cancelBtn.addEventListener('click', closeBranchModal);
+        }
+
+        // Обработка отправки формы
+        const form = document.getElementById('branch-form');
+        if (form) {
+            form.addEventListener('submit', function(e) {
+                e.preventDefault();
+                saveBranchSettings();
+            });
+        }
+
+        // Закрытие модального окна при клике вне его
+        const modal = document.getElementById('branchModal');
+        if (modal) {
+            modal.addEventListener('click', function(e) {
+                if (e.target === modal) {
+                    closeBranchModal();
+                }
+            });
+        }
+    }
+
+    function saveBranchSettings() {
+        const form = document.getElementById('branch-form');
+        const formData = new FormData(form);
+        
+        // Добавляем action для AJAX обработчика
+        formData.append('action', 'saveBranchSettings');
+        
+        // Добавляем выбранных сотрудников
+        const employeeIds = selectedEmployees.map(emp => emp.ID);
+        formData.append('employee_ids', JSON.stringify(employeeIds));
+
+        const csrfToken = getCSRFToken();
+        fetch('/local/components/artmax/calendar/ajax.php', {
+            method: 'POST',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-Bitrix-Csrf-Token': csrfToken
+            },
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showNotification('Настройки филиала сохранены', 'success');
+                closeTimezoneModal();
+            } else {
+                showNotification('Ошибка сохранения: ' + (data.error || 'Неизвестная ошибка'), 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Ошибка при сохранении настроек:', error);
+            showNotification('Ошибка соединения с сервером', 'error');
+        });
+    }
+
     // Делаем функции глобальными
     window.showCreateContactForm = showCreateContactForm;
     window.hideCreateContactForm = hideCreateContactForm;
@@ -3607,6 +4028,9 @@
     window.closeNoteModal = closeNoteModal;
     window.saveNote = saveNote;
     window.editNote = editNote;
+    window.openBranchModal = openBranchModal;
+    window.closeBranchModal = closeBranchModal;
+    window.removeEmployee = removeEmployee;
 
     // Функция обновления иконки сделки в календаре
     function updateEventDealIcon(eventId, dealId) {
