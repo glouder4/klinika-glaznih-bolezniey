@@ -17,9 +17,34 @@
 
     function initCalendar() {
         // Инициализация глобальных переменных для календаря
-        const now = new Date();
-        window.currentYear = now.getFullYear();
-        window.currentMonth = now.getMonth() + 1;
+        // Сначала пытаемся получить дату из URL параметра
+        const urlParams = new URLSearchParams(window.location.search);
+        const dateParam = urlParams.get('date');
+        
+        if (dateParam) {
+            // Если есть параметр date в URL, используем его
+            const urlDate = new Date(dateParam);
+            if (!isNaN(urlDate.getTime())) {
+                window.currentYear = urlDate.getFullYear();
+                window.currentMonth = urlDate.getMonth() + 1;
+                console.log('initCalendar: Используем дату из URL:', dateParam, 'year:', window.currentYear, 'month:', window.currentMonth);
+            } else {
+                // Если дата в URL некорректная, используем текущую дату
+                const now = new Date();
+                window.currentYear = now.getFullYear();
+                window.currentMonth = now.getMonth() + 1;
+                console.log('initCalendar: Некорректная дата в URL, используем текущую дату');
+            }
+        } else {
+            // Если нет параметра date, используем текущую дату
+            const now = new Date();
+            window.currentYear = now.getFullYear();
+            window.currentMonth = now.getMonth() + 1;
+            console.log('initCalendar: Нет параметра date в URL, используем текущую дату');
+        }
+        
+        // Обновляем глобальные переменные из URL (на случай, если они не были установлены правильно)
+        updateGlobalDateFromURL();
         
         // Инициализация календарных ячеек
         initCalendarCells();
@@ -59,6 +84,15 @@
         
         // Инициализация модального окна клиента
         initClientModal();
+        
+        // Обработка формы создания филиала
+        const addBranchForm = document.getElementById('add-branch-form');
+        if (addBranchForm) {
+            addBranchForm.addEventListener('submit', handleAddBranchSubmit);
+        }
+        
+        // НЕ загружаем события при первой загрузке - они уже загружены сервером
+        // refreshCalendarEvents() будет вызываться только при необходимости (изменения, обновления)
     }
 
     function initCalendarCells() {
@@ -1453,6 +1487,78 @@
         return branchElement ? branchElement.getAttribute('data-branch-id') : 0;
     }
 
+    // Функции для работы с модальным окном создания филиала
+    function openAddBranchModal() {
+        const modal = document.getElementById('addBranchModal');
+        if (modal) {
+            // Сбрасываем форму
+            document.getElementById('add-branch-form').reset();
+            
+            modal.style.display = 'block';
+            document.body.style.overflow = 'hidden';
+        }
+    }
+
+    function closeAddBranchModal() {
+        const modal = document.getElementById('addBranchModal');
+        if (modal) {
+            modal.style.display = 'none';
+            document.body.style.overflow = 'auto';
+        }
+    }
+
+    // Обработка формы создания филиала
+    function handleAddBranchSubmit(event) {
+        event.preventDefault();
+        
+        const formData = new FormData(event.target);
+        const branchData = {
+            name: formData.get('name'),
+            address: formData.get('address'),
+            phone: formData.get('phone'),
+            email: formData.get('email')
+        };
+
+        // Валидация
+        if (!branchData.name.trim()) {
+            showFieldError('branch-name', 'Заполните название филиала.');
+            return;
+        }
+
+        // Отправляем запрос на создание филиала
+        const csrfToken = getCSRFToken();
+        fetch('/local/components/artmax/calendar/ajax.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-Bitrix-Csrf-Token': csrfToken
+            },
+            body: new URLSearchParams({
+                action: 'addBranch',
+                name: branchData.name,
+                address: branchData.address,
+                phone: branchData.phone,
+                email: branchData.email,
+                sessid: csrfToken
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showNotification('Филиал успешно создан! Переключатель филиалов обновится автоматически.', 'success');
+                closeAddBranchModal();
+                // Не перезагружаем страницу - Bitrix обновит переключатель автоматически
+            } else {
+                showNotification('Ошибка создания филиала: ' + (data.error || 'Неизвестная ошибка'), 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Ошибка при создании филиала:', error);
+            showNotification('Ошибка соединения с сервером', 'error');
+        });
+    }
+
     // Функции для работы с модальным окном расписания
     function openScheduleModal() {
         const modal = document.getElementById('scheduleModal');
@@ -1490,6 +1596,9 @@
             
             // Инициализируем поля окончания повторения
             toggleEndFields();
+
+            // Загружаем сотрудников текущего филиала для селектора
+            loadBranchEmployeesForSchedule();
 
             modal.style.display = 'block';
             document.body.style.overflow = 'hidden';
@@ -3770,12 +3879,54 @@
                 populateEmployeeSelector('event-employee', data.employees);
                 // Заполняем селектор в форме редактирования события
                 populateEmployeeSelector('edit-event-employee', data.employees);
-                // Заполняем селектор в форме создания расписания
-                populateEmployeeSelector('schedule-employee', data.employees);
             }
         })
         .catch(error => {
             console.error('Ошибка при загрузке сотрудников для селекторов:', error);
+        });
+        
+        // Загружаем сотрудников текущего филиала для формы расписания
+        loadBranchEmployeesForSchedule();
+    }
+
+    // Загрузка сотрудников текущего филиала для формы расписания
+    function loadBranchEmployeesForSchedule() {
+        const branchId = getBranchId() || 1;
+        const csrfToken = getCSRFToken();
+        
+        fetch('/local/components/artmax/calendar/ajax.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-Bitrix-Csrf-Token': csrfToken
+            },
+            body: new URLSearchParams({
+                action: 'getBranchEmployees',
+                branchId: branchId,
+                sessid: csrfToken
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.employees) {
+                console.log('Загружены сотрудники филиала для расписания:', data.employees);
+                // Заполняем селектор в форме создания расписания только сотрудниками текущего филиала
+                populateEmployeeSelector('schedule-employee', data.employees);
+            } else {
+                console.error('Ошибка загрузки сотрудников филиала:', data.error);
+                // В случае ошибки используем всех сотрудников как fallback
+                if (window.allEmployees) {
+                    populateEmployeeSelector('schedule-employee', window.allEmployees);
+                }
+            }
+        })
+        .catch(error => {
+            console.error('Ошибка при загрузке сотрудников филиала для расписания:', error);
+            // В случае ошибки используем всех сотрудников как fallback
+            if (window.allEmployees) {
+                populateEmployeeSelector('schedule-employee', window.allEmployees);
+            }
         });
     }
 
@@ -4646,6 +4797,8 @@
     window.openEditEventModal = openEditEventModal;
     window.openScheduleModal = openScheduleModal;
     window.closeScheduleModal = closeScheduleModal;
+    window.openAddBranchModal = openAddBranchModal;
+    window.closeAddBranchModal = closeAddBranchModal;
     window.toggleWeeklyDays = toggleWeeklyDays;
     window.toggleEndFields = toggleEndFields;
     window.selectPresetColor = selectPresetColor;
@@ -5329,20 +5482,34 @@
     function refreshCalendarEvents() {
         const branchId = getBranchId() || 1;
         
+        // Сначала пытаемся обновить глобальные переменные из URL
+        updateGlobalDateFromURL();
+        
         // Получаем текущий месяц и год из глобальных переменных
         const year = window.currentYear || new Date().getFullYear();
         const month = window.currentMonth || (new Date().getMonth() + 1);
         
-        console.log('refreshCalendarEvents: year =', year, 'month =', month);
+        console.log('refreshCalendarEvents: Используем глобальные переменные - year =', year, 'month =', month);
+        console.log('refreshCalendarEvents: window.currentYear =', window.currentYear, 'window.currentMonth =', window.currentMonth);
         
-        // Формируем диапазон дат для текущего месяца
+        // Формируем диапазон дат для календарной сетки (включая дни предыдущего и следующего месяца)
         // ВНИМАНИЕ: month в JavaScript это 1-12, но new Date() ожидает 0-11!
-        const dateFrom = `${year}-${String(month).padStart(2, '0')}-01`;
-        const lastDay = new Date(year, month, 0).getDate(); // month (1-12) - получаем последний день текущего месяца
-        const dateTo = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+        const firstDay = new Date(year, month - 1, 1); // month-1 потому что new Date() ожидает 0-11
+        const firstDayOfWeek = firstDay.getDay() === 0 ? 7 : firstDay.getDay(); // Преобразуем воскресенье (0) в 7
         
-        console.log('DYNAMIC LOAD: dateFrom =', dateFrom, 'dateTo =', dateTo, 'lastDay =', lastDay);
-        console.log('DYNAMIC LOAD: new Date test =', new Date(year, month, 0));
+        // Начинаем с понедельника предыдущей недели
+        const startDate = new Date(firstDay);
+        startDate.setDate(startDate.getDate() - (firstDayOfWeek - 1));
+        
+        // Заканчиваем через 6 недель (42 дня)
+        const endDate = new Date(startDate);
+        endDate.setDate(endDate.getDate() + 41);
+        
+        const dateFrom = startDate.toISOString().split('T')[0];
+        const dateTo = endDate.toISOString().split('T')[0];
+        
+        console.log('refreshCalendarEvents: Сформированный диапазон дат - dateFrom =', dateFrom, 'dateTo =', dateTo);
+        console.log('refreshCalendarEvents: startDate =', startDate.toISOString(), 'endDate =', endDate.toISOString());
         
         const csrfToken = getCSRFToken();
         fetch('/local/components/artmax/calendar/ajax.php', {
@@ -5911,6 +6078,23 @@
         return eventElement;
     }
 
+    // Функция для обновления глобальных переменных из URL
+    function updateGlobalDateFromURL() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const dateParam = urlParams.get('date');
+        
+        if (dateParam) {
+            const urlDate = new Date(dateParam);
+            if (!isNaN(urlDate.getTime())) {
+                window.currentYear = urlDate.getFullYear();
+                window.currentMonth = urlDate.getMonth() + 1;
+                console.log('updateGlobalDateFromURL: Обновлены глобальные переменные из URL:', dateParam, 'year:', window.currentYear, 'month:', window.currentMonth);
+                return true;
+            }
+        }
+        return false;
+    }
+
     // Функции навигации по календарю
     window.previousMonth = function() {
         const currentMonthElement = document.querySelector('.current-month');
@@ -5918,9 +6102,9 @@
             const currentText = currentMonthElement.textContent;
             const currentDate = new Date();
             
-            // Парсим текущий месяц и год
-            const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
-                               'July', 'August', 'September', 'October', 'November', 'December'];
+            // Парсим текущий месяц и год (русские названия)
+            const monthNames = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
+                               'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
             
             let currentMonth = currentDate.getMonth();
             let currentYear = currentDate.getFullYear();
@@ -5958,9 +6142,9 @@
             const currentText = currentMonthElement.textContent;
             const currentDate = new Date();
             
-            // Парсим текущий месяц и год
-            const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
-                               'July', 'August', 'September', 'October', 'November', 'December'];
+            // Парсим текущий месяц и год (русские названия)
+            const monthNames = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
+                               'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
             
             let currentMonth = currentDate.getMonth();
             let currentYear = currentDate.getFullYear();
@@ -5985,6 +6169,8 @@
             window.currentYear = currentYear;
             window.currentMonth = currentMonth + 1;
             
+            console.log('previousMonth: Обновлены глобальные переменные - year:', window.currentYear, 'month:', window.currentMonth);
+            
             // Обновляем URL и перезагружаем страницу
             const newDate = new Date(currentYear, currentMonth, 1);
             // Форматируем дату в локальном формате, избегая проблем с часовыми поясами
@@ -6002,9 +6188,9 @@
             const currentText = currentMonthElement.textContent;
             const currentDate = new Date();
             
-            // Парсим текущий месяц и год
-            const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
-                               'July', 'August', 'September', 'October', 'November', 'December'];
+            // Парсим текущий месяц и год (русские названия)
+            const monthNames = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
+                               'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
             
             let currentMonth = currentDate.getMonth();
             let currentYear = currentDate.getFullYear();
@@ -6029,6 +6215,8 @@
             window.currentYear = currentYear;
             window.currentMonth = currentMonth + 1;
             
+            console.log('nextMonth: Обновлены глобальные переменные - year:', window.currentYear, 'month:', window.currentMonth);
+            
             // Обновляем URL и перезагружаем страницу
             const newDate = new Date(currentYear, currentMonth, 1);
             // Форматируем дату в локальном формате, избегая проблем с часовыми поясами
@@ -6042,6 +6230,12 @@
 
     function goToToday() {
         const today = new Date();
+        // Обновляем глобальные переменные
+        window.currentYear = today.getFullYear();
+        window.currentMonth = today.getMonth() + 1;
+        
+        console.log('goToToday: Обновлены глобальные переменные - year:', window.currentYear, 'month:', window.currentMonth);
+        
         // Форматируем дату в локальном формате, избегая проблем с часовыми поясами
         const year = today.getFullYear();
         const month = String(today.getMonth() + 1).padStart(2, '0');
@@ -6252,8 +6446,8 @@
         const timeSelect = document.getElementById('move-event-time');
         timeSelect.innerHTML = '<option value="">Выберите время</option>';
         
-        // Загружаем врачей и устанавливаем текущего
-        loadEmployeesForMove(event.EMPLOYEE_ID);
+        // Загружаем филиалы и устанавливаем текущий
+        loadBranchesForMove(event.BRANCH_ID, event.EMPLOYEE_ID);
         
         // Показываем модальное окно
         modal.style.display = 'flex';
@@ -6261,9 +6455,6 @@
             modal.classList.add('show');
         }, 10);
         document.body.style.overflow = 'hidden';
-        
-        // Загружаем расписание врача для текущей даты
-        loadDoctorScheduleForMove(event.EMPLOYEE_ID, standardDate);
     }
 
     // Функция закрытия модального окна переноса
@@ -6278,7 +6469,92 @@
         }
     }
 
-    // Функция загрузки врачей для переноса
+    // Функция загрузки филиалов для переноса
+    function loadBranchesForMove(currentBranchId, currentEmployeeId = null) {
+        const csrfToken = getCSRFToken();
+        fetch('/local/components/artmax/calendar/ajax.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-Bitrix-Csrf-Token': csrfToken
+            },
+            body: new URLSearchParams({
+                action: 'getBranches',
+                sessid: csrfToken
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                populateBranchSelectForMove(data.branches, currentBranchId, currentEmployeeId);
+            } else {
+                console.error('Ошибка загрузки филиалов:', data.error);
+                showNotification('Ошибка загрузки филиалов', 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Ошибка при загрузке филиалов:', error);
+            showNotification('Ошибка соединения с сервером', 'error');
+        });
+    }
+
+    // Функция заполнения селектора филиалов для переноса
+    function populateBranchSelectForMove(branches, currentBranchId, currentEmployeeId = null) {
+        const branchSelect = document.getElementById('move-event-branch');
+        branchSelect.innerHTML = '<option value="">Выберите филиал</option>';
+        
+        branches.forEach(branch => {
+            const option = document.createElement('option');
+            option.value = branch.ID;
+            option.textContent = branch.NAME;
+            
+            // Устанавливаем текущий филиал как выбранный
+            if (branch.ID == currentBranchId) {
+                option.selected = true;
+            }
+            
+            branchSelect.appendChild(option);
+        });
+        
+        // После загрузки филиалов загружаем врачей для выбранного филиала
+        if (currentBranchId) {
+            loadEmployeesForMoveByBranch(currentBranchId, currentEmployeeId);
+        }
+    }
+
+    // Функция загрузки врачей для переноса по филиалу
+    function loadEmployeesForMoveByBranch(branchId, currentEmployeeId) {
+        const csrfToken = getCSRFToken();
+        fetch('/local/components/artmax/calendar/ajax.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-Bitrix-Csrf-Token': csrfToken
+            },
+            body: new URLSearchParams({
+                action: 'getBranchEmployees',
+                branchId: branchId,
+                sessid: csrfToken
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                populateEmployeeSelectForMove(data.employees, currentEmployeeId);
+            } else {
+                console.error('Ошибка загрузки врачей филиала:', data.error);
+                showNotification('Ошибка загрузки врачей филиала', 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Ошибка при загрузке врачей филиала:', error);
+            showNotification('Ошибка соединения с сервером', 'error');
+        });
+    }
+
+    // Функция загрузки врачей для переноса (старая версия для совместимости)
     function loadEmployeesForMove(currentEmployeeId) {
         const csrfToken = getCSRFToken();
         fetch('/local/components/artmax/calendar/ajax.php', {
@@ -6325,6 +6601,34 @@
             
             employeeSelect.appendChild(option);
         });
+        
+        // Если есть выбранный врач и дата, загружаем его расписание
+        if (currentEmployeeId) {
+            const dateInput = document.getElementById('move-event-date');
+            const selectedDate = dateInput.value;
+            if (selectedDate) {
+                loadDoctorScheduleForMove(currentEmployeeId, selectedDate);
+            }
+        }
+    }
+
+    // Функция обработки изменения филиала в форме переноса
+    function onMoveBranchChange() {
+        const branchSelect = document.getElementById('move-event-branch');
+        const selectedBranchId = branchSelect.value;
+        
+        // Очищаем селектор врачей
+        const employeeSelect = document.getElementById('move-event-employee');
+        employeeSelect.innerHTML = '<option value="">Выберите врача</option>';
+        
+        // Очищаем селектор времени
+        const timeSelect = document.getElementById('move-event-time');
+        timeSelect.innerHTML = '<option value="">Выберите время</option>';
+        
+        // Загружаем врачей для выбранного филиала
+        if (selectedBranchId) {
+            loadEmployeesForMoveByBranch(selectedBranchId, null);
+        }
     }
 
     // Функция загрузки расписания врача для переноса
@@ -6456,11 +6760,12 @@
         const form = event.target;
         const formData = new FormData(form);
         const eventId = formData.get('eventId');
+        const branchId = formData.get('branch_id');
         const employeeId = formData.get('employee_id');
         const date = formData.get('date');
         const time = formData.get('time');
         
-        if (!eventId || !employeeId || !date || !time) {
+        if (!eventId || !branchId || !employeeId || !date || !time) {
             showNotification('Заполните все поля', 'error');
             return;
         }
@@ -6508,6 +6813,7 @@
                     body: new URLSearchParams({
                         action: 'moveEvent',
                         eventId: eventId,
+                        branchId: branchId,
                         employeeId: employeeId,
                         dateFrom: newDateTime,
                         dateTo: newEndDateTime,
@@ -6561,6 +6867,7 @@
     window.openMoveEventModal = openMoveEventModal;
     window.closeMoveEventModal = closeMoveEventModal;
     window.onMoveDateChange = onMoveDateChange;
+    window.onMoveBranchChange = onMoveBranchChange;
     window.onMoveEmployeeChange = onMoveEmployeeChange;
     window.handleMoveEventSubmit = handleMoveEventSubmit;
 

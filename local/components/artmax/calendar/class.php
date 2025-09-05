@@ -44,21 +44,38 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
             // Получаем события для филиала с ограничениями по дате
             $calendarObj = new \Artmax\Calendar\Calendar();
             
-            // Получаем текущий месяц и год
-            $currentYear = date('Y');
-            $currentMonth = date('n');
+            // Получаем текущий месяц и год из URL параметра или текущую дату
+            $currentDate = isset($_GET['date']) ? new DateTime($_GET['date']) : new DateTime();
+            $currentYear = $currentDate->format('Y');
+            $currentMonth = $currentDate->format('n');
             
-            // Формируем диапазон дат для текущего месяца
-            $dateFrom = sprintf('%04d-%02d-01', $currentYear, $currentMonth);
-            $lastDay = date('t', mktime(0, 0, 0, $currentMonth, 1, $currentYear));
-            $dateTo = sprintf('%04d-%02d-%02d', $currentYear, $currentMonth, $lastDay);
+            // Отладочная информация о выбранной дате
+            error_log("PHP COMPONENT: URL date param = " . ($_GET['date'] ?? 'not set'));
+            error_log("PHP COMPONENT: Using date = " . $currentDate->format('Y-m-d'));
+            error_log("PHP COMPONENT: currentYear = $currentYear, currentMonth = $currentMonth");
+            
+            // Формируем диапазон дат для календарной сетки (включая дни предыдущего и следующего месяца)
+            $firstDay = new DateTime("$currentYear-$currentMonth-01");
+            $firstDayOfWeek = $firstDay->format('N'); // 1 = понедельник, 7 = воскресенье
+            
+            // Начинаем с понедельника предыдущей недели
+            $startDate = clone $firstDay;
+            $startDate->modify('-' . ($firstDayOfWeek - 1) . ' days');
+            
+            // Заканчиваем через 6 недель (42 дня)
+            $endDate = clone $startDate;
+            $endDate->modify('+41 days');
+            
+            $dateFrom = $startDate->format('Y-m-d');
+            $dateTo = $endDate->format('Y-m-d');
             
             $events = $calendarObj->getEventsByBranch($branchId, $dateFrom, $dateTo, null, null); // Убираем ограничение для статической загрузки
             
             // Отладочная информация
             error_log("=== STATIC LOAD START ===");
             error_log("STATIC LOAD: dateFrom=$dateFrom, dateTo=$dateTo, events count=" . count($events));
-            error_log("STATIC LOAD: currentYear=$currentYear, currentMonth=$currentMonth, lastDay=$lastDay");
+            error_log("STATIC LOAD: currentYear=$currentYear, currentMonth=$currentMonth");
+            error_log("STATIC LOAD: startDate=" . $startDate->format('Y-m-d') . ", endDate=" . $endDate->format('Y-m-d'));
 
             // Группируем события по датам для отображения в календаре
             $eventsByDate = [];
@@ -197,6 +214,26 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                 $result = $this->searchClientsAction(
                     $_POST['query'] ?? '',
                     $_POST['type'] ?? 'contact'
+                );
+                break;
+                
+            case 'getBranches':
+                $result = $this->getBranchesAction();
+                break;
+                
+            case 'getBranchEmployees':
+                $result = $this->getBranchEmployeesAction(
+                    (int)($_POST['branchId'] ?? 1)
+                );
+                break;
+                
+            case 'moveEvent':
+                $result = $this->moveEventAction(
+                    (int)($_POST['eventId'] ?? 0),
+                    (int)($_POST['branchId'] ?? 1),
+                    (int)($_POST['employeeId'] ?? 0),
+                    $_POST['dateFrom'] ?? '',
+                    $_POST['dateTo'] ?? ''
                 );
                 break;
                 
@@ -1462,6 +1499,76 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
     }
 
     /**
+     * Получение всех филиалов
+     */
+    public function getBranchesAction()
+    {
+        if (!$GLOBALS['USER'] || !$GLOBALS['USER']->IsAuthorized()) {
+            return ['success' => false, 'error' => 'Необходима авторизация'];
+        }
+
+        try {
+            if (!CModule::IncludeModule('artmax.calendar')) {
+                return ['success' => false, 'error' => 'Модуль календаря не установлен'];
+            }
+
+            $branchObj = new \Artmax\Calendar\Branch();
+            $branches = $branchObj->getBranches();
+
+            return [
+                'success' => true,
+                'branches' => $branches
+            ];
+        } catch (\Exception $e) {
+            return ['success' => false, 'error' => 'Ошибка получения филиалов: ' . $e->getMessage()];
+        }
+    }
+
+    /**
+     * Создание нового филиала
+     */
+    public function addBranchAction($name, $address = '', $phone = '', $email = '')
+    {
+        if (!$GLOBALS['USER'] || !$GLOBALS['USER']->IsAuthorized()) {
+            return ['success' => false, 'error' => 'Необходима авторизация'];
+        }
+
+        try {
+            if (!CModule::IncludeModule('artmax.calendar')) {
+                return ['success' => false, 'error' => 'Модуль календаря не установлен'];
+            }
+
+            // Валидация
+            if (empty($name)) {
+                return ['success' => false, 'error' => 'Название филиала обязательно'];
+            }
+
+            $branchObj = new \Artmax\Calendar\Branch();
+            $branchId = $branchObj->addBranch($name, $address, $phone, $email);
+
+            if ($branchId) {
+                // Обновляем страницы раздела для отображения нового филиала
+                try {
+                    \Artmax\Calendar\EventHandlers::updateSectionPages();
+                } catch (\Exception $e) {
+                    // Логируем ошибку, но не прерываем создание филиала
+                    error_log('Ошибка обновления страниц раздела: ' . $e->getMessage());
+                }
+
+                return [
+                    'success' => true,
+                    'branchId' => $branchId,
+                    'message' => 'Филиал успешно создан'
+                ];
+            } else {
+                return ['success' => false, 'error' => 'Ошибка создания филиала'];
+            }
+        } catch (\Exception $e) {
+            return ['success' => false, 'error' => 'Ошибка создания филиала: ' . $e->getMessage()];
+        }
+    }
+
+    /**
      * Получение сотрудников филиала
      */
     public function getBranchEmployeesAction($branchId)
@@ -1484,6 +1591,51 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
             ];
         } catch (\Exception $e) {
             return ['success' => false, 'error' => 'Ошибка получения сотрудников филиала: ' . $e->getMessage()];
+        }
+    }
+
+    /**
+     * Перенос события
+     */
+    public function moveEventAction($eventId, $branchId, $employeeId, $dateFrom, $dateTo)
+    {
+        if (!$GLOBALS['USER'] || !$GLOBALS['USER']->IsAuthorized()) {
+            return ['success' => false, 'error' => 'Необходима авторизация'];
+        }
+
+        try {
+            if (!CModule::IncludeModule('artmax.calendar')) {
+                return ['success' => false, 'error' => 'Модуль календаря не установлен'];
+            }
+
+            $calendar = new \Artmax\Calendar\Calendar();
+            
+            // Получаем текущее событие
+            $event = $calendar->getEvent($eventId);
+            if (!$event) {
+                return ['success' => false, 'error' => 'Событие не найдено'];
+            }
+
+            // Проверяем права на перенос (только автор события)
+            if ($event['USER_ID'] != $GLOBALS['USER']->GetID()) {
+                return ['success' => false, 'error' => 'Нет прав на перенос события'];
+            }
+
+            // Проверяем доступность времени для нового врача
+            if (!$calendar->isTimeAvailableForDoctor($dateFrom, $dateTo, $employeeId)) {
+                return ['success' => false, 'error' => 'Время уже занято для выбранного врача'];
+            }
+
+            // Обновляем событие
+            $result = $calendar->updateEvent($eventId, $event['TITLE'], $event['DESCRIPTION'], $dateFrom, $dateTo, $event['EVENT_COLOR'], $branchId, $employeeId);
+
+            if ($result) {
+                return ['success' => true];
+            } else {
+                return ['success' => false, 'error' => 'Ошибка переноса события'];
+            }
+        } catch (\Exception $e) {
+            return ['success' => false, 'error' => 'Ошибка переноса события: ' . $e->getMessage()];
         }
     }
 

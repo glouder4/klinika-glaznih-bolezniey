@@ -112,6 +112,13 @@ class artmax_calendar extends CModule
         $connection->query($sqlEvents);
         $connection->query($sqlBranches);
         $connection->query($sqlBranchesSettings);
+        
+        // Создаем первый филиал по умолчанию
+        $sqlDefaultBranch = "
+        INSERT INTO artmax_calendar_branches (NAME, ADDRESS, PHONE, EMAIL, TIMEZONE_NAME) 
+        VALUES ('Филиал - 1', '', '', '', 'Europe/Moscow')
+        ";
+        $connection->query($sqlDefaultBranch);
     }
 
     public function UnInstallDB()

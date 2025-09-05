@@ -877,13 +877,19 @@ switch ($action) {
         break;
 
     case 'getBranchEmployees':
-        $branchId = $_POST['branch_id'] ?? 0;
+        $branchId = $_POST['branchId'] ?? $_POST['branch_id'] ?? 0;
+        
+        // Отладочная информация
+        error_log("AJAX getBranchEmployees: branchId = " . $branchId);
+        error_log("AJAX getBranchEmployees: POST data = " . json_encode($_POST));
         
         try {
             $component = new ArtmaxCalendarComponent();
             $result = $component->getBranchEmployeesAction($branchId);
+            error_log("AJAX getBranchEmployees: result = " . json_encode($result));
             die(json_encode($result));
         } catch (Exception $e) {
+            error_log("AJAX getBranchEmployees: error = " . $e->getMessage());
             die(json_encode(['success' => false, 'error' => 'Ошибка получения сотрудников: ' . $e->getMessage()]));
         }
         break;
@@ -1051,6 +1057,31 @@ switch ($action) {
             } else {
                 die(json_encode(['success' => false, 'error' => 'Ошибка обновления статуса визита']));
             }
+        } catch (Exception $e) {
+            die(json_encode(['success' => false, 'error' => $e->getMessage()]));
+        }
+        break;
+
+    case 'getBranches':
+        try {
+            $component = new ArtmaxCalendarComponent();
+            $result = $component->getBranchesAction();
+            die(json_encode($result));
+        } catch (Exception $e) {
+            die(json_encode(['success' => false, 'error' => $e->getMessage()]));
+        }
+        break;
+
+    case 'addBranch':
+        $name = $_POST['name'] ?? '';
+        $address = $_POST['address'] ?? '';
+        $phone = $_POST['phone'] ?? '';
+        $email = $_POST['email'] ?? '';
+        
+        try {
+            $component = new ArtmaxCalendarComponent();
+            $result = $component->addBranchAction($name, $address, $phone, $email);
+            die(json_encode($result));
         } catch (Exception $e) {
             die(json_encode(['success' => false, 'error' => $e->getMessage()]));
         }

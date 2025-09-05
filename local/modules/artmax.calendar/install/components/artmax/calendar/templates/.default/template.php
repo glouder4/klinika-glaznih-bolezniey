@@ -4,6 +4,10 @@ use Bitrix\Main\Localization\Loc;
 
 Loc::loadMessages(__FILE__);
 
+// Отладочная информация
+echo '<!-- STATIC LOAD DEBUG: Total events = ' . count($arResult['EVENTS']) . ' -->';
+echo '<!-- STATIC LOAD DEBUG: Events by date keys = ' . implode(', ', array_keys($arResult['EVENTS_BY_DATE'])) . ' -->';
+
 /**
  * Конвертирует дату из российского формата (день.месяц.год) в стандартный (год-месяц-день)
  * @param string $dateString Дата в формате "04.08.2025 09:00:00"
@@ -41,6 +45,56 @@ function convertRussianDateToStandard($dateString)
 
     // Если ничего не получилось, возвращаем исходную строку
     return $dateString;
+}
+
+/**
+ * Переводит название месяца на русский язык
+ * @param string $monthName Название месяца на английском
+ * @return string Название месяца на русском
+ */
+function translateMonthToRussian($monthName)
+{
+    $months = [
+        'January' => 'Январь',
+        'February' => 'Февраль',
+        'March' => 'Март',
+        'April' => 'Апрель',
+        'May' => 'Май',
+        'June' => 'Июнь',
+        'July' => 'Июль',
+        'August' => 'Август',
+        'September' => 'Сентябрь',
+        'October' => 'Октябрь',
+        'November' => 'Ноябрь',
+        'December' => 'Декабрь'
+    ];
+    
+    return $months[$monthName] ?? $monthName;
+}
+
+/**
+ * Переводит сокращенное название месяца на русский язык
+ * @param string $monthName Сокращенное название месяца на английском
+ * @return string Сокращенное название месяца на русском
+ */
+function translateShortMonthToRussian($monthName)
+{
+    $months = [
+        'Jan' => 'Янв',
+        'Feb' => 'Фев',
+        'Mar' => 'Мар',
+        'Apr' => 'Апр',
+        'May' => 'Май',
+        'Jun' => 'Июн',
+        'Jul' => 'Июл',
+        'Aug' => 'Авг',
+        'Sep' => 'Сен',
+        'Oct' => 'Окт',
+        'Nov' => 'Ноя',
+        'Dec' => 'Дек'
+    ];
+    
+    return $months[$monthName] ?? $monthName;
 }
 
 /**
@@ -107,6 +161,9 @@ $totalDays = 42; // 6 недель * 7 дней
         </div>
         
         <div class="header-right">
+            <button class="btn btn-primary btn-add-branch" onclick="openAddBranchModal()" title="Добавить филиал">
+                ➕ Добавить филиал
+            </button>
             <button class="btn btn-secondary btn-branch" id="branch-settings-btn" title="Настройки филиала">
                 ⚙️ Настройки филиала
             </button>
@@ -117,7 +174,7 @@ $totalDays = 42; // 6 недель * 7 дней
     <div class="calendar-main">
         <div class="calendar-toolbar">
             <div class="month-selector">
-                <span class="current-month"><?= $currentDate->format('F, Y') ?></span>
+                <span class="current-month"><?= translateMonthToRussian($currentDate->format('F')) . ', ' . $currentDate->format('Y') ?></span>
             </div>
             <div class="calendar-controls">
                 <span class="view-type">Месяц</span>
@@ -158,15 +215,18 @@ $totalDays = 42; // 6 недель * 7 дней
                         if ($isToday) $dayClass .= ' today';
 
                         echo '<div class="' . $dayClass . '" data-date="' . $dateKey . '">';
-                        echo '<div class="day-number">' . $currentDateIterator->format('j') . '</div>';
-
-                        // Если это не текущий месяц, добавляем месяц
+                        
+                        // Если это не текущий месяц, добавляем месяц в одну строку с номером дня
                         if (!$isCurrentMonth && $currentDateIterator->format('j') <= 7) {
-                            echo '<div class="month-label">' . $currentDateIterator->format('M') . '</div>';
+                            echo '<div class="day-number">' . $currentDateIterator->format('j') . ' ' . translateShortMonthToRussian($currentDateIterator->format('M')) . '</div>';
+                        } else {
+                            echo '<div class="day-number">' . $currentDateIterator->format('j') . '</div>';
                         }
 
                         // Отображаем события для этого дня
                         if (isset($arResult['EVENTS_BY_DATE'][$dateKey])) {
+                            // Отладочная информация
+                            echo '<!-- STATIC LOAD: ' . count($arResult['EVENTS_BY_DATE'][$dateKey]) . ' events for ' . $dateKey . ' -->';
                             foreach ($arResult['EVENTS_BY_DATE'][$dateKey] as $event) {
                                 $eventColor = $event['EVENT_COLOR'] ?? '#3498db';
                                 $style = 'border-left: 4px solid ' . $eventColor . '; background-color: ' . $eventColor . '65;';
@@ -180,7 +240,13 @@ $totalDays = 42; // 6 недель * 7 дней
                                 // Получаем время окончания
                                 $eventEndTime = extractTimeFromDate($event['DATE_TO']);
                                 
-                                echo '<div class="calendar-event" data-event-id="' . $event['ID'] . '" style="' . $style . '" onclick="event.stopPropagation();">';
+                                // Добавляем класс статуса
+                                $statusClass = isset($event['STATUS']) ? 'status-' . $event['STATUS'] : 'status-active';
+                                
+                                // Добавляем класс для перенесенных записей
+                                $timeChangedClass = (isset($event['TIME_IS_CHANGED']) && $event['TIME_IS_CHANGED'] == 1) ? ' time-changed' : '';
+                                
+                                echo '<div class="calendar-event ' . $statusClass . $timeChangedClass . '" data-event-id="' . $event['ID'] . '" style="' . $style . '" onclick="event.stopPropagation();">';
                                 echo '<div class="event-content">';
                                 echo '<div class="event-title">' . htmlspecialchars($event['TITLE']) . '</div>';
                                 echo '<div class="event-time">';
@@ -229,6 +295,70 @@ $totalDays = 42; // 6 недель * 7 дней
                 }
                 ?>
             </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно для переноса записи -->
+    <div class="event-form-modal" id="moveEventModal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Перенести запись</h3>
+                <button class="close-btn" onclick="closeMoveEventModal()">×</button>
+            </div>
+            <form id="move-event-form" novalidate onsubmit="handleMoveEventSubmit(event)">
+                <?= bitrix_sessid_post() ?>
+                <input type="hidden" id="move-event-id" name="eventId">
+                
+                <div class="form-group" id="move-branch-group">
+                    <label for="move-event-branch">Филиал *</label>
+                    <select id="move-event-branch" name="branch_id" required onchange="onMoveBranchChange()">
+                        <option value="">Выберите филиал</option>
+                        <!-- Опции будут загружены через JavaScript -->
+                    </select>
+                    <div class="error-message" style="display: none;">
+                        <span class="error-icon">⚠️</span>
+                        <span>Выберите филиал.</span>
+                    </div>
+                </div>
+                
+                <div class="form-group" id="move-employee-group">
+                    <label for="move-event-employee">Врач *</label>
+                    <select id="move-event-employee" name="employee_id" required onchange="onMoveEmployeeChange()">
+                        <option value="">Выберите врача</option>
+                        <!-- Опции будут загружены через JavaScript -->
+                    </select>
+                    <div class="error-message" style="display: none;">
+                        <span class="error-icon">⚠️</span>
+                        <span>Выберите врача.</span>
+                    </div>
+                </div>
+                
+                <div class="form-group" id="move-date-group">
+                    <label for="move-event-date">Дата *</label>
+                    <input type="date" id="move-event-date" name="date" required onchange="onMoveDateChange()">
+                    <div class="error-message" style="display: none;">
+                        <span class="error-icon">⚠️</span>
+                        <span>Выберите дату.</span>
+                    </div>
+                </div>
+                
+                <div class="form-group" id="move-time-group">
+                    <label for="move-event-time">Время *</label>
+                    <select id="move-event-time" name="time" required>
+                        <option value="">Выберите время</option>
+                        <!-- Опции будут загружены через JavaScript -->
+                    </select>
+                    <div class="error-message" style="display: none;">
+                        <span class="error-icon">⚠️</span>
+                        <span>Выберите время.</span>
+                    </div>
+                </div>
+                
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeMoveEventModal()">Отмена</button>
+                    <button type="submit" class="btn btn-primary">Перенести</button>
+                </div>
+            </form>
         </div>
     </div>
 
@@ -786,8 +916,10 @@ $totalDays = 42; // 6 недель * 7 дней
 
                 <!-- Кнопки действий -->
                 <div class="side-panel-actions">
-                    <button class="edit-event-btn" onclick="openEditEventModalFromSidePanel()">Редактировать</button>
-                    <button class="delete-event-btn" onclick="deleteEventFromSidePanel()">🗑️ Удалить</button>
+                    <button class="edit-event-btn" onclick="openEditEventModalFromSidePanel()">✏️ Редактировать</button>
+                    <button class="move-event-btn" onclick="moveEventFromSidePanel()">📅 Перенести запись</button>
+                    <button id="cancel-event-btn" class="cancel-event-btn" onclick="toggleEventStatusFromSidePanel()">❌ Отменить запись</button>
+                    <button class="delete-event-btn" style="display: none;" onclick="deleteEventFromSidePanel()">🗑️ Удалить</button>
                 </div>
             </div>
         </div>
@@ -987,6 +1119,48 @@ $totalDays = 42; // 6 недель * 7 дней
                 <button type="button" class="btn btn-secondary" onclick="closeEmployeeModal()">ОТМЕНА</button>
                 <button type="button" class="btn btn-primary" onclick="saveEmployee()">СОХРАНИТЬ</button>
             </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно для создания нового филиала -->
+    <div id="addBranchModal" class="event-form-modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Создать новый филиал</h3>
+                <button class="close-btn" onclick="closeAddBranchModal()">×</button>
+            </div>
+            <form id="add-branch-form" novalidate>
+                <?= bitrix_sessid_post() ?>
+                
+                <div class="form-group" id="branch-name-group">
+                    <label for="branch-name">Название филиала *</label>
+                    <input type="text" id="branch-name" name="name" required placeholder="Введите название филиала">
+                    <div class="error-message" style="display: none;">
+                        <span class="error-icon">⚠️</span>
+                        <span>Заполните название филиала.</span>
+                    </div>
+                </div>
+                
+                <div class="form-group" id="branch-address-group">
+                    <label for="branch-address">Адрес</label>
+                    <input type="text" id="branch-address" name="address" placeholder="Введите адрес филиала">
+                </div>
+                
+                <div class="form-group" id="branch-phone-group">
+                    <label for="branch-phone">Телефон</label>
+                    <input type="tel" id="branch-phone" name="phone" placeholder="Введите телефон филиала">
+                </div>
+                
+                <div class="form-group" id="branch-email-group">
+                    <label for="branch-email">Email</label>
+                    <input type="email" id="branch-email" name="email" placeholder="Введите email филиала">
+                </div>
+                
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeAddBranchModal()">ОТМЕНА</button>
+                    <button type="submit" class="btn btn-primary">СОЗДАТЬ ФИЛИАЛ</button>
+                </div>
+            </form>
         </div>
     </div>
 </div>
@@ -1241,6 +1415,7 @@ $totalDays = 42; // 6 недель * 7 дней
                     title: formData.get('title'),
                     date: formData.get('date'),
                     time: formData.get('time'),
+                    employee_id: formData.get('employee_id'),
                     repeat: formData.get('repeat') === 'on',
                     frequency: formData.get('frequency')
                 };
@@ -1249,7 +1424,7 @@ $totalDays = 42; // 6 недель * 7 дней
                 
                 // Здесь можно добавить AJAX запрос для сохранения расписания
                 // Пока просто показываем уведомление
-                alert('Расписание успешно создано!');
+                showNotification('Расписание успешно создано!', 'success');
                 closeScheduleModal();
             });
         }

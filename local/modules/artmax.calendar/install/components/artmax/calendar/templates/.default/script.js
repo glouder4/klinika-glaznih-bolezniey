@@ -16,6 +16,36 @@
     });
 
     function initCalendar() {
+        // Инициализация глобальных переменных для календаря
+        // Сначала пытаемся получить дату из URL параметра
+        const urlParams = new URLSearchParams(window.location.search);
+        const dateParam = urlParams.get('date');
+        
+        if (dateParam) {
+            // Если есть параметр date в URL, используем его
+            const urlDate = new Date(dateParam);
+            if (!isNaN(urlDate.getTime())) {
+                window.currentYear = urlDate.getFullYear();
+                window.currentMonth = urlDate.getMonth() + 1;
+                console.log('initCalendar: Используем дату из URL:', dateParam, 'year:', window.currentYear, 'month:', window.currentMonth);
+            } else {
+                // Если дата в URL некорректная, используем текущую дату
+                const now = new Date();
+                window.currentYear = now.getFullYear();
+                window.currentMonth = now.getMonth() + 1;
+                console.log('initCalendar: Некорректная дата в URL, используем текущую дату');
+            }
+        } else {
+            // Если нет параметра date, используем текущую дату
+            const now = new Date();
+            window.currentYear = now.getFullYear();
+            window.currentMonth = now.getMonth() + 1;
+            console.log('initCalendar: Нет параметра date в URL, используем текущую дату');
+        }
+        
+        // Обновляем глобальные переменные из URL (на случай, если они не были установлены правильно)
+        updateGlobalDateFromURL();
+        
         // Инициализация календарных ячеек
         initCalendarCells();
 
@@ -54,6 +84,15 @@
         
         // Инициализация модального окна клиента
         initClientModal();
+        
+        // Обработка формы создания филиала
+        const addBranchForm = document.getElementById('add-branch-form');
+        if (addBranchForm) {
+            addBranchForm.addEventListener('submit', handleAddBranchSubmit);
+        }
+        
+        // НЕ загружаем события при первой загрузке - они уже загружены сервером
+        // refreshCalendarEvents() будет вызываться только при необходимости (изменения, обновления)
     }
 
     function initCalendarCells() {
@@ -558,7 +597,8 @@
             dateFrom: formatLocalDateTime(startDateTime),
             dateTo: formatLocalDateTime(endDateTime),
             branchId: getBranchId() || 1,
-            eventColor: formData.get('event-color') || '#3498db'
+            eventColor: formData.get('event-color') || '#3498db',
+            employee_id: formData.get('employee_id') || null
         };
         
         // Логируем данные, которые отправляем
@@ -648,7 +688,9 @@
         
         // Проверяем корректность даты
         if (!dateValue || !timeValue) {
-            showNotification('Ошибка: некорректные дата или время', 'error');
+            showNotification('Ошибка: некорректные дата или время. Возможно время уже занято.', 'error');
+            submitBtn.textContent = 'Сохранить';
+            submitBtn.disabled = false;
             return;
         }
         
@@ -862,7 +904,7 @@
         openEditEventModal(eventId);
     }
 
-    function showEventSidePanel(eventId) {
+    window.showEventSidePanel = function(eventId) {
         console.log('showEventSidePanel: Показываем боковое окно для события:', eventId);
         
         // Сохраняем ID текущего события
@@ -1001,6 +1043,10 @@
                 
                 // Загружаем и отображаем заметку
                 loadEventNote(eventId);
+                
+                // Обновляем кнопку в зависимости от статуса события
+                console.log('showEventSidePanel: Статус события:', event.STATUS);
+                updateCancelButtonByStatus(event.STATUS);
             } else {
                 showNotification('Ошибка при загрузке события', 'error');
                 // Сбрасываем счетчик загрузки при ошибке основного запроса
@@ -1415,6 +1461,16 @@
                     modal.style.display = 'block';
                     document.body.style.overflow = 'hidden';
                 }
+                
+                // Обновляем занятые временные слоты
+                updateOccupiedTimeSlots(event.EMPLOYEE_ID, eventId);
+                
+                // Добавляем обработчик изменения даты
+                if (dateInput) {
+                    dateInput.addEventListener('change', () => {
+                        updateOccupiedTimeSlots(event.EMPLOYEE_ID, eventId);
+                    });
+                }
             } else {
                 showNotification('Ошибка при загрузке события', 'error');
             }
@@ -1429,6 +1485,78 @@
         // Получаем ID филиала из данных страницы или возвращаем 0
         const branchElement = document.querySelector('[data-branch-id]');
         return branchElement ? branchElement.getAttribute('data-branch-id') : 0;
+    }
+
+    // Функции для работы с модальным окном создания филиала
+    function openAddBranchModal() {
+        const modal = document.getElementById('addBranchModal');
+        if (modal) {
+            // Сбрасываем форму
+            document.getElementById('add-branch-form').reset();
+            
+            modal.style.display = 'block';
+            document.body.style.overflow = 'hidden';
+        }
+    }
+
+    function closeAddBranchModal() {
+        const modal = document.getElementById('addBranchModal');
+        if (modal) {
+            modal.style.display = 'none';
+            document.body.style.overflow = 'auto';
+        }
+    }
+
+    // Обработка формы создания филиала
+    function handleAddBranchSubmit(event) {
+        event.preventDefault();
+        
+        const formData = new FormData(event.target);
+        const branchData = {
+            name: formData.get('name'),
+            address: formData.get('address'),
+            phone: formData.get('phone'),
+            email: formData.get('email')
+        };
+
+        // Валидация
+        if (!branchData.name.trim()) {
+            showFieldError('branch-name', 'Заполните название филиала.');
+            return;
+        }
+
+        // Отправляем запрос на создание филиала
+        const csrfToken = getCSRFToken();
+        fetch('/local/components/artmax/calendar/ajax.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-Bitrix-Csrf-Token': csrfToken
+            },
+            body: new URLSearchParams({
+                action: 'addBranch',
+                name: branchData.name,
+                address: branchData.address,
+                phone: branchData.phone,
+                email: branchData.email,
+                sessid: csrfToken
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showNotification('Филиал успешно создан! Переключатель филиалов обновится автоматически.', 'success');
+                closeAddBranchModal();
+                // Не перезагружаем страницу - Bitrix обновит переключатель автоматически
+            } else {
+                showNotification('Ошибка создания филиала: ' + (data.error || 'Неизвестная ошибка'), 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Ошибка при создании филиала:', error);
+            showNotification('Ошибка соединения с сервером', 'error');
+        });
     }
 
     // Функции для работы с модальным окном расписания
@@ -1468,6 +1596,9 @@
             
             // Инициализируем поля окончания повторения
             toggleEndFields();
+
+            // Загружаем сотрудников текущего филиала для селектора
+            loadBranchEmployeesForSchedule();
 
             modal.style.display = 'block';
             document.body.style.overflow = 'hidden';
@@ -1655,20 +1786,26 @@
                 showNotification(message, 'success');
                 closeScheduleModal();
                 
-                // Динамически добавляем события расписания в календарь
+                // Динамически добавляем события расписания в календарь с анимацией
                 if (data.events && Array.isArray(data.events)) {
-                    console.log('Добавляем события в календарь:', data.events);
+                    console.log('Добавляем события расписания в календарь:', data.events);
                     data.events.forEach(event => {
-                        console.log('Добавляем событие:', event);
+                        console.log('Добавляем событие расписания:', event);
                         console.log('Цвет события:', event.EVENT_COLOR);
-                        addEventToCalendar({
+                        
+                        // Конвертируем данные события в формат, понятный для addEventToCalendar
+                        const eventData = {
                             id: event.ID,
                             title: event.TITLE,
                             description: event.DESCRIPTION,
                             dateFrom: event.DATE_FROM,
                             dateTo: event.DATE_TO,
-                            eventColor: event.EVENT_COLOR || scheduleData.eventColor || '#3498db'
-                        });
+                            eventColor: event.EVENT_COLOR || scheduleData.eventColor || '#3498db',
+                            contactEntityId: event.CONTACT_ENTITY_ID,
+                            dealEntityId: event.DEAL_ENTITY_ID
+                        };
+                        
+                        addEventToCalendar(eventData);
                     });
                 }
             } else {
@@ -3742,12 +3879,54 @@
                 populateEmployeeSelector('event-employee', data.employees);
                 // Заполняем селектор в форме редактирования события
                 populateEmployeeSelector('edit-event-employee', data.employees);
-                // Заполняем селектор в форме создания расписания
-                populateEmployeeSelector('schedule-employee', data.employees);
             }
         })
         .catch(error => {
             console.error('Ошибка при загрузке сотрудников для селекторов:', error);
+        });
+        
+        // Загружаем сотрудников текущего филиала для формы расписания
+        loadBranchEmployeesForSchedule();
+    }
+
+    // Загрузка сотрудников текущего филиала для формы расписания
+    function loadBranchEmployeesForSchedule() {
+        const branchId = getBranchId() || 1;
+        const csrfToken = getCSRFToken();
+        
+        fetch('/local/components/artmax/calendar/ajax.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-Bitrix-Csrf-Token': csrfToken
+            },
+            body: new URLSearchParams({
+                action: 'getBranchEmployees',
+                branchId: branchId,
+                sessid: csrfToken
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.employees) {
+                console.log('Загружены сотрудники филиала для расписания:', data.employees);
+                // Заполняем селектор в форме создания расписания только сотрудниками текущего филиала
+                populateEmployeeSelector('schedule-employee', data.employees);
+            } else {
+                console.error('Ошибка загрузки сотрудников филиала:', data.error);
+                // В случае ошибки используем всех сотрудников как fallback
+                if (window.allEmployees) {
+                    populateEmployeeSelector('schedule-employee', window.allEmployees);
+                }
+            }
+        })
+        .catch(error => {
+            console.error('Ошибка при загрузке сотрудников филиала для расписания:', error);
+            // В случае ошибки используем всех сотрудников как fallback
+            if (window.allEmployees) {
+                populateEmployeeSelector('schedule-employee', window.allEmployees);
+            }
         });
     }
 
@@ -3777,7 +3956,7 @@
     }
 
     // Функции для работы с модальным окном врача
-    function openEmployeeModal() {
+    window.openEmployeeModal = function() {
         const modal = document.getElementById('employeeModal');
         if (modal) {
             modal.style.display = 'flex';
@@ -3796,7 +3975,7 @@
         }
     }
 
-    function closeEmployeeModal() {
+    window.closeEmployeeModal = function() {
         const modal = document.getElementById('employeeModal');
         if (modal) {
             modal.style.display = 'none';
@@ -3858,7 +4037,7 @@
         }
     }
 
-    function saveEmployee() {
+    window.saveEmployee = function() {
         const employeeId = document.getElementById('employee-select').value;
         if (!employeeId) {
             showNotification('Выберите врача', 'error');
@@ -3870,6 +4049,7 @@
             return;
         }
 
+        // Сначала получаем данные о текущем событии для проверки времени
         const csrfToken = getCSRFToken();
         fetch('/local/components/artmax/calendar/ajax.php', {
             method: 'POST',
@@ -3879,11 +4059,65 @@
                 'X-Bitrix-Csrf-Token': csrfToken
             },
             body: new URLSearchParams({
-                action: 'updateEvent',
+                action: 'getEvent',
                 eventId: window.currentEventId,
-                employee_id: employeeId,
                 sessid: csrfToken
             })
+        })
+        .then(response => response.json())
+        .then(eventData => {
+            if (!eventData.success) {
+                showNotification('Ошибка получения данных события', 'error');
+                return Promise.reject('Failed to get event data');
+            }
+
+            const event = eventData.event;
+            
+            // Проверяем занятость времени для выбранного врача
+            return fetch('/local/components/artmax/calendar/ajax.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-Bitrix-Csrf-Token': csrfToken
+                },
+                body: new URLSearchParams({
+                    action: 'checkTimeAvailability',
+                    dateFrom: event.DATE_FROM,
+                    dateTo: event.DATE_TO,
+                    employeeId: employeeId,
+                    excludeEventId: window.currentEventId,
+                    sessid: csrfToken
+                })
+            });
+        })
+        .then(response => response.json())
+        .then(availabilityData => {
+            if (!availabilityData.success) {
+                showNotification('Ошибка проверки времени: ' + (availabilityData.error || 'Неизвестная ошибка'), 'error');
+                return Promise.reject('Failed to check time availability');
+            }
+
+            if (!availabilityData.available) {
+                showNotification('Время занято у выбранного врача. Выберите другое время или другого врача.', 'error');
+                return Promise.reject('Time not available');
+            }
+
+            // Если время свободно, назначаем врача
+            return fetch('/local/components/artmax/calendar/ajax.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-Bitrix-Csrf-Token': csrfToken
+                },
+                body: new URLSearchParams({
+                    action: 'assignDoctor',
+                    eventId: window.currentEventId,
+                    employee_id: employeeId,
+                    sessid: csrfToken
+                })
+            });
         })
         .then(response => response.json())
         .then(data => {
@@ -3898,7 +4132,10 @@
         })
         .catch(error => {
             console.error('Ошибка при назначении врача:', error);
-            showNotification('Ошибка соединения с сервером', 'error');
+            // Показываем общую ошибку только если это не была ошибка занятости времени
+            if (error !== 'Time not available') {
+                showNotification('Ошибка соединения с сервером', 'error');
+            }
         });
     }
 
@@ -3934,7 +4171,7 @@
         });
     }
 
-    function openEmployeeDetails() {
+    window.openEmployeeDetails = function() {
         // Пока что просто открываем модальное окно для выбора врача
         openEmployeeModal();
     }
@@ -3985,7 +4222,8 @@
     function updateEmployeeCardInSidePanel(employee) {
         const statusElement = document.getElementById('employee-status');
         if (statusElement) {
-            statusElement.textContent = `${employee.NAME} ${employee.LAST_NAME}`.trim() || employee.LOGIN;
+            const employeeName = `${employee.NAME} ${employee.LAST_NAME}`.trim() || employee.LOGIN;
+            statusElement.textContent = employeeName;
         }
         
         // Сохраняем данные врача для использования в модальном окне
@@ -4559,6 +4797,8 @@
     window.openEditEventModal = openEditEventModal;
     window.openScheduleModal = openScheduleModal;
     window.closeScheduleModal = closeScheduleModal;
+    window.openAddBranchModal = openAddBranchModal;
+    window.closeAddBranchModal = closeAddBranchModal;
     window.toggleWeeklyDays = toggleWeeklyDays;
     window.toggleEndFields = toggleEndFields;
     window.selectPresetColor = selectPresetColor;
@@ -5007,25 +5247,55 @@
         // Создаем объект Date из строки времени, избегая проблем с часовыми поясами
         let dateFrom;
         if (typeof eventData.dateFrom === 'string' && eventData.dateFrom.includes(' ')) {
-            // Если дата в формате "2025-08-04 12:00:00", парсим компоненты отдельно
-            const [datePart, timePart] = eventData.dateFrom.split(' ');
-            const [year, month, day] = datePart.split('-').map(Number);
-            const [hours, minutes, seconds] = timePart.split(':').map(Number);
-            // Создаем Date в локальном времени (month - 1, так как в JS месяцы начинаются с 0)
-            dateFrom = new Date(year, month - 1, day, hours, minutes, seconds);
+            // Проверяем, если дата в российском формате "01.09.2025 09:00:00"
+            if (eventData.dateFrom.match(/^\d{1,2}\.\d{1,2}\.\d{4}\s+\d{1,2}:\d{1,2}:\d{1,2}$/)) {
+                const [datePart, timePart] = eventData.dateFrom.split(' ');
+                const [day, month, year] = datePart.split('.').map(Number);
+                const [hours, minutes, seconds] = timePart.split(':').map(Number);
+                // Создаем Date в локальном времени (month - 1, так как в JS месяцы начинаются с 0)
+                dateFrom = new Date(year, month - 1, day, hours, minutes, seconds);
+                console.log('addEventToCalendar: Российский формат даты обработан:', eventData.dateFrom, '->', dateFrom);
+            } else if (eventData.dateFrom.match(/^\d{4}-\d{2}-\d{2}\s+\d{1,2}:\d{1,2}:\d{1,2}$/)) {
+                // Если дата в формате "2025-08-04 12:00:00", парсим компоненты отдельно
+                const [datePart, timePart] = eventData.dateFrom.split(' ');
+                const [year, month, day] = datePart.split('-').map(Number);
+                const [hours, minutes, seconds] = timePart.split(':').map(Number);
+                // Создаем Date в локальном времени (month - 1, так как в JS месяцы начинаются с 0)
+                dateFrom = new Date(year, month - 1, day, hours, minutes, seconds);
+                console.log('addEventToCalendar: Стандартный формат даты обработан:', eventData.dateFrom, '->', dateFrom);
+            } else {
+                // Если дата в ISO формате
+                dateFrom = new Date(eventData.dateFrom);
+                console.log('addEventToCalendar: ISO формат даты обработан:', eventData.dateFrom, '->', dateFrom);
+            }
         } else {
             // Если дата в ISO формате
             dateFrom = new Date(eventData.dateFrom);
+            console.log('addEventToCalendar: ISO формат даты (fallback):', eventData.dateFrom, '->', dateFrom);
         }
         
         // Получаем ключ даты в формате YYYY-MM-DD
         let dateKey;
         if (typeof eventData.dateFrom === 'string' && eventData.dateFrom.includes(' ')) {
-            // Если дата в формате "2025-08-04 12:00:00"
-            dateKey = eventData.dateFrom.split(' ')[0];
+            // Проверяем, если дата в российском формате "01.09.2025 09:00:00"
+            if (eventData.dateFrom.match(/^\d{1,2}\.\d{1,2}\.\d{4}\s+\d{1,2}:\d{1,2}:\d{1,2}$/)) {
+                const [datePart] = eventData.dateFrom.split(' ');
+                const [day, month, year] = datePart.split('.');
+                dateKey = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+                console.log('addEventToCalendar: Российский формат dateKey:', eventData.dateFrom, '->', dateKey);
+            } else if (eventData.dateFrom.match(/^\d{4}-\d{2}-\d{2}\s+\d{1,2}:\d{1,2}:\d{1,2}$/)) {
+                // Если дата в формате "2025-08-04 12:00:00"
+                dateKey = eventData.dateFrom.split(' ')[0];
+                console.log('addEventToCalendar: Стандартный формат dateKey:', eventData.dateFrom, '->', dateKey);
+            } else {
+                // Если дата в ISO формате, извлекаем дату без конвертации
+                dateKey = eventData.dateFrom.split('T')[0];
+                console.log('addEventToCalendar: ISO формат dateKey:', eventData.dateFrom, '->', dateKey);
+            }
         } else {
             // Если дата в ISO формате, извлекаем дату без конвертации
             dateKey = eventData.dateFrom.split('T')[0];
+            console.log('addEventToCalendar: ISO формат dateKey (fallback):', eventData.dateFrom, '->', dateKey);
         }
         
         // Находим ячейку календаря для этой даты
@@ -5052,17 +5322,26 @@
         
         let timeString;
         if (typeof eventData.dateFrom === 'string') {
-            // Если дата в формате "2025-08-04 12:00:00", извлекаем время напрямую
-            const timeMatch = eventData.dateFrom.match(/(\d{2}):(\d{2}):(\d{2})$/);
-            if (timeMatch) {
-                timeString = `${timeMatch[1]}:${timeMatch[2]}`;
-                console.log('addEventToCalendar: Время извлечено из пробела:', timeString);
+            // Проверяем, если дата в российском формате "01.09.2025 09:00:00"
+            if (eventData.dateFrom.match(/^\d{1,2}\.\d{1,2}\.\d{4}\s+\d{1,2}:\d{1,2}:\d{1,2}$/)) {
+                const timeMatch = eventData.dateFrom.match(/(\d{1,2}):(\d{1,2}):(\d{1,2})$/);
+                if (timeMatch) {
+                    timeString = `${timeMatch[1].padStart(2, '0')}:${timeMatch[2].padStart(2, '0')}`;
+                    console.log('addEventToCalendar: Время извлечено из российского формата:', timeString);
+                }
+            } else if (eventData.dateFrom.match(/^\d{4}-\d{2}-\d{2}\s+\d{1,2}:\d{1,2}:\d{1,2}$/)) {
+                // Если дата в формате "2025-08-04 12:00:00", извлекаем время напрямую
+                const timeMatch = eventData.dateFrom.match(/(\d{2}):(\d{2}):(\d{2})$/);
+                if (timeMatch) {
+                    timeString = `${timeMatch[1]}:${timeMatch[2]}`;
+                    console.log('addEventToCalendar: Время извлечено из стандартного формата:', timeString);
+                }
             } else {
                 // Если дата в ISO формате (с T), извлекаем время
                 const isoTimeMatch = eventData.dateFrom.match(/T(\d{2}):(\d{2}):/);
                 if (isoTimeMatch) {
                     timeString = `${isoTimeMatch[1]}:${isoTimeMatch[2]}`;
-                    console.log('addEventToCalendar: Время извлечено из T:', timeString);
+                    console.log('addEventToCalendar: Время извлечено из ISO формата:', timeString);
                 } else {
                     // Fallback на локальное время
                     timeString = dateFrom.toLocaleTimeString('ru-RU', { 
@@ -5086,10 +5365,18 @@
         // Получаем время окончания
         let endTimeString;
         if (typeof eventData.dateTo === 'string') {
-            // Если дата в формате "2025-08-04 12:00:00", извлекаем время напрямую
-            const endTimeMatch = eventData.dateTo.match(/(\d{2}):(\d{2}):(\d{2})$/);
-            if (endTimeMatch) {
-                endTimeString = `${endTimeMatch[1]}:${endTimeMatch[2]}`;
+            // Проверяем, если дата в российском формате "01.09.2025 09:00:00"
+            if (eventData.dateTo.match(/^\d{1,2}\.\d{1,2}\.\d{4}\s+\d{1,2}:\d{1,2}:\d{1,2}$/)) {
+                const endTimeMatch = eventData.dateTo.match(/(\d{1,2}):(\d{1,2}):(\d{1,2})$/);
+                if (endTimeMatch) {
+                    endTimeString = `${endTimeMatch[1].padStart(2, '0')}:${endTimeMatch[2].padStart(2, '0')}`;
+                }
+            } else if (eventData.dateTo.match(/^\d{4}-\d{2}-\d{2}\s+\d{1,2}:\d{1,2}:\d{1,2}$/)) {
+                // Если дата в формате "2025-08-04 12:00:00", извлекаем время напрямую
+                const endTimeMatch = eventData.dateTo.match(/(\d{2}):(\d{2}):(\d{2})$/);
+                if (endTimeMatch) {
+                    endTimeString = `${endTimeMatch[1]}:${endTimeMatch[2]}`;
+                }
             } else {
                 // Если дата в ISO формате (с T), извлекаем время
                 const isoEndTimeMatch = eventData.dateTo.match(/T(\d{2}):(\d{2}):/);
@@ -5195,6 +5482,35 @@
     function refreshCalendarEvents() {
         const branchId = getBranchId() || 1;
         
+        // Сначала пытаемся обновить глобальные переменные из URL
+        updateGlobalDateFromURL();
+        
+        // Получаем текущий месяц и год из глобальных переменных
+        const year = window.currentYear || new Date().getFullYear();
+        const month = window.currentMonth || (new Date().getMonth() + 1);
+        
+        console.log('refreshCalendarEvents: Используем глобальные переменные - year =', year, 'month =', month);
+        console.log('refreshCalendarEvents: window.currentYear =', window.currentYear, 'window.currentMonth =', window.currentMonth);
+        
+        // Формируем диапазон дат для календарной сетки (включая дни предыдущего и следующего месяца)
+        // ВНИМАНИЕ: month в JavaScript это 1-12, но new Date() ожидает 0-11!
+        const firstDay = new Date(year, month - 1, 1); // month-1 потому что new Date() ожидает 0-11
+        const firstDayOfWeek = firstDay.getDay() === 0 ? 7 : firstDay.getDay(); // Преобразуем воскресенье (0) в 7
+        
+        // Начинаем с понедельника предыдущей недели
+        const startDate = new Date(firstDay);
+        startDate.setDate(startDate.getDate() - (firstDayOfWeek - 1));
+        
+        // Заканчиваем через 6 недель (42 дня)
+        const endDate = new Date(startDate);
+        endDate.setDate(endDate.getDate() + 41);
+        
+        const dateFrom = startDate.toISOString().split('T')[0];
+        const dateTo = endDate.toISOString().split('T')[0];
+        
+        console.log('refreshCalendarEvents: Сформированный диапазон дат - dateFrom =', dateFrom, 'dateTo =', dateTo);
+        console.log('refreshCalendarEvents: startDate =', startDate.toISOString(), 'endDate =', endDate.toISOString());
+        
         const csrfToken = getCSRFToken();
         fetch('/local/components/artmax/calendar/ajax.php', {
             method: 'POST',
@@ -5206,13 +5522,19 @@
             body: new URLSearchParams({
                 action: 'getEvents',
                 branchId: branchId,
+                dateFrom: dateFrom,
+                dateTo: dateTo,
                 sessid: csrfToken
             })
         })
         .then(response => response.json())
         .then(data => {
+            console.log('DYNAMIC LOAD: Server response:', data);
             if (data.success && data.events) {
+                console.log('DYNAMIC LOAD: Events received:', data.events.length);
                 updateCalendarEvents(data.events);
+            } else {
+                console.error('DYNAMIC LOAD: Error in response:', data);
             }
         })
         .catch(error => {
@@ -5234,12 +5556,20 @@
             console.log('updateCalendarEvents: Обрабатываем событие:', event);
             console.log('updateCalendarEvents: event.DATE_FROM =', event.DATE_FROM);
             
-            // Получаем ключ даты, избегая проблем с часовыми поясами
+            // Получаем ключ даты, конвертируя российский формат в стандартный
             let dateKey;
             if (typeof event.DATE_FROM === 'string' && event.DATE_FROM.includes(' ')) {
-                // Если дата в формате "2025-08-04 12:00:00"
-                dateKey = event.DATE_FROM.split(' ')[0];
-                console.log('updateCalendarEvents: Дата извлечена из пробела:', dateKey);
+                const datePart = event.DATE_FROM.split(' ')[0];
+                // Проверяем, если дата в российском формате "01.09.2025"
+                if (datePart.match(/^\d{1,2}\.\d{1,2}\.\d{4}$/)) {
+                    const [day, month, year] = datePart.split('.');
+                    dateKey = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+                    console.log('updateCalendarEvents: Российский формат конвертирован:', datePart, '->', dateKey);
+                } else {
+                    // Если дата в стандартном формате "2025-08-04"
+                    dateKey = datePart;
+                    console.log('updateCalendarEvents: Стандартный формат:', dateKey);
+                }
             } else {
                 // Если дата в ISO формате, извлекаем дату без конвертации
                 dateKey = event.DATE_FROM.split('T')[0];
@@ -5256,9 +5586,58 @@
         Object.keys(eventsByDate).forEach(dateKey => {
             const calendarDay = document.querySelector(`[data-date="${dateKey}"]`);
             if (calendarDay) {
+                // Сортируем события по времени начала
+                eventsByDate[dateKey].sort((a, b) => {
+                    const timeA = a.DATE_FROM || '';
+                    const timeB = b.DATE_FROM || '';
+                    
+                    // Извлекаем время из даты
+                    const timeMatchA = timeA.match(/(\d{2}):(\d{2}):(\d{2})$/);
+                    const timeMatchB = timeB.match(/(\d{2}):(\d{2}):(\d{2})$/);
+                    
+                    if (timeMatchA && timeMatchB) {
+                        const timeStrA = `${timeMatchA[1]}:${timeMatchA[2]}`;
+                        const timeStrB = `${timeMatchB[1]}:${timeMatchB[2]}`;
+                        return timeStrA.localeCompare(timeStrB);
+                    }
+                    
+                    return 0;
+                });
+                
                 eventsByDate[dateKey].forEach(event => {
                     const eventElement = createEventElement(event);
                     calendarDay.appendChild(eventElement);
+                    
+                    // Анимация появления
+                    eventElement.style.opacity = '0';
+                    eventElement.style.transform = 'scale(0.8)';
+                    
+                    // Плавное появление
+                    setTimeout(() => {
+                        eventElement.style.transition = 'all 0.3s ease-out';
+                        eventElement.style.opacity = '1';
+                        eventElement.style.transform = 'scale(1)';
+                        
+                        // Убираем временные стили после анимации и восстанавливаем оригинальный цвет
+                        setTimeout(() => {
+                            eventElement.style.transition = '';
+                            eventElement.style.opacity = '';
+                            eventElement.style.transform = '';
+                            
+                            // Восстанавливаем оригинальный цвет фона с 40% прозрачностью
+                            const originalColor = eventElement.getAttribute('data-original-color');
+                            if (originalColor) {
+                                // Конвертируем hex в RGB и добавляем 40% прозрачность
+                                const hex = originalColor.replace('#', '');
+                                const r = parseInt(hex.substr(0, 2), 16);
+                                const g = parseInt(hex.substr(2, 2), 16);
+                                const b = parseInt(hex.substr(4, 2), 16);
+                                eventElement.style.backgroundColor = `rgba(${r}, ${g}, ${b}, 0.4)`;
+                            } else {
+                                eventElement.style.backgroundColor = '';
+                            }
+                        }, 300);
+                    }, 50);
                 });
             }
         });
@@ -5305,6 +5684,11 @@
                     eventElement.style.opacity = '0';
                     
                     setTimeout(() => {
+                        // Получаем данные о статусе и времени из существующего элемента
+                        const currentStatus = eventElement.classList.contains('status-cancelled') ? 'cancelled' :
+                                           eventElement.classList.contains('status-moved') ? 'moved' : 'active';
+                        const isTimeChanged = eventElement.classList.contains('time-changed') ? 1 : 0;
+                        
                         // Удаляем событие со старой позиции
                         eventElement.remove();
                         
@@ -5315,7 +5699,9 @@
                             DESCRIPTION: eventData.description || '',
                             DATE_FROM: eventData.dateFrom,
                             DATE_TO: eventData.dateTo,
-                            EVENT_COLOR: eventData.eventColor || '#3498db'
+                            EVENT_COLOR: eventData.eventColor || '#3498db',
+                            STATUS: currentStatus,
+                            TIME_IS_CHANGED: isTimeChanged
                         });
                         
                         // Добавляем событие в новую ячейку
@@ -5338,6 +5724,14 @@
                                 if (blinkCount >= maxBlinks) {
                                     clearInterval(blinkInterval);
                                     newEventElement.style.boxShadow = 'none';
+                                    
+                                    // Очищаем стили после анимации
+                                    setTimeout(() => {
+                                        newEventElement.style.transition = '';
+                                        newEventElement.style.opacity = '';
+                                        newEventElement.style.transform = '';
+                                        newEventElement.style.boxShadow = '';
+                                    }, 300);
                                     return;
                                 }
                                 
@@ -5435,22 +5829,62 @@
                 // Обновляем цвет события
                 if (eventData.eventColor) {
                     eventElement.style.borderLeft = `4px solid ${eventData.eventColor}`;
-                    eventElement.style.backgroundColor = `${eventData.eventColor}15`;
+                    eventElement.style.backgroundColor = `${eventData.eventColor}40`;
+                    // Сохраняем оригинальный цвет в data-атрибуте
+                    eventElement.setAttribute('data-original-color', eventData.eventColor);
                 }
                 
                 // Анимация обновления
+                eventElement.style.transition = 'all 0.3s ease';
                 eventElement.style.transform = 'scale(1.05)';
                 eventElement.style.boxShadow = '0 0 20px rgba(52, 152, 219, 0.6)';
                 
                 setTimeout(() => {
-                    eventElement.style.transition = 'all 0.3s ease';
                     eventElement.style.transform = 'scale(1)';
                     eventElement.style.boxShadow = 'none';
+                    
+                    // Очищаем стили после анимации
+                    setTimeout(() => {
+                        eventElement.style.transition = '';
+                        eventElement.style.transform = '';
+                        eventElement.style.boxShadow = '';
+                    }, 300);
                 }, 200);
+                
+                // Сортируем события по времени в том же дне
+                sortEventsInDay(currentParent);
             }
         } else {
             console.error('updateEventInCalendar: Событие не найдено в календаре, ID:', eventId);
         }
+    }
+
+    /**
+     * Сортирует события в дне по времени начала
+     */
+    function sortEventsInDay(dayElement) {
+        if (!dayElement) return;
+        
+        const events = Array.from(dayElement.querySelectorAll('.calendar-event'));
+        if (events.length <= 1) return;
+        
+        // Сортируем события по времени начала
+        events.sort((a, b) => {
+            const timeA = a.querySelector('.event-time')?.textContent || '';
+            const timeB = b.querySelector('.event-time')?.textContent || '';
+            
+            // Извлекаем время начала (до "–")
+            const startTimeA = timeA.split('–')[0]?.trim() || '';
+            const startTimeB = timeB.split('–')[0]?.trim() || '';
+            
+            // Сравниваем время в формате HH:MM
+            return startTimeA.localeCompare(startTimeB);
+        });
+        
+        // Переставляем события в отсортированном порядке
+        events.forEach(event => {
+            dayElement.appendChild(event);
+        });
     }
 
     /**
@@ -5517,12 +5951,32 @@
     function createEventElement(event) {
         const eventElement = document.createElement('div');
         eventElement.className = 'calendar-event';
+        
+        // Добавляем класс статуса
+        if (event.STATUS) {
+            eventElement.classList.add(`status-${event.STATUS}`);
+        } else {
+            eventElement.classList.add('status-active');
+        }
+        
+        // Добавляем класс для перенесенных записей
+        if (event.TIME_IS_CHANGED == 1 || event.TIME_IS_CHANGED === '1') {
+            eventElement.classList.add('time-changed');
+        }
+            
         eventElement.setAttribute('data-event-id', event.ID);
         
         // Применяем цвет события
         if (event.EVENT_COLOR) {
             eventElement.style.borderLeft = `4px solid ${event.EVENT_COLOR}`;
-            eventElement.style.backgroundColor = `${event.EVENT_COLOR}15`;
+            // Конвертируем hex в RGB и добавляем 40% прозрачность
+            const hex = event.EVENT_COLOR.replace('#', '');
+            const r = parseInt(hex.substr(0, 2), 16);
+            const g = parseInt(hex.substr(2, 2), 16);
+            const b = parseInt(hex.substr(4, 2), 16);
+            eventElement.style.backgroundColor = `rgba(${r}, ${g}, ${b}, 0.4)`;
+            // Сохраняем оригинальный цвет БЕЗ прозрачности в data-атрибуте
+            eventElement.setAttribute('data-original-color', event.EVENT_COLOR);
         }
         
         // Форматируем время, избегая проблем с часовыми поясами
@@ -5624,16 +6078,33 @@
         return eventElement;
     }
 
+    // Функция для обновления глобальных переменных из URL
+    function updateGlobalDateFromURL() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const dateParam = urlParams.get('date');
+        
+        if (dateParam) {
+            const urlDate = new Date(dateParam);
+            if (!isNaN(urlDate.getTime())) {
+                window.currentYear = urlDate.getFullYear();
+                window.currentMonth = urlDate.getMonth() + 1;
+                console.log('updateGlobalDateFromURL: Обновлены глобальные переменные из URL:', dateParam, 'year:', window.currentYear, 'month:', window.currentMonth);
+                return true;
+            }
+        }
+        return false;
+    }
+
     // Функции навигации по календарю
-    function previousMonth() {
+    window.previousMonth = function() {
         const currentMonthElement = document.querySelector('.current-month');
         if (currentMonthElement) {
             const currentText = currentMonthElement.textContent;
             const currentDate = new Date();
             
-            // Парсим текущий месяц и год
-            const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
-                               'July', 'August', 'September', 'October', 'November', 'December'];
+            // Парсим текущий месяц и год (русские названия)
+            const monthNames = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
+                               'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
             
             let currentMonth = currentDate.getMonth();
             let currentYear = currentDate.getFullYear();
@@ -5665,15 +6136,61 @@
         }
     }
 
+    function previousMonth() {
+        const currentMonthElement = document.querySelector('.current-month');
+        if (currentMonthElement) {
+            const currentText = currentMonthElement.textContent;
+            const currentDate = new Date();
+            
+            // Парсим текущий месяц и год (русские названия)
+            const monthNames = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
+                               'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
+            
+            let currentMonth = currentDate.getMonth();
+            let currentYear = currentDate.getFullYear();
+            
+            // Пытаемся найти месяц в тексте
+            for (let i = 0; i < monthNames.length; i++) {
+                if (currentText.includes(monthNames[i])) {
+                    currentMonth = i;
+                    break;
+                }
+            }
+            
+            // Переходим к предыдущему месяцу
+            if (currentMonth === 0) {
+                currentMonth = 11;
+                currentYear--;
+            } else {
+                currentMonth--;
+            }
+            
+            // Обновляем глобальные переменные
+            window.currentYear = currentYear;
+            window.currentMonth = currentMonth + 1;
+            
+            console.log('previousMonth: Обновлены глобальные переменные - year:', window.currentYear, 'month:', window.currentMonth);
+            
+            // Обновляем URL и перезагружаем страницу
+            const newDate = new Date(currentYear, currentMonth, 1);
+            // Форматируем дату в локальном формате, избегая проблем с часовыми поясами
+            const year = newDate.getFullYear();
+            const month = String(newDate.getMonth() + 1).padStart(2, '0');
+            const day = String(newDate.getDate()).padStart(2, '0');
+            const newDateString = `${year}-${month}-${day}`;
+            window.location.href = window.location.pathname + '?date=' + newDateString;
+        }
+    }
+
     function nextMonth() {
         const currentMonthElement = document.querySelector('.current-month');
         if (currentMonthElement) {
             const currentText = currentMonthElement.textContent;
             const currentDate = new Date();
             
-            // Парсим текущий месяц и год
-            const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
-                               'July', 'August', 'September', 'October', 'November', 'December'];
+            // Парсим текущий месяц и год (русские названия)
+            const monthNames = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
+                               'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
             
             let currentMonth = currentDate.getMonth();
             let currentYear = currentDate.getFullYear();
@@ -5694,6 +6211,12 @@
                 currentMonth++;
             }
             
+            // Обновляем глобальные переменные
+            window.currentYear = currentYear;
+            window.currentMonth = currentMonth + 1;
+            
+            console.log('nextMonth: Обновлены глобальные переменные - year:', window.currentYear, 'month:', window.currentMonth);
+            
             // Обновляем URL и перезагружаем страницу
             const newDate = new Date(currentYear, currentMonth, 1);
             // Форматируем дату в локальном формате, избегая проблем с часовыми поясами
@@ -5707,6 +6230,12 @@
 
     function goToToday() {
         const today = new Date();
+        // Обновляем глобальные переменные
+        window.currentYear = today.getFullYear();
+        window.currentMonth = today.getMonth() + 1;
+        
+        console.log('goToToday: Обновлены глобальные переменные - year:', window.currentYear, 'month:', window.currentMonth);
+        
         // Форматируем дату в локальном формате, избегая проблем с часовыми поясами
         const year = today.getFullYear();
         const month = String(today.getMonth() + 1).padStart(2, '0');
@@ -5714,5 +6243,632 @@
         const todayString = `${year}-${month}-${day}`;
         window.location.href = window.location.pathname + '?date=' + todayString;
     }
+
+    // Функция для обновления занятых временных слотов в форме редактирования
+    function updateOccupiedTimeSlots(employeeId, excludeEventId) {
+        const dateInput = document.getElementById('edit-event-date');
+        const timeSelect = document.getElementById('edit-event-time');
+        
+        if (!dateInput || !timeSelect) {
+            console.error('updateOccupiedTimeSlots: Не найдены поля даты или времени');
+            return;
+        }
+        
+        const selectedDate = dateInput.value;
+        if (!selectedDate) {
+            console.log('updateOccupiedTimeSlots: Дата не выбрана');
+            return;
+        }
+        
+        // Получаем занятые слоты с сервера
+        const csrfToken = getCSRFToken();
+        fetch('/local/components/artmax/calendar/ajax.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-Bitrix-Csrf-Token': csrfToken
+            },
+            body: new URLSearchParams({
+                action: 'getOccupiedTimes',
+                date: selectedDate,
+                employee_id: employeeId || '',
+                excludeEventId: excludeEventId || '',
+                sessid: csrfToken
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.occupiedTimes) {
+                // Сбрасываем все disabled состояния
+                const options = timeSelect.querySelectorAll('option');
+                options.forEach(option => {
+                    option.disabled = false;
+                    option.style.color = '';
+                });
+                
+                // Устанавливаем disabled для занятых слотов
+                data.occupiedTimes.forEach(occupiedTime => {
+                    const option = timeSelect.querySelector(`option[value="${occupiedTime}"]`);
+                    if (option) {
+                        option.disabled = true;
+                        option.style.color = '#ccc';
+                    }
+                });
+                
+                console.log('updateOccupiedTimeSlots: Обновлены занятые слоты:', data.occupiedTimes);
+            } else {
+                console.error('updateOccupiedTimeSlots: Ошибка получения занятых слотов:', data.error);
+            }
+        })
+        .catch(error => {
+            console.error('updateOccupiedTimeSlots: Ошибка запроса:', error);
+        });
+    }
+
+    // Функция для переноса записи
+    function moveEventFromSidePanel() {
+        if (!window.currentEventId) {
+            showNotification('Ошибка: не найдено событие', 'error');
+            return;
+        }
+
+        // Получаем данные о текущем событии
+        const csrfToken = getCSRFToken();
+        fetch('/local/components/artmax/calendar/ajax.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-Bitrix-Csrf-Token': csrfToken
+            },
+            body: new URLSearchParams({
+                action: 'getEvent',
+                eventId: window.currentEventId,
+                sessid: csrfToken
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                openMoveEventModal(data.event);
+            } else {
+                showNotification('Ошибка получения данных события', 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Ошибка при получении данных события:', error);
+            showNotification('Ошибка соединения с сервером', 'error');
+        });
+    }
+
+    // Функция для переключения статуса записи (отменить/вернуть)
+    function toggleEventStatusFromSidePanel() {
+        if (!window.currentEventId) {
+            showNotification('Ошибка: не найдено событие', 'error');
+            return;
+        }
+        
+        // Получаем текущий статус из кнопки
+        const cancelBtn = document.getElementById('cancel-event-btn');
+        const isCurrentlyCancelled = cancelBtn.textContent.includes('Вернуть');
+        
+        if (isCurrentlyCancelled) {
+            // Возвращаем в расписание
+            if (confirm('Вы уверены, что хотите вернуть эту запись в расписание?')) {
+                updateEventStatus(window.currentEventId, 'active');
+            }
+        } else {
+            // Отменяем запись
+            if (confirm('Вы уверены, что хотите отменить эту запись?')) {
+                updateEventStatus(window.currentEventId, 'cancelled');
+            }
+        }
+    }
+    
+    // Функция для обновления кнопки в зависимости от статуса
+    function updateCancelButtonByStatus(status) {
+        console.log('updateCancelButtonByStatus: Обновляем кнопку для статуса:', status);
+        const cancelBtn = document.getElementById('cancel-event-btn');
+        if (!cancelBtn) {
+            console.log('updateCancelButtonByStatus: Кнопка не найдена');
+            return;
+        }
+        
+        if (status === 'cancelled') {
+            console.log('updateCancelButtonByStatus: Устанавливаем кнопку "Вернуть в расписание"');
+            cancelBtn.innerHTML = '✅ Вернуть в расписание';
+            cancelBtn.className = 'cancel-event-btn return-event-btn';
+        } else {
+            console.log('updateCancelButtonByStatus: Устанавливаем кнопку "Отменить запись"');
+            cancelBtn.innerHTML = '❌ Отменить запись';
+            cancelBtn.className = 'cancel-event-btn';
+        }
+    }
+
+    // Функция для обновления статуса события
+    function updateEventStatus(eventId, status) {
+        const csrfToken = getCSRFToken();
+        fetch('/local/components/artmax/calendar/ajax.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-Bitrix-Csrf-Token': csrfToken
+            },
+            body: new URLSearchParams({
+                action: 'updateEventStatus',
+                eventId: eventId,
+                status: status,
+                sessid: csrfToken
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const statusText = status === 'cancelled' ? 'отменена' : 
+                                 status === 'moved' ? 'перенесена' : 'активна';
+                showNotification(`Запись ${statusText}`, 'success');
+                
+                // Обновляем кнопку в боковой панели
+                updateCancelButtonByStatus(status);
+                
+                closeEventSidePanel();
+                refreshCalendarEvents();
+            } else {
+                showNotification('Ошибка обновления статуса: ' + (data.error || 'Неизвестная ошибка'), 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Ошибка при обновлении статуса:', error);
+            showNotification('Ошибка соединения с сервером', 'error');
+        });
+    }
+
+    // Функция открытия модального окна переноса записи
+    function openMoveEventModal(event) {
+        const modal = document.getElementById('moveEventModal');
+        if (!modal) {
+            console.error('Модальное окно переноса не найдено');
+            return;
+        }
+
+        // Заполняем форму данными события
+        document.getElementById('move-event-id').value = event.ID;
+        
+        // Устанавливаем текущую дату события
+        const eventDate = event.DATE_FROM.split(' ')[0];
+        const [day, month, year] = eventDate.split('.');
+        const standardDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+        document.getElementById('move-event-date').value = standardDate;
+        
+        // Очищаем селекторы
+        const timeSelect = document.getElementById('move-event-time');
+        timeSelect.innerHTML = '<option value="">Выберите время</option>';
+        
+        // Загружаем филиалы и устанавливаем текущий
+        loadBranchesForMove(event.BRANCH_ID, event.EMPLOYEE_ID);
+        
+        // Показываем модальное окно
+        modal.style.display = 'flex';
+        setTimeout(() => {
+            modal.classList.add('show');
+        }, 10);
+        document.body.style.overflow = 'hidden';
+    }
+
+    // Функция закрытия модального окна переноса
+    function closeMoveEventModal() {
+        const modal = document.getElementById('moveEventModal');
+        if (modal) {
+            modal.classList.remove('show');
+            setTimeout(() => {
+                modal.style.display = 'none';
+                document.body.style.overflow = '';
+            }, 300);
+        }
+    }
+
+    // Функция загрузки филиалов для переноса
+    function loadBranchesForMove(currentBranchId, currentEmployeeId = null) {
+        const csrfToken = getCSRFToken();
+        fetch('/local/components/artmax/calendar/ajax.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-Bitrix-Csrf-Token': csrfToken
+            },
+            body: new URLSearchParams({
+                action: 'getBranches',
+                sessid: csrfToken
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                populateBranchSelectForMove(data.branches, currentBranchId, currentEmployeeId);
+            } else {
+                console.error('Ошибка загрузки филиалов:', data.error);
+                showNotification('Ошибка загрузки филиалов', 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Ошибка при загрузке филиалов:', error);
+            showNotification('Ошибка соединения с сервером', 'error');
+        });
+    }
+
+    // Функция заполнения селектора филиалов для переноса
+    function populateBranchSelectForMove(branches, currentBranchId, currentEmployeeId = null) {
+        const branchSelect = document.getElementById('move-event-branch');
+        branchSelect.innerHTML = '<option value="">Выберите филиал</option>';
+        
+        branches.forEach(branch => {
+            const option = document.createElement('option');
+            option.value = branch.ID;
+            option.textContent = branch.NAME;
+            
+            // Устанавливаем текущий филиал как выбранный
+            if (branch.ID == currentBranchId) {
+                option.selected = true;
+            }
+            
+            branchSelect.appendChild(option);
+        });
+        
+        // После загрузки филиалов загружаем врачей для выбранного филиала
+        if (currentBranchId) {
+            loadEmployeesForMoveByBranch(currentBranchId, currentEmployeeId);
+        }
+    }
+
+    // Функция загрузки врачей для переноса по филиалу
+    function loadEmployeesForMoveByBranch(branchId, currentEmployeeId) {
+        const csrfToken = getCSRFToken();
+        fetch('/local/components/artmax/calendar/ajax.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-Bitrix-Csrf-Token': csrfToken
+            },
+            body: new URLSearchParams({
+                action: 'getBranchEmployees',
+                branchId: branchId,
+                sessid: csrfToken
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                populateEmployeeSelectForMove(data.employees, currentEmployeeId);
+            } else {
+                console.error('Ошибка загрузки врачей филиала:', data.error);
+                showNotification('Ошибка загрузки врачей филиала', 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Ошибка при загрузке врачей филиала:', error);
+            showNotification('Ошибка соединения с сервером', 'error');
+        });
+    }
+
+    // Функция загрузки врачей для переноса (старая версия для совместимости)
+    function loadEmployeesForMove(currentEmployeeId) {
+        const csrfToken = getCSRFToken();
+        fetch('/local/components/artmax/calendar/ajax.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-Bitrix-Csrf-Token': csrfToken
+            },
+            body: new URLSearchParams({
+                action: 'getEmployees',
+                sessid: csrfToken
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                populateEmployeeSelectForMove(data.employees, currentEmployeeId);
+            } else {
+                console.error('Ошибка загрузки врачей:', data.error);
+                showNotification('Ошибка загрузки врачей', 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Ошибка при загрузке врачей:', error);
+            showNotification('Ошибка соединения с сервером', 'error');
+        });
+    }
+
+    // Функция заполнения селектора врачей для переноса
+    function populateEmployeeSelectForMove(employees, currentEmployeeId) {
+        const employeeSelect = document.getElementById('move-event-employee');
+        employeeSelect.innerHTML = '<option value="">Выберите врача</option>';
+        
+        employees.forEach(employee => {
+            const option = document.createElement('option');
+            option.value = employee.ID;
+            option.textContent = `${employee.NAME} ${employee.LAST_NAME}`.trim() || employee.LOGIN;
+            
+            // Устанавливаем текущего врача как выбранного
+            if (employee.ID == currentEmployeeId) {
+                option.selected = true;
+            }
+            
+            employeeSelect.appendChild(option);
+        });
+        
+        // Если есть выбранный врач и дата, загружаем его расписание
+        if (currentEmployeeId) {
+            const dateInput = document.getElementById('move-event-date');
+            const selectedDate = dateInput.value;
+            if (selectedDate) {
+                loadDoctorScheduleForMove(currentEmployeeId, selectedDate);
+            }
+        }
+    }
+
+    // Функция обработки изменения филиала в форме переноса
+    function onMoveBranchChange() {
+        const branchSelect = document.getElementById('move-event-branch');
+        const selectedBranchId = branchSelect.value;
+        
+        // Очищаем селектор врачей
+        const employeeSelect = document.getElementById('move-event-employee');
+        employeeSelect.innerHTML = '<option value="">Выберите врача</option>';
+        
+        // Очищаем селектор времени
+        const timeSelect = document.getElementById('move-event-time');
+        timeSelect.innerHTML = '<option value="">Выберите время</option>';
+        
+        // Загружаем врачей для выбранного филиала
+        if (selectedBranchId) {
+            loadEmployeesForMoveByBranch(selectedBranchId, null);
+        }
+    }
+
+    // Функция загрузки расписания врача для переноса
+    function loadDoctorScheduleForMove(employeeId, date) {
+        const csrfToken = getCSRFToken();
+        fetch('/local/components/artmax/calendar/ajax.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-Bitrix-Csrf-Token': csrfToken
+            },
+            body: new URLSearchParams({
+                action: 'getDoctorScheduleForMove',
+                employeeId: employeeId,
+                date: date,
+                excludeEventId: window.currentEventId,
+                sessid: csrfToken
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            console.log('Ответ сервера для getDoctorScheduleForMove:', data);
+            if (data.success) {
+                console.log('availableTimes:', data.availableTimes);
+                populateTimeSelectForMove(data.availableTimes);
+            } else {
+                console.error('Ошибка загрузки расписания врача:', data.error);
+                showNotification('Ошибка загрузки расписания врача', 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Ошибка при загрузке расписания врача:', error);
+            showNotification('Ошибка соединения с сервером', 'error');
+        });
+    }
+
+    // Функция загрузки доступных времен для переноса (устаревшая, оставляем для совместимости)
+    function loadAvailableTimesForMove(date) {
+        const employeeId = document.getElementById('move-event-employee').value;
+        if (!employeeId) {
+            const timeSelect = document.getElementById('move-event-time');
+            timeSelect.innerHTML = '<option value="">Сначала выберите врача</option>';
+            return;
+        }
+
+        loadDoctorScheduleForMove(employeeId, date);
+    }
+
+    // Функция заполнения селектора времени для переноса
+    function populateTimeSelectForMove(availableTimes) {
+        const timeSelect = document.getElementById('move-event-time');
+        timeSelect.innerHTML = '<option value="">Выберите время</option>';
+        
+        // Проверяем, что availableTimes является массивом
+        if (!Array.isArray(availableTimes)) {
+            console.error('availableTimes не является массивом:', availableTimes);
+            const option = document.createElement('option');
+            option.value = '';
+            option.textContent = 'Ошибка загрузки времен';
+            option.disabled = true;
+            timeSelect.appendChild(option);
+            return;
+        }
+        
+        if (availableTimes.length === 0) {
+            const option = document.createElement('option');
+            option.value = '';
+            option.textContent = 'Нет доступных времен';
+            option.disabled = true;
+            timeSelect.appendChild(option);
+            return;
+        }
+        
+        availableTimes.forEach(timeSlot => {
+            const option = document.createElement('option');
+            option.value = timeSlot.time;
+            option.textContent = timeSlot.time;
+            timeSelect.appendChild(option);
+        });
+    }
+
+    // Обработчик изменения врача в модальном окне переноса
+    function onMoveEmployeeChange() {
+        const employeeId = document.getElementById('move-event-employee').value;
+        const dateInput = document.getElementById('move-event-date');
+        const selectedDate = dateInput.value;
+        
+        if (!employeeId) {
+            const timeSelect = document.getElementById('move-event-time');
+            timeSelect.innerHTML = '<option value="">Сначала выберите врача</option>';
+            return;
+        }
+        
+        if (selectedDate) {
+            // Загружаем расписание врача для выбранной даты
+            loadDoctorScheduleForMove(employeeId, selectedDate);
+        } else {
+            const timeSelect = document.getElementById('move-event-time');
+            timeSelect.innerHTML = '<option value="">Выберите дату</option>';
+        }
+    }
+
+    // Обработчик изменения даты в модальном окне переноса
+    function onMoveDateChange() {
+        const employeeId = document.getElementById('move-event-employee').value;
+        const dateInput = document.getElementById('move-event-date');
+        const selectedDate = dateInput.value;
+        
+        if (!employeeId) {
+            const timeSelect = document.getElementById('move-event-time');
+            timeSelect.innerHTML = '<option value="">Сначала выберите врача</option>';
+            return;
+        }
+        
+        if (selectedDate) {
+            // Загружаем расписание врача для выбранной даты
+            loadDoctorScheduleForMove(employeeId, selectedDate);
+        } else {
+            const timeSelect = document.getElementById('move-event-time');
+            timeSelect.innerHTML = '<option value="">Выберите дату</option>';
+        }
+    }
+
+    // Обработчик отправки формы переноса
+    function handleMoveEventSubmit(event) {
+        event.preventDefault();
+        
+        const form = event.target;
+        const formData = new FormData(form);
+        const eventId = formData.get('eventId');
+        const branchId = formData.get('branch_id');
+        const employeeId = formData.get('employee_id');
+        const date = formData.get('date');
+        const time = formData.get('time');
+        
+        if (!eventId || !branchId || !employeeId || !date || !time) {
+            showNotification('Заполните все поля', 'error');
+            return;
+        }
+        
+        // Создаем дату и время для переноса
+        const [year, month, day] = date.split('-');
+        const [hours, minutes] = time.split(':');
+        const newDateTime = `${year}-${month}-${day} ${hours}:${minutes}:00`;
+        
+        // Получаем длительность события из текущего события
+        const csrfToken = getCSRFToken();
+        fetch('/local/components/artmax/calendar/ajax.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-Bitrix-Csrf-Token': csrfToken
+            },
+            body: new URLSearchParams({
+                action: 'getEvent',
+                eventId: eventId,
+                sessid: csrfToken
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const event = data.event;
+                const duration = getEventDuration(event.DATE_FROM, event.DATE_TO);
+                
+                // Вычисляем новое время окончания
+                const startTime = new Date(newDateTime);
+                const endTime = new Date(startTime.getTime() + duration * 60 * 1000);
+                
+                const newEndDateTime = formatLocalDateTime(endTime);
+                
+                // Переносим событие с обменом местами
+                return fetch('/local/components/artmax/calendar/ajax.php', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'X-Bitrix-Csrf-Token': csrfToken
+                    },
+                    body: new URLSearchParams({
+                        action: 'moveEvent',
+                        eventId: eventId,
+                        branchId: branchId,
+                        employeeId: employeeId,
+                        dateFrom: newDateTime,
+                        dateTo: newEndDateTime,
+                        sessid: csrfToken
+                    })
+                });
+            } else {
+                throw new Error('Ошибка получения данных события');
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showNotification('Запись успешно перенесена', 'success');
+                closeMoveEventModal();
+                closeEventSidePanel();
+                refreshCalendarEvents();
+            } else {
+                showNotification('Ошибка переноса записи: ' + (data.error || 'Неизвестная ошибка'), 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Ошибка при переносе записи:', error);
+            showNotification('Ошибка соединения с сервером', 'error');
+        });
+    }
+
+    // Вспомогательная функция для получения длительности события в минутах
+    function getEventDuration(dateFrom, dateTo) {
+        const start = new Date(dateFrom);
+        const end = new Date(dateTo);
+        return Math.round((end - start) / (1000 * 60));
+    }
+
+    // Вспомогательная функция для форматирования даты и времени
+    function formatLocalDateTime(date) {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        const hours = String(date.getHours()).padStart(2, '0');
+        const minutes = String(date.getMinutes()).padStart(2, '0');
+        const seconds = String(date.getSeconds()).padStart(2, '0');
+        return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+    }
+
+    // Делаем функции доступными глобально
+    window.moveEventFromSidePanel = moveEventFromSidePanel;
+    window.toggleEventStatusFromSidePanel = toggleEventStatusFromSidePanel;
+    window.updateEventStatus = updateEventStatus;
+    window.updateCancelButtonByStatus = updateCancelButtonByStatus;
+    window.openMoveEventModal = openMoveEventModal;
+    window.closeMoveEventModal = closeMoveEventModal;
+    window.onMoveDateChange = onMoveDateChange;
+    window.onMoveBranchChange = onMoveBranchChange;
+    window.onMoveEmployeeChange = onMoveEmployeeChange;
+    window.handleMoveEventSubmit = handleMoveEventSubmit;
 
 })();

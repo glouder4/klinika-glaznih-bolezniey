@@ -777,12 +777,20 @@ class Calendar
             $sql = "SELECT EMPLOYEE_ID FROM artmax_calendar_branch_employees WHERE BRANCH_ID = " . (int)$branchId;
             $result = $this->connection->query($sql);
             
+            // Отладочная информация
+            error_log("getBranchEmployees: SQL = " . $sql);
+            error_log("getBranchEmployees: branchId = " . $branchId);
+            
             $employeeIds = [];
             while ($row = $result->fetch()) {
                 $employeeIds[] = $row['EMPLOYEE_ID'];
+                error_log("getBranchEmployees: Found employee ID = " . $row['EMPLOYEE_ID']);
             }
             
+            error_log("getBranchEmployees: Total employee IDs found = " . count($employeeIds));
+            
             if (empty($employeeIds)) {
+                error_log("getBranchEmployees: No employees found for branch " . $branchId);
                 return [];
             }
             
@@ -810,8 +818,10 @@ class Calendar
                     'LOGIN' => $user['LOGIN'] ?: '',
                     'EMAIL' => $user['EMAIL'] ?: ''
                 ];
+                error_log("getBranchEmployees: Added employee = " . $user['NAME'] . " " . $user['LAST_NAME']);
             }
             
+            error_log("getBranchEmployees: Final employees count = " . count($employees));
             return $employees;
         } catch (\Exception $e) {
             error_log('Ошибка получения сотрудников филиала: ' . $e->getMessage());

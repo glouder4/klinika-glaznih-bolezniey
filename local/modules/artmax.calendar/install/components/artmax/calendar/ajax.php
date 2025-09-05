@@ -10,7 +10,22 @@ require($_SERVER['DOCUMENT_ROOT'].'/bitrix/modules/main/include/prolog_before.ph
 // Подключаем класс компонента
 require_once($_SERVER['DOCUMENT_ROOT'].'/local/components/artmax/calendar/class.php');
 
-
+/**
+ * Конвертирует дату из российского формата в стандартный для SQL
+ */
+function convertRussianDateToStandard($dateString)
+{
+    if (preg_match('/^(\d{1,2})\.(\d{1,2})\.(\d{4})\s+(\d{1,2}):(\d{1,2}):(\d{1,2})$/', $dateString, $matches)) {
+        $day = str_pad($matches[1], 2, '0', STR_PAD_LEFT);
+        $month = str_pad($matches[2], 2, '0', STR_PAD_LEFT);
+        $year = $matches[3];
+        $hour = str_pad($matches[4], 2, '0', STR_PAD_LEFT);
+        $minute = str_pad($matches[5], 2, '0', STR_PAD_LEFT);
+        $second = str_pad($matches[6], 2, '0', STR_PAD_LEFT);
+        return "{$year}-{$month}-{$day} {$hour}:{$minute}:{$second}";
+    }
+    return $dateString;
+}
 
 /**
  * Получение следующего дня недели для еженедельного повторения
@@ -146,9 +161,9 @@ switch ($action) {
         // Сохраняем время как есть, без конвертации в UTC
         // Это позволит избежать проблем с часовыми поясами
 
-        // Проверяем доступность времени
-        if (!$calendarObj->isTimeAvailable($dateFrom, $dateTo, $userId)) {
-            die(json_encode(['success' => false, 'error' => 'Время уже занято']));
+        // Проверяем доступность времени для врача
+        if (!$calendarObj->isTimeAvailableForDoctor($dateFrom, $dateTo, $employeeId)) {
+            die(json_encode(['success' => false, 'error' => 'Время уже занято для выбранного врача']));
         }
 
         // Добавляем событие с цветом (без конвертации в UTC)
@@ -215,6 +230,34 @@ switch ($action) {
             die(json_encode(['success' => false, 'error' => 'Нет прав на редактирование']));
         }
 
+        // Проверяем доступность времени для врача при изменении времени
+        $timeChanged = ($event['DATE_FROM'] != $dateFrom || $event['DATE_TO'] != $dateTo);
+        $doctorChanged = ((int)$event['EMPLOYEE_ID'] != (int)$employeeId);
+        
+        // Логируем для отладки
+        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+            "UPDATE_EVENT_DEBUG: timeChanged=" . ($timeChanged ? 'true' : 'false') . ", doctorChanged=" . ($doctorChanged ? 'true' : 'false') . "\n", 
+            FILE_APPEND | LOCK_EX);
+        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+            "UPDATE_EVENT_DEBUG: oldTime=" . $event['DATE_FROM'] . " - " . $event['DATE_TO'] . ", newTime=" . $dateFrom . " - " . $dateTo . "\n", 
+            FILE_APPEND | LOCK_EX);
+        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+            "UPDATE_EVENT_DEBUG: oldDoctor=" . $event['EMPLOYEE_ID'] . ", newDoctor=" . $employeeId . "\n", 
+            FILE_APPEND | LOCK_EX);
+        
+        if ($timeChanged || $doctorChanged) {
+            // Проверяем конфликты с текущим врачом события (не с новым)
+            $doctorToCheck = $event['EMPLOYEE_ID'] ? $event['EMPLOYEE_ID'] : null;
+            
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "UPDATE_EVENT_DEBUG: Checking conflicts with doctorToCheck=" . $doctorToCheck . "\n", 
+                FILE_APPEND | LOCK_EX);
+            
+            if (!$calendarObj->isTimeAvailableForDoctor($dateFrom, $dateTo, $doctorToCheck, $eventId)) {
+                die(json_encode(['success' => false, 'error' => 'Время уже занято для выбранного врача']));
+            }
+        }
+
         try {
             $result = $calendarObj->updateEvent($eventId, $title, $description, $dateFrom, $dateTo, $eventColor, $branchId, $employeeId);
             if ($result) {
@@ -227,15 +270,211 @@ switch ($action) {
         }
         break;
 
+    case 'assignDoctor':
+        $eventId = (int)($_POST['eventId'] ?? 0);
+        $employeeId = $_POST['employee_id'] ?? null;
+
+        if (!$eventId || !$employeeId) {
+            http_response_code(400);
+            die(json_encode(['success' => false, 'error' => 'ID события и врача обязательны']));
+        }
+
+        $event = $calendarObj->getEvent($eventId);
+        if (!$event) {
+            die(json_encode(['success' => false, 'error' => 'Событие не найдено']));
+        }
+
+        // Проверяем права на редактирование (только автор события)
+        if ($event['USER_ID'] != $GLOBALS['USER']->GetID()) {
+            http_response_code(403);
+            die(json_encode(['success' => false, 'error' => 'Нет прав на редактирование']));
+        }
+
+        try {
+            $result = $calendarObj->assignDoctor($eventId, $employeeId);
+            if ($result) {
+                die(json_encode(['success' => true]));
+            } else {
+                die(json_encode(['success' => false, 'error' => 'Ошибка назначения врача']));
+            }
+        } catch (Exception $e) {
+            die(json_encode(['success' => false, 'error' => $e->getMessage()]));
+        }
+        break;
+
+    case 'getOccupiedTimes':
+        $date = $_POST['date'] ?? '';
+        $employeeId = $_POST['employee_id'] ?? null;
+        $excludeEventId = $_POST['excludeEventId'] ?? null;
+
+        if (!$date) {
+            http_response_code(400);
+            die(json_encode(['success' => false, 'error' => 'Дата обязательна']));
+        }
+
+        try {
+            $occupiedTimes = $calendarObj->getOccupiedTimesForDoctor($date, $employeeId, $excludeEventId);
+            die(json_encode(['success' => true, 'occupiedTimes' => $occupiedTimes]));
+        } catch (Exception $e) {
+            die(json_encode(['success' => false, 'error' => $e->getMessage()]));
+        }
+        break;
+
+    case 'checkTimeAvailability':
+        $dateFrom = $_POST['dateFrom'] ?? '';
+        $dateTo = $_POST['dateTo'] ?? '';
+        $employeeId = $_POST['employeeId'] ?? null;
+        $excludeEventId = $_POST['excludeEventId'] ?? null;
+
+        if (!$dateFrom || !$dateTo) {
+            http_response_code(400);
+            die(json_encode(['success' => false, 'error' => 'Даты обязательны']));
+        }
+
+        try {
+            // Конвертируем даты из российского формата в стандартный
+            $convertedDateFrom = convertRussianDateToStandard($dateFrom);
+            $convertedDateTo = convertRussianDateToStandard($dateTo);
+            
+            $available = $calendarObj->isTimeAvailableForDoctor($convertedDateFrom, $convertedDateTo, $employeeId, $excludeEventId);
+            die(json_encode(['success' => true, 'available' => $available]));
+        } catch (Exception $e) {
+            die(json_encode(['success' => false, 'error' => $e->getMessage()]));
+        }
+        break;
+
+    case 'getAvailableTimesForMove':
+        $date = $_POST['date'] ?? '';
+        $employeeId = $_POST['employeeId'] ?? null;
+        $excludeEventId = $_POST['excludeEventId'] ?? null;
+
+        if (!$date) {
+            http_response_code(400);
+            die(json_encode(['success' => false, 'error' => 'Дата обязательна']));
+        }
+
+        try {
+            $availableTimes = $calendarObj->getAvailableTimesForMove($date, $excludeEventId, $employeeId);
+            die(json_encode(['success' => true, 'availableTimes' => $availableTimes]));
+        } catch (Exception $e) {
+            die(json_encode(['success' => false, 'error' => $e->getMessage()]));
+        }
+        break;
+
+    case 'getDoctorScheduleForMove':
+        $date = $_POST['date'] ?? '';
+        $employeeId = $_POST['employeeId'] ?? null;
+        $excludeEventId = $_POST['excludeEventId'] ?? null;
+
+        if (!$date || !$employeeId) {
+            http_response_code(400);
+            die(json_encode(['success' => false, 'error' => 'Дата и врач обязательны']));
+        }
+
+        try {
+            $availableTimes = $calendarObj->getDoctorScheduleForMove($date, $employeeId, $excludeEventId);
+            die(json_encode(['success' => true, 'availableTimes' => $availableTimes]));
+        } catch (Exception $e) {
+            die(json_encode(['success' => false, 'error' => $e->getMessage()]));
+        }
+        break;
+
+    case 'moveEvent':
+        $eventId = (int)($_POST['eventId'] ?? 0);
+        $employeeId = $_POST['employeeId'] ?? null;
+        $newDateFrom = $_POST['dateFrom'] ?? '';
+        $newDateTo = $_POST['dateTo'] ?? '';
+
+        if (!$eventId || !$newDateFrom || !$newDateTo) {
+            http_response_code(400);
+            die(json_encode(['success' => false, 'error' => 'Не все параметры переданы']));
+        }
+
+        try {
+            $result = $calendarObj->moveEvent($eventId, $newDateFrom, $newDateTo, $employeeId);
+            if ($result) {
+                die(json_encode(['success' => true]));
+            } else {
+                die(json_encode(['success' => false, 'error' => 'Ошибка переноса записи']));
+            }
+        } catch (Exception $e) {
+            die(json_encode(['success' => false, 'error' => $e->getMessage()]));
+        }
+        break;
+
+    case 'updateEventStatus':
+        $eventId = (int)($_POST['eventId'] ?? 0);
+        $status = $_POST['status'] ?? '';
+
+        if (!$eventId || !in_array($status, ['active', 'moved', 'cancelled'])) {
+            http_response_code(400);
+            die(json_encode(['success' => false, 'error' => 'Некорректные параметры']));
+        }
+
+        $event = $calendarObj->getEvent($eventId);
+        if (!$event) {
+            die(json_encode(['success' => false, 'error' => 'Событие не найдено']));
+        }
+
+        // Проверяем права на редактирование (только автор события)
+        if ($event['USER_ID'] != $GLOBALS['USER']->GetID()) {
+            http_response_code(403);
+            die(json_encode(['success' => false, 'error' => 'Нет прав на редактирование']));
+        }
+
+        try {
+            // Если возвращаем отмененную запись в расписание, проверяем доступность времени
+            if ($event['STATUS'] === 'cancelled' && $status === 'active') {
+                // Конвертируем даты из российского формата в стандартный для SQL
+                $dateFromStandard = convertRussianDateToStandard($event['DATE_FROM']);
+                $dateToStandard = convertRussianDateToStandard($event['DATE_TO']);
+                
+                $isAvailable = $calendarObj->isTimeAvailableForDoctor(
+                    $dateFromStandard, 
+                    $dateToStandard, 
+                    $event['EMPLOYEE_ID'], 
+                    $eventId
+                );
+                
+                if (!$isAvailable) {
+                    die(json_encode([
+                        'success' => false, 
+                        'error' => 'Время уже занято другой записью. Пожалуйста, измените время записи перед возвратом в расписание.'
+                    ]));
+                }
+            }
+            
+            $result = $calendarObj->updateEventStatus($eventId, $status);
+            if ($result) {
+                die(json_encode(['success' => true]));
+            } else {
+                die(json_encode(['success' => false, 'error' => 'Ошибка обновления статуса']));
+            }
+        } catch (Exception $e) {
+            die(json_encode(['success' => false, 'error' => $e->getMessage()]));
+        }
+        break;
+
     case 'getEvents':
         $branchId = (int)($_POST['branchId'] ?? 1);
         $dateFrom = $_POST['dateFrom'] ?? null;
         $dateTo = $_POST['dateTo'] ?? null;
 
+        // Отладочная информация
+        error_log("DYNAMIC LOAD: dateFrom=$dateFrom, dateTo=$dateTo, branchId=$branchId");
+
         try {
             $events = $calendarObj->getEventsByBranch($branchId, $dateFrom, $dateTo);
+            error_log("DYNAMIC LOAD: actual events count=" . count($events));
+            
+            // Логируем первые несколько событий для отладки
+            if (count($events) > 0) {
+                error_log("DYNAMIC LOAD: first event sample: " . json_encode($events[0]));
+            }
+            
             die(json_encode(['success' => true, 'events' => $events]));
         } catch (Exception $e) {
+            error_log("DYNAMIC LOAD ERROR: " . $e->getMessage());
             die(json_encode(['success' => false, 'error' => $e->getMessage()]));
         }
         break;
@@ -638,13 +877,19 @@ switch ($action) {
         break;
 
     case 'getBranchEmployees':
-        $branchId = $_POST['branch_id'] ?? 0;
+        $branchId = $_POST['branchId'] ?? $_POST['branch_id'] ?? 0;
+        
+        // Отладочная информация
+        error_log("AJAX getBranchEmployees: branchId = " . $branchId);
+        error_log("AJAX getBranchEmployees: POST data = " . json_encode($_POST));
         
         try {
             $component = new ArtmaxCalendarComponent();
             $result = $component->getBranchEmployeesAction($branchId);
+            error_log("AJAX getBranchEmployees: result = " . json_encode($result));
             die(json_encode($result));
         } catch (Exception $e) {
+            error_log("AJAX getBranchEmployees: error = " . $e->getMessage());
             die(json_encode(['success' => false, 'error' => 'Ошибка получения сотрудников: ' . $e->getMessage()]));
         }
         break;
@@ -812,6 +1057,31 @@ switch ($action) {
             } else {
                 die(json_encode(['success' => false, 'error' => 'Ошибка обновления статуса визита']));
             }
+        } catch (Exception $e) {
+            die(json_encode(['success' => false, 'error' => $e->getMessage()]));
+        }
+        break;
+
+    case 'getBranches':
+        try {
+            $component = new ArtmaxCalendarComponent();
+            $result = $component->getBranchesAction();
+            die(json_encode($result));
+        } catch (Exception $e) {
+            die(json_encode(['success' => false, 'error' => $e->getMessage()]));
+        }
+        break;
+
+    case 'addBranch':
+        $name = $_POST['name'] ?? '';
+        $address = $_POST['address'] ?? '';
+        $phone = $_POST['phone'] ?? '';
+        $email = $_POST['email'] ?? '';
+        
+        try {
+            $component = new ArtmaxCalendarComponent();
+            $result = $component->addBranchAction($name, $address, $phone, $email);
+            die(json_encode($result));
         } catch (Exception $e) {
             die(json_encode(['success' => false, 'error' => $e->getMessage()]));
         }

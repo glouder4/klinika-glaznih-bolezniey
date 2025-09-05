@@ -41,19 +41,56 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                 return;
             }
 
-            // Получаем события для филиала
+            // Получаем события для филиала с ограничениями по дате
             $calendarObj = new \Artmax\Calendar\Calendar();
-            $events = $calendarObj->getEventsByBranch($branchId, null, null, null, $eventsCount);
+            
+            // Получаем текущий месяц и год из URL параметра или текущую дату
+            $currentDate = isset($_GET['date']) ? new DateTime($_GET['date']) : new DateTime();
+            $currentYear = $currentDate->format('Y');
+            $currentMonth = $currentDate->format('n');
+            
+            // Отладочная информация о выбранной дате
+            error_log("PHP COMPONENT: URL date param = " . ($_GET['date'] ?? 'not set'));
+            error_log("PHP COMPONENT: Using date = " . $currentDate->format('Y-m-d'));
+            error_log("PHP COMPONENT: currentYear = $currentYear, currentMonth = $currentMonth");
+            
+            // Формируем диапазон дат для календарной сетки (включая дни предыдущего и следующего месяца)
+            $firstDay = new DateTime("$currentYear-$currentMonth-01");
+            $firstDayOfWeek = $firstDay->format('N'); // 1 = понедельник, 7 = воскресенье
+            
+            // Начинаем с понедельника предыдущей недели
+            $startDate = clone $firstDay;
+            $startDate->modify('-' . ($firstDayOfWeek - 1) . ' days');
+            
+            // Заканчиваем через 6 недель (42 дня)
+            $endDate = clone $startDate;
+            $endDate->modify('+41 days');
+            
+            $dateFrom = $startDate->format('Y-m-d');
+            $dateTo = $endDate->format('Y-m-d');
+            
+            $events = $calendarObj->getEventsByBranch($branchId, $dateFrom, $dateTo, null, null); // Убираем ограничение для статической загрузки
+            
+            // Отладочная информация
+            error_log("=== STATIC LOAD START ===");
+            error_log("STATIC LOAD: dateFrom=$dateFrom, dateTo=$dateTo, events count=" . count($events));
+            error_log("STATIC LOAD: currentYear=$currentYear, currentMonth=$currentMonth");
+            error_log("STATIC LOAD: startDate=" . $startDate->format('Y-m-d') . ", endDate=" . $endDate->format('Y-m-d'));
 
             // Группируем события по датам для отображения в календаре
             $eventsByDate = [];
             foreach ($events as $event) {
-                $dateKey = date('Y-m-d', strtotime($this->convertRussianDateToStandard($event['DATE_FROM'])));
+                $convertedDate = $this->convertRussianDateToStandard($event['DATE_FROM']);
+                $dateKey = date('Y-m-d', strtotime($convertedDate));
+                error_log("STATIC LOAD: event ID={$event['ID']}, original DATE_FROM={$event['DATE_FROM']}, converted={$convertedDate}, dateKey={$dateKey}");
                 if (!isset($eventsByDate[$dateKey])) {
                     $eventsByDate[$dateKey] = [];
                 }
                 $eventsByDate[$dateKey][] = $event;
             }
+            
+            error_log("STATIC LOAD: eventsByDate keys=" . implode(', ', array_keys($eventsByDate)));
+            error_log("=== STATIC LOAD END ===");
 
             // Получаем список всех филиалов для навигации
             $allBranches = $branchObj->getBranches();
@@ -130,6 +167,7 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                     $_POST['title'] ?? '',
                     $_POST['date'] ?? '',
                     $_POST['time'] ?? '',
+                    $_POST['employee_id'] ?? null,
                     $_POST['repeat'] === 'on' || $_POST['repeat'] === 'true',
                     $_POST['frequency'] ?? null,
                     $weekdays,
@@ -179,6 +217,26 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                 );
                 break;
                 
+            case 'getBranches':
+                $result = $this->getBranchesAction();
+                break;
+                
+            case 'getBranchEmployees':
+                $result = $this->getBranchEmployeesAction(
+                    (int)($_POST['branchId'] ?? 1)
+                );
+                break;
+                
+            case 'moveEvent':
+                $result = $this->moveEventAction(
+                    (int)($_POST['eventId'] ?? 0),
+                    (int)($_POST['branchId'] ?? 1),
+                    (int)($_POST['employeeId'] ?? 0),
+                    $_POST['dateFrom'] ?? '',
+                    $_POST['dateTo'] ?? ''
+                );
+                break;
+                
             default:
                 $result = ['success' => false, 'error' => 'Неизвестное действие'];
         }
@@ -213,10 +271,9 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
             $calendarObj = new \Artmax\Calendar\Calendar();
             $userId = $GLOBALS['USER']->GetID();
 
-            // Проверяем доступность времени
-            
-            if (!$calendarObj->isTimeAvailable($dateFrom, $dateTo, $userId)) {
-                return ['success' => false, 'error' => 'Время уже занято'];
+            // Проверяем доступность времени для врача
+            if (!$calendarObj->isTimeAvailableForDoctor($dateFrom, $dateTo, $employeeId)) {
+                return ['success' => false, 'error' => 'Время уже занято для выбранного врача'];
             }
             
             $eventId = $calendarObj->addEvent($title, $description, $dateFrom, $dateTo, $userId, $branchId, $eventColor);
@@ -311,113 +368,182 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
             $dateTo = clone $dateFrom;
             $dateTo->add(new \DateInterval('PT1H')); // Добавляем 1 час по умолчанию
 
-            // Проверяем доступность времени
-            if (!$calendarObj->isTimeAvailable($dateFrom->format('Y-m-d H:i:s'), $dateTo->format('Y-m-d H:i:s'), $userId)) {
-                return ['success' => false, 'error' => 'Время уже занято'];
-            }
-
-            // Создаем событие
-            $eventId = $calendarObj->addEvent($title, '', $dateFrom->format('Y-m-d H:i:s'), $dateTo->format('Y-m-d H:i:s'), $userId, 1, $eventColor, $employeeId);
-
-            if ($eventId) {
-                $eventsCreated = 1; // Основное событие
-                $createdEvents = [];
+            $eventsCreated = 0;
+            $createdEvents = [];
+            
+            // Если событие повторяемое, создаем все события (включая первое)
+            if ($repeat && $frequency) {
+                // Логируем параметры для отладки
+                error_log("addScheduleAction: date = $date, time = $time, dateFrom = " . $dateFrom->format('Y-m-d H:i:s'));
                 
-                // Получаем основное событие
-                $mainEvent = $calendarObj->getEvent($eventId);
-                if ($mainEvent) {
-                    $mainEvent['EVENT_COLOR'] = $eventColor;
-                    // Конвертируем даты в стандартный формат
-                    $mainEvent['DATE_FROM'] = $this->convertRussianDateToStandard($mainEvent['DATE_FROM']);
-                    $mainEvent['DATE_TO'] = $this->convertRussianDateToStandard($mainEvent['DATE_TO']);
-                    $createdEvents[] = $mainEvent;
-                }
-                
-                // Если событие повторяемое, создаем повторения
-                if ($repeat && $frequency) {
-                    $recurringResult = $this->createRecurringEvents($eventId, $frequency, $weekdays, $repeatEnd, $repeatCount, $repeatEndDate, $eventColor, $employeeId);
-                    if ($recurringResult && $recurringResult['count'] > 0) {
-                        $eventsCreated += $recurringResult['count'];
-                        
-                        // Получаем все созданные повторяющиеся события
-                        foreach ($recurringResult['ids'] as $recurringEventId) {
-                            $recurringEvent = $calendarObj->getEvent($recurringEventId);
-                            if ($recurringEvent) {
-                                $recurringEvent['EVENT_COLOR'] = $eventColor;
-                                // Конвертируем даты в стандартный формат
-                                $recurringEvent['DATE_FROM'] = $this->convertRussianDateToStandard($recurringEvent['DATE_FROM']);
-                                $recurringEvent['DATE_TO'] = $this->convertRussianDateToStandard($recurringEvent['DATE_TO']);
-                                $createdEvents[] = $recurringEvent;
-                            }
+                error_log("addScheduleAction: Calling createRecurringEvents with frequency = $frequency, weekdays = " . implode(',', $weekdays));
+                $recurringResult = $this->createRecurringEvents(null, $frequency, $weekdays, $repeatEnd, $repeatCount, $repeatEndDate, $eventColor, $employeeId, $dateFrom->format('Y-m-d H:i:s'), $title, $dateFrom->format('Y-m-d H:i:s'), $dateTo->format('Y-m-d H:i:s'), $userId);
+                error_log("addScheduleAction: createRecurringEvents returned: " . json_encode($recurringResult));
+                if ($recurringResult && $recurringResult['count'] > 0) {
+                    $eventsCreated = $recurringResult['count'];
+                    
+                    // Получаем все созданные события
+                    foreach ($recurringResult['ids'] as $eventId) {
+                        $event = $calendarObj->getEvent($eventId);
+                        if ($event) {
+                            $event['EVENT_COLOR'] = $eventColor;
+                            // Конвертируем даты в стандартный формат
+                            $event['DATE_FROM'] = $this->convertRussianDateToStandard($event['DATE_FROM']);
+                            $event['DATE_TO'] = $this->convertRussianDateToStandard($event['DATE_TO']);
+                            $createdEvents[] = $event;
                         }
                     }
                 }
+            } else {
+                // Если событие не повторяемое, создаем только одно событие
+                if ($calendarObj->isTimeAvailableForDoctor($dateFrom->format('Y-m-d H:i:s'), $dateTo->format('Y-m-d H:i:s'), $employeeId)) {
+                    $eventId = $calendarObj->addEvent($title, '', $dateFrom->format('Y-m-d H:i:s'), $dateTo->format('Y-m-d H:i:s'), $userId, 1, $eventColor, $employeeId);
+                    if ($eventId) {
+                        $eventsCreated = 1;
+                        $event = $calendarObj->getEvent($eventId);
+                        if ($event) {
+                            $event['EVENT_COLOR'] = $eventColor;
+                            // Конвертируем даты в стандартный формат
+                            $event['DATE_FROM'] = $this->convertRussianDateToStandard($event['DATE_FROM']);
+                            $event['DATE_TO'] = $this->convertRussianDateToStandard($event['DATE_TO']);
+                            $createdEvents[] = $event;
+                        }
+                    }
+                }
+            }
 
+            // Логируем результат
+            error_log("addScheduleAction: eventsCreated = $eventsCreated, createdEvents count = " . count($createdEvents));
+            error_log("addScheduleAction: result = " . json_encode($result));
+            
+            // Возвращаем результат
+            if ($eventsCreated > 0) {
+                error_log("addScheduleAction: Returning success with $eventsCreated events");
                 return [
                     'success' => true, 
-                    'eventId' => $eventId, 
+                    'eventId' => $mainEventId, 
                     'eventsCreated' => $eventsCreated,
                     'events' => $createdEvents
                 ];
             } else {
-                return ['success' => false, 'error' => 'Ошибка добавления расписания'];
+                error_log("addScheduleAction: Returning error - no events created");
+                return [
+                    'success' => false, 
+                    'error' => 'Все выбранные времена заняты, расписание не создано'
+                ];
             }
         } catch (\Exception $e) {
-            return ['success' => false, 'error' => $e->getMessage()];
+            error_log("addScheduleAction error: " . $e->getMessage());
+            return ['success' => false, 'error' => 'Ошибка создания расписания: ' . $e->getMessage()];
         }
     }
 
     /**
      * Создание повторяющихся событий
      */
-    private function createRecurringEvents($originalEventId, $frequency, $weekdays = [], $repeatEnd = 'never', $repeatCount = null, $repeatEndDate = null, $eventColor = '#3498db', $employeeId = null)
+    private function createRecurringEvents($originalEventId, $frequency, $weekdays = [], $repeatEnd = 'never', $repeatCount = null, $repeatEndDate = null, $eventColor = '#3498db', $employeeId = null, $scheduleStartDate = null, $title = null, $dateFrom = null, $dateTo = null, $userId = null)
     {
         try {
+            error_log("createRecurringEvents: Starting with frequency = $frequency, weekdays = " . implode(',', $weekdays));
             if (!CModule::IncludeModule('artmax.calendar')) {
                 return ['count' => 0, 'ids' => []];
             }
             
             $calendarObj = new \Artmax\Calendar\Calendar();
-            $originalEvent = $calendarObj->getEvent($originalEventId);
             
-            if (!$originalEvent) {
-                return ['count' => 0, 'ids' => []];
+            // Если переданы параметры для создания событий напрямую
+            if ($title && $dateFrom && $dateTo && $userId) {
+                $eventDateFrom = new \DateTime($dateFrom);
+                $eventDateTo = new \DateTime($dateTo);
+                $duration = $eventDateFrom->diff($eventDateTo);
+                $startDate = $scheduleStartDate ? new \DateTime($scheduleStartDate) : $eventDateFrom;
+            } else {
+                // Старая логика для обратной совместимости
+                $originalEvent = $calendarObj->getEvent($originalEventId);
+                if (!$originalEvent) {
+                    return ['count' => 0, 'ids' => []];
+                }
+                $eventDateFrom = new \DateTime($originalEvent['DATE_FROM']);
+                $eventDateTo = new \DateTime($originalEvent['DATE_TO']);
+                $duration = $eventDateFrom->diff($eventDateTo);
+                $startDate = $scheduleStartDate ? new \DateTime($scheduleStartDate) : $eventDateFrom;
+                $title = $originalEvent['TITLE'];
+                $userId = $originalEvent['USER_ID'];
             }
-
-            $dateFrom = new \DateTime($originalEvent['DATE_FROM']);
-            $dateTo = new \DateTime($originalEvent['DATE_TO']);
-            $duration = $dateFrom->diff($dateTo);
 
             $eventsCreated = 0;
             $createdEventIds = [];
-            $maxEvents = ($repeatEnd === 'after' && $repeatCount) ? $repeatCount : 100; // Максимум 100 событий
+            
+            // Для еженедельного расписания с выбранными днями недели
+            if ($frequency === 'weekly' && !empty($weekdays)) {
+                if ($repeatCount && $repeatCount > 0) {
+                    // Для еженедельного повторения используем количество недель
+                    $maxWeeks = $repeatCount;
+                    $maxEvents = $repeatCount * count($weekdays);
+                } else {
+                    // Для бесконечного повторения
+                    $maxWeeks = 100; // Максимум 100 недель для бесконечного повторения
+                    $maxEvents = 100 * count($weekdays); // Максимум 100 событий для бесконечного повторения
+                }
+            } else {
+                if ($repeatCount && $repeatCount > 0) {
+                    // Если указано количество повторений, используем его
+                    $maxEvents = $repeatCount;
+                } else {
+                    // Для бесконечного повторения
+                    $maxEvents = 100; // Максимум 100 событий для бесконечного повторения
+                }
+            }
+            
             $endDate = ($repeatEnd === 'date' && $repeatEndDate) ? new \DateTime($repeatEndDate) : null;
+            
+            // Логируем параметры для отладки
+            error_log("createRecurringEvents: repeatEnd = $repeatEnd, repeatCount = $repeatCount, maxEvents = $maxEvents");
 
             if ($frequency === 'weekly' && !empty($weekdays)) {
                 // Специальная обработка для еженедельного повторения с выбранными днями недели
-                $currentDate = clone $dateFrom;
+                // Используем дату начала расписания как базовую дату
+                $currentDate = clone $startDate;
                 $weekNumber = 0;
                 
-                while ($eventsCreated < $maxEvents) {
-                    // Находим понедельник текущей недели
+                // Логируем параметры для отладки
+                error_log("createRecurringEvents: maxWeeks = $maxWeeks, maxEvents = $maxEvents, weekdays = " . implode(',', $weekdays));
+                error_log("createRecurringEvents: startDate = " . $startDate->format('Y-m-d H:i:s'));
+                error_log("createRecurringEvents: eventDateFrom = " . $eventDateFrom->format('Y-m-d H:i:s'));
+                
+                // Используем количество недель из параметров
+                $weekNumber = 0; // Начинаем с недели 0 (первая неделя - та, на которую приходится дата начала)
+
+                while ($weekNumber < $maxWeeks) {
+                    // Логируем текущую неделю
+                    error_log("createRecurringEvents: weekNumber = $weekNumber, eventsCreated = $eventsCreated, currentDate = " . $currentDate->format('Y-m-d'));
+                    
+                    // Находим понедельник недели, в которой находится currentDate
                     $dayOfWeek = $currentDate->format('N'); // 1 = понедельник, 7 = воскресенье
                     $mondayOffset = $dayOfWeek - 1;
                     $weekStart = clone $currentDate;
                     $weekStart->sub(new \DateInterval('P' . $mondayOffset . 'D'));
+                    
+                    // Логируем начало недели
+                    error_log("createRecurringEvents: weekStart = " . $weekStart->format('Y-m-d') . " (Monday of week containing " . $currentDate->format('Y-m-d') . ")");
                     
                     // Создаем события для каждого выбранного дня недели в текущей неделе
                     foreach ($weekdays as $weekday) {
                         $eventDate = clone $weekStart;
                         $eventDate->add(new \DateInterval('P' . ($weekday - 1) . 'D'));
                         
-                        // Проверяем, что дата события не раньше исходной даты
-                        if ($eventDate >= $dateFrom) {
+                        // Логируем проверяемую дату
+                        error_log("createRecurringEvents: Checking weekday $weekday, eventDate = " . $eventDate->format('Y-m-d') . ", startDate = " . $startDate->format('Y-m-d'));
+                        
+                        // Проверяем, что дата события не раньше даты начала расписания
+                        if ($eventDate >= $startDate) {
+                            error_log("createRecurringEvents: Date " . $eventDate->format('Y-m-d') . " >= startDate " . $startDate->format('Y-m-d') . " - proceeding with event creation");
                             // Проверяем ограничение по дате
                             if ($endDate && $eventDate > $endDate) {
                                 break 2; // Выходим из обоих циклов
                             }
                             
-                            // Проверяем ограничение по количеству
+                            // Дополнительная проверка по количеству событий (защита от переполнения)
                             if ($eventsCreated >= $maxEvents) {
                                 break 2; // Выходим из обоих циклов
                             }
@@ -425,15 +551,17 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                             $eventDateTo = clone $eventDate;
                             $eventDateTo->add($duration);
                             
-                            // Проверяем доступность времени для повторяющегося события
-                            if ($calendarObj->isTimeAvailable($eventDate->format('Y-m-d H:i:s'), $eventDateTo->format('Y-m-d H:i:s'), $originalEvent['USER_ID'])) {
-                                // Создаем повторяющееся событие
+                            
+                            // Проверяем доступность времени для события
+                            if ($calendarObj->isTimeAvailableForDoctor($eventDate->format('Y-m-d H:i:s'), $eventDateTo->format('Y-m-d H:i:s'), $employeeId)) {
+                                // Создаем событие
+                                error_log("createRecurringEvents: Creating event for date " . $eventDate->format('Y-m-d H:i:s'));
                                 $recurringEventId = $calendarObj->addEvent(
-                                    $originalEvent['TITLE'],
-                                    $originalEvent['DESCRIPTION'],
+                                    $title,
+                                    '', // Описание пустое для расписания
                                     $eventDate->format('Y-m-d H:i:s'),
                                     $eventDateTo->format('Y-m-d H:i:s'),
-                                    $originalEvent['USER_ID'],
+                                    $userId,
                                     1,
                                     $eventColor,
                                     $employeeId
@@ -442,9 +570,14 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                                 if ($recurringEventId) {
                                     $eventsCreated++;
                                     $createdEventIds[] = $recurringEventId;
+                                    error_log("createRecurringEvents: Event created with ID $recurringEventId, total events: $eventsCreated");
                                 }
+                            } else {
+                                error_log("createRecurringEvents: Time not available for " . $eventDate->format('Y-m-d H:i:s'));
                             }
                             // Если время занято, просто пропускаем этот день
+                        } else {
+                            error_log("createRecurringEvents: Date " . $eventDate->format('Y-m-d') . " < startDate " . $startDate->format('Y-m-d') . " - skipping this date");
                         }
                     }
                     
@@ -486,15 +619,16 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                         break;
                     }
 
+                    
                     // Проверяем доступность времени для повторяющегося события
-                    if ($calendarObj->isTimeAvailable($newDateFrom->format('Y-m-d H:i:s'), $newDateTo->format('Y-m-d H:i:s'), $originalEvent['USER_ID'])) {
-                        // Создаем повторяющееся событие
+                    if ($calendarObj->isTimeAvailableForDoctor($newDateFrom->format('Y-m-d H:i:s'), $newDateTo->format('Y-m-d H:i:s'), $employeeId)) {
+                        // Создаем событие
                         $recurringEventId = $calendarObj->addEvent(
-                            $originalEvent['TITLE'],
-                            $originalEvent['DESCRIPTION'],
+                            $title,
+                            '', // Описание пустое для расписания
                             $newDateFrom->format('Y-m-d H:i:s'),
                             $newDateTo->format('Y-m-d H:i:s'),
-                            $originalEvent['USER_ID'],
+                            $userId,
                             1,
                             $eventColor,
                             $employeeId
@@ -575,9 +709,9 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                 return ['success' => false, 'error' => 'Нет прав на редактирование'];
             }
 
-            // Проверяем доступность времени (исключая текущее событие)
-            if (!$calendarObj->isTimeAvailable($dateFrom, $dateTo, $userId, $eventId)) {
-                return ['success' => false, 'error' => 'Время уже занято'];
+            // Проверяем доступность времени для врача (исключая текущее событие)
+            if (!$calendarObj->isTimeAvailableForDoctor($dateFrom, $dateTo, $employeeId, $eventId)) {
+                return ['success' => false, 'error' => 'Время уже занято для выбранного врача'];
             }
 
             // Обновляем событие
@@ -1365,6 +1499,76 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
     }
 
     /**
+     * Получение всех филиалов
+     */
+    public function getBranchesAction()
+    {
+        if (!$GLOBALS['USER'] || !$GLOBALS['USER']->IsAuthorized()) {
+            return ['success' => false, 'error' => 'Необходима авторизация'];
+        }
+
+        try {
+            if (!CModule::IncludeModule('artmax.calendar')) {
+                return ['success' => false, 'error' => 'Модуль календаря не установлен'];
+            }
+
+            $branchObj = new \Artmax\Calendar\Branch();
+            $branches = $branchObj->getBranches();
+
+            return [
+                'success' => true,
+                'branches' => $branches
+            ];
+        } catch (\Exception $e) {
+            return ['success' => false, 'error' => 'Ошибка получения филиалов: ' . $e->getMessage()];
+        }
+    }
+
+    /**
+     * Создание нового филиала
+     */
+    public function addBranchAction($name, $address = '', $phone = '', $email = '')
+    {
+        if (!$GLOBALS['USER'] || !$GLOBALS['USER']->IsAuthorized()) {
+            return ['success' => false, 'error' => 'Необходима авторизация'];
+        }
+
+        try {
+            if (!CModule::IncludeModule('artmax.calendar')) {
+                return ['success' => false, 'error' => 'Модуль календаря не установлен'];
+            }
+
+            // Валидация
+            if (empty($name)) {
+                return ['success' => false, 'error' => 'Название филиала обязательно'];
+            }
+
+            $branchObj = new \Artmax\Calendar\Branch();
+            $branchId = $branchObj->addBranch($name, $address, $phone, $email);
+
+            if ($branchId) {
+                // Обновляем страницы раздела для отображения нового филиала
+                try {
+                    \Artmax\Calendar\EventHandlers::updateSectionPages();
+                } catch (\Exception $e) {
+                    // Логируем ошибку, но не прерываем создание филиала
+                    error_log('Ошибка обновления страниц раздела: ' . $e->getMessage());
+                }
+
+                return [
+                    'success' => true,
+                    'branchId' => $branchId,
+                    'message' => 'Филиал успешно создан'
+                ];
+            } else {
+                return ['success' => false, 'error' => 'Ошибка создания филиала'];
+            }
+        } catch (\Exception $e) {
+            return ['success' => false, 'error' => 'Ошибка создания филиала: ' . $e->getMessage()];
+        }
+    }
+
+    /**
      * Получение сотрудников филиала
      */
     public function getBranchEmployeesAction($branchId)
@@ -1387,6 +1591,51 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
             ];
         } catch (\Exception $e) {
             return ['success' => false, 'error' => 'Ошибка получения сотрудников филиала: ' . $e->getMessage()];
+        }
+    }
+
+    /**
+     * Перенос события
+     */
+    public function moveEventAction($eventId, $branchId, $employeeId, $dateFrom, $dateTo)
+    {
+        if (!$GLOBALS['USER'] || !$GLOBALS['USER']->IsAuthorized()) {
+            return ['success' => false, 'error' => 'Необходима авторизация'];
+        }
+
+        try {
+            if (!CModule::IncludeModule('artmax.calendar')) {
+                return ['success' => false, 'error' => 'Модуль календаря не установлен'];
+            }
+
+            $calendar = new \Artmax\Calendar\Calendar();
+            
+            // Получаем текущее событие
+            $event = $calendar->getEvent($eventId);
+            if (!$event) {
+                return ['success' => false, 'error' => 'Событие не найдено'];
+            }
+
+            // Проверяем права на перенос (только автор события)
+            if ($event['USER_ID'] != $GLOBALS['USER']->GetID()) {
+                return ['success' => false, 'error' => 'Нет прав на перенос события'];
+            }
+
+            // Проверяем доступность времени для нового врача
+            if (!$calendar->isTimeAvailableForDoctor($dateFrom, $dateTo, $employeeId)) {
+                return ['success' => false, 'error' => 'Время уже занято для выбранного врача'];
+            }
+
+            // Обновляем событие
+            $result = $calendar->updateEvent($eventId, $event['TITLE'], $event['DESCRIPTION'], $dateFrom, $dateTo, $event['EVENT_COLOR'], $branchId, $employeeId);
+
+            if ($result) {
+                return ['success' => true];
+            } else {
+                return ['success' => false, 'error' => 'Ошибка переноса события'];
+            }
+        } catch (\Exception $e) {
+            return ['success' => false, 'error' => 'Ошибка переноса события: ' . $e->getMessage()];
         }
     }
 
