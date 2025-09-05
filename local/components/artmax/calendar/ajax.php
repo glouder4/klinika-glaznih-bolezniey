@@ -343,6 +343,65 @@ switch ($action) {
         }
         break;
 
+    case 'getAvailableTimesForMove':
+        $date = $_POST['date'] ?? '';
+        $employeeId = $_POST['employeeId'] ?? null;
+        $excludeEventId = $_POST['excludeEventId'] ?? null;
+
+        if (!$date) {
+            http_response_code(400);
+            die(json_encode(['success' => false, 'error' => 'Дата обязательна']));
+        }
+
+        try {
+            $availableTimes = $calendarObj->getAvailableTimesForMove($date, $excludeEventId, $employeeId);
+            die(json_encode(['success' => true, 'availableTimes' => $availableTimes]));
+        } catch (Exception $e) {
+            die(json_encode(['success' => false, 'error' => $e->getMessage()]));
+        }
+        break;
+
+    case 'getDoctorScheduleForMove':
+        $date = $_POST['date'] ?? '';
+        $employeeId = $_POST['employeeId'] ?? null;
+        $excludeEventId = $_POST['excludeEventId'] ?? null;
+
+        if (!$date || !$employeeId) {
+            http_response_code(400);
+            die(json_encode(['success' => false, 'error' => 'Дата и врач обязательны']));
+        }
+
+        try {
+            $availableTimes = $calendarObj->getDoctorScheduleForMove($date, $employeeId, $excludeEventId);
+            die(json_encode(['success' => true, 'availableTimes' => $availableTimes]));
+        } catch (Exception $e) {
+            die(json_encode(['success' => false, 'error' => $e->getMessage()]));
+        }
+        break;
+
+    case 'moveEvent':
+        $eventId = (int)($_POST['eventId'] ?? 0);
+        $employeeId = $_POST['employeeId'] ?? null;
+        $newDateFrom = $_POST['dateFrom'] ?? '';
+        $newDateTo = $_POST['dateTo'] ?? '';
+
+        if (!$eventId || !$newDateFrom || !$newDateTo) {
+            http_response_code(400);
+            die(json_encode(['success' => false, 'error' => 'Не все параметры переданы']));
+        }
+
+        try {
+            $result = $calendarObj->moveEvent($eventId, $newDateFrom, $newDateTo, $employeeId);
+            if ($result) {
+                die(json_encode(['success' => true]));
+            } else {
+                die(json_encode(['success' => false, 'error' => 'Ошибка переноса записи']));
+            }
+        } catch (Exception $e) {
+            die(json_encode(['success' => false, 'error' => $e->getMessage()]));
+        }
+        break;
+
     case 'updateEventStatus':
         $eventId = (int)($_POST['eventId'] ?? 0);
         $status = $_POST['status'] ?? '';
@@ -401,10 +460,21 @@ switch ($action) {
         $dateFrom = $_POST['dateFrom'] ?? null;
         $dateTo = $_POST['dateTo'] ?? null;
 
+        // Отладочная информация
+        error_log("DYNAMIC LOAD: dateFrom=$dateFrom, dateTo=$dateTo, branchId=$branchId");
+
         try {
             $events = $calendarObj->getEventsByBranch($branchId, $dateFrom, $dateTo);
+            error_log("DYNAMIC LOAD: actual events count=" . count($events));
+            
+            // Логируем первые несколько событий для отладки
+            if (count($events) > 0) {
+                error_log("DYNAMIC LOAD: first event sample: " . json_encode($events[0]));
+            }
+            
             die(json_encode(['success' => true, 'events' => $events]));
         } catch (Exception $e) {
+            error_log("DYNAMIC LOAD ERROR: " . $e->getMessage());
             die(json_encode(['success' => false, 'error' => $e->getMessage()]));
         }
         break;

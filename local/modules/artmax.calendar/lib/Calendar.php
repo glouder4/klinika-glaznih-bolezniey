@@ -44,6 +44,9 @@ class Calendar
         file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
             "  - eventColor: {$eventColor}\n", 
             FILE_APPEND | LOCK_EX);
+        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+            "  - employeeId: {$employeeId}\n", 
+            FILE_APPEND | LOCK_EX);
         
         // Используем время как есть, без всяких конвертаций
         $sql = "INSERT INTO artmax_calendar_events (TITLE, DESCRIPTION, DATE_FROM, DATE_TO, ORIGINAL_DATE_FROM, ORIGINAL_DATE_TO, TIME_IS_CHANGED, USER_ID, BRANCH_ID, EVENT_COLOR, EMPLOYEE_ID) VALUES ('" . 
@@ -320,9 +323,12 @@ class Calendar
      */
     public function isTimeAvailableForDoctor($dateFrom, $dateTo, $employeeId, $excludeId = null)
     {
-        // Если врач не указан, проверяем конфликты с событиями без врача
-        if (!$employeeId) {
-            $employeeId = null;
+        // Если врач не указан, считаем время доступным (не проверяем конфликты)
+        if (!$employeeId || $employeeId === '' || $employeeId === '0') {
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "IS_TIME_AVAILABLE_FOR_DOCTOR: No employeeId provided, returning true (no conflict check)\n", 
+                FILE_APPEND | LOCK_EX);
+            return true;
         }
 
         // Логируем параметры
@@ -330,11 +336,18 @@ class Calendar
             "IS_TIME_AVAILABLE_FOR_DOCTOR: Checking for employeeId=" . $employeeId . ", dateFrom=" . $dateFrom . ", dateTo=" . $dateTo . "\n", 
             FILE_APPEND | LOCK_EX);
         
-        // Проверяем пересечение временных интервалов только для конкретного врача и только активных записей
+        // Извлекаем дату из dateFrom для фильтрации по конкретному дню
+        // Используем простой способ извлечения даты без DateTime
+        $dateOnly = substr($dateFrom, 0, 10); // Берем первые 10 символов (YYYY-MM-DD)
+        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+            "IS_TIME_AVAILABLE_FOR_DOCTOR: Extracted dateOnly=" . $dateOnly . "\n", 
+            FILE_APPEND | LOCK_EX);
+        
+        // Проверяем пересечение временных интервалов только для конкретного врача, только активных записей и только на конкретную дату
         if ($employeeId === null) {
-            $sql = "SELECT COUNT(*) as count FROM artmax_calendar_events WHERE EMPLOYEE_ID IS NULL AND STATUS != 'cancelled' AND DATE_FROM < '" . $this->connection->getSqlHelper()->forSql($dateTo) . "' AND DATE_TO > '" . $this->connection->getSqlHelper()->forSql($dateFrom) . "'";
+            $sql = "SELECT COUNT(*) as count FROM artmax_calendar_events WHERE EMPLOYEE_ID IS NULL AND STATUS != 'cancelled' AND DATE(DATE_FROM) = '$dateOnly' AND DATE_FROM < '" . $this->connection->getSqlHelper()->forSql($dateTo) . "' AND DATE_TO > '" . $this->connection->getSqlHelper()->forSql($dateFrom) . "'";
         } else {
-            $sql = "SELECT COUNT(*) as count FROM artmax_calendar_events WHERE EMPLOYEE_ID = " . (int)$employeeId . " AND STATUS != 'cancelled' AND DATE_FROM < '" . $this->connection->getSqlHelper()->forSql($dateTo) . "' AND DATE_TO > '" . $this->connection->getSqlHelper()->forSql($dateFrom) . "'";
+            $sql = "SELECT COUNT(*) as count FROM artmax_calendar_events WHERE EMPLOYEE_ID = " . (int)$employeeId . " AND STATUS != 'cancelled' AND DATE(DATE_FROM) = '$dateOnly' AND DATE_FROM < '" . $this->connection->getSqlHelper()->forSql($dateTo) . "' AND DATE_TO > '" . $this->connection->getSqlHelper()->forSql($dateFrom) . "'";
         }
         
         if ($excludeId) {
@@ -343,6 +356,18 @@ class Calendar
         
         file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
             "IS_TIME_AVAILABLE_FOR_DOCTOR: SQL = " . $sql . "\n", 
+            FILE_APPEND | LOCK_EX);
+        
+        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+            "IS_TIME_AVAILABLE_FOR_DOCTOR: dateOnly = " . $dateOnly . ", dateFrom = " . $dateFrom . ", dateTo = " . $dateTo . "\n", 
+            FILE_APPEND | LOCK_EX);
+        
+        // Проверяем, какие события есть у врача на эту дату
+        $checkSql = "SELECT ID, TITLE, DATE_FROM, DATE_TO FROM artmax_calendar_events WHERE EMPLOYEE_ID = " . (int)$employeeId . " AND DATE(DATE_FROM) = '$dateOnly'";
+        $checkResult = $this->connection->query($checkSql);
+        $existingEvents = $checkResult->fetchAll();
+        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+            "IS_TIME_AVAILABLE_FOR_DOCTOR: Existing events on $dateOnly: " . json_encode($existingEvents) . "\n", 
             FILE_APPEND | LOCK_EX);
         
         $result = $this->connection->query($sql);
@@ -356,9 +381,9 @@ class Calendar
         // Если есть конфликты, показываем какие именно события конфликтуют
         if ($count > 0) {
             if ($employeeId === null) {
-                $conflictSql = "SELECT ID, TITLE, DATE_FROM, DATE_TO FROM artmax_calendar_events WHERE EMPLOYEE_ID IS NULL AND STATUS != 'cancelled' AND DATE_FROM < '" . $this->connection->getSqlHelper()->forSql($dateTo) . "' AND DATE_TO > '" . $this->connection->getSqlHelper()->forSql($dateFrom) . "'";
+                $conflictSql = "SELECT ID, TITLE, DATE_FROM, DATE_TO FROM artmax_calendar_events WHERE EMPLOYEE_ID IS NULL AND STATUS != 'cancelled' AND DATE(DATE_FROM) = '$dateOnly' AND DATE_FROM < '" . $this->connection->getSqlHelper()->forSql($dateTo) . "' AND DATE_TO > '" . $this->connection->getSqlHelper()->forSql($dateFrom) . "'";
             } else {
-                $conflictSql = "SELECT ID, TITLE, DATE_FROM, DATE_TO FROM artmax_calendar_events WHERE EMPLOYEE_ID = " . (int)$employeeId . " AND STATUS != 'cancelled' AND DATE_FROM < '" . $this->connection->getSqlHelper()->forSql($dateTo) . "' AND DATE_TO > '" . $this->connection->getSqlHelper()->forSql($dateFrom) . "'";
+                $conflictSql = "SELECT ID, TITLE, DATE_FROM, DATE_TO FROM artmax_calendar_events WHERE EMPLOYEE_ID = " . (int)$employeeId . " AND STATUS != 'cancelled' AND DATE(DATE_FROM) = '$dateOnly' AND DATE_FROM < '" . $this->connection->getSqlHelper()->forSql($dateTo) . "' AND DATE_TO > '" . $this->connection->getSqlHelper()->forSql($dateFrom) . "'";
             }
             if ($excludeId) {
                 $conflictSql .= " AND ID != " . (int)$excludeId;
@@ -837,6 +862,222 @@ class Calendar
         } catch (\Exception $e) {
             $errorMessage = 'Ошибка обновления статуса визита события: ' . $e->getMessage();
             error_log($errorMessage);
+            return false;
+        }
+    }
+
+    /**
+     * Получает доступные времена для переноса записи (только пустые слоты без контактов и сделок)
+     */
+    public function getAvailableTimesForMove($date, $excludeEventId = null, $employeeId = null)
+    {
+        // Генерируем все возможные времена с 8:00 до 18:00 с интервалом 30 минут
+        $availableTimes = [];
+        $startHour = 8;
+        $endHour = 18;
+        
+        for ($hour = $startHour; $hour < $endHour; $hour++) {
+            for ($minute = 0; $minute < 60; $minute += 30) {
+                $timeString = sprintf('%02d:%02d', $hour, $minute);
+                $availableTimes[] = [
+                    'time' => $timeString,
+                    'available' => true
+                ];
+            }
+        }
+        
+        // Получаем все события на эту дату
+        $dateFrom = $date . ' 00:00:00';
+        $dateTo = $date . ' 23:59:59';
+        
+        $sql = "
+            SELECT 
+                ID,
+                DATE_FORMAT(DATE_FROM, '%H:%i') AS TIME_FROM,
+                DATE_FORMAT(DATE_TO, '%H:%i') AS TIME_TO,
+                CONTACT_ENTITY_ID,
+                DEAL_ENTITY_ID
+            FROM artmax_calendar_events 
+            WHERE DATE_FROM >= '$dateFrom' 
+              AND DATE_FROM <= '$dateTo'
+              AND STATUS != 'cancelled'";
+        
+        if ($excludeEventId) {
+            $sql .= " AND ID != " . (int)$excludeEventId;
+        }
+        
+        if ($employeeId) {
+            $sql .= " AND EMPLOYEE_ID = " . (int)$employeeId;
+        }
+        
+        $result = $this->connection->query($sql);
+        
+        // Отмечаем занятые времена
+        while ($event = $result->fetch()) {
+            $timeFrom = $event['TIME_FROM'];
+            $timeTo = $event['TIME_TO'];
+            
+            // Проверяем, есть ли контакт или сделка
+            $hasContactOrDeal = !empty($event['CONTACT_ENTITY_ID']) || !empty($event['DEAL_ENTITY_ID']);
+            
+            // Если есть контакт или сделка, помечаем время как недоступное
+            if ($hasContactOrDeal) {
+                foreach ($availableTimes as &$timeSlot) {
+                    if ($timeSlot['time'] >= $timeFrom && $timeSlot['time'] < $timeTo) {
+                        $timeSlot['available'] = false;
+                    }
+                }
+            }
+        }
+        
+        // Возвращаем только доступные времена
+        $filteredTimes = array_filter($availableTimes, function($timeSlot) {
+            return $timeSlot['available'];
+        });
+        
+        // Переиндексируем массив, чтобы индексы были последовательными
+        return array_values($filteredTimes);
+    }
+
+    /**
+     * Получает расписание врача для переноса записи (только времена событий БЕЗ контактов/сделок)
+     */
+    public function getDoctorScheduleForMove($date, $employeeId, $excludeEventId = null)
+    {
+        // Получаем все события врача на эту дату БЕЗ контактов и сделок
+        $dateFrom = $date . ' 00:00:00';
+        $dateTo = $date . ' 23:59:59';
+        
+        $sql = "
+            SELECT 
+                ID,
+                DATE_FORMAT(DATE_FROM, '%H:%i') AS TIME_FROM,
+                DATE_FORMAT(DATE_TO, '%H:%i') AS TIME_TO,
+                CONTACT_ENTITY_ID,
+                DEAL_ENTITY_ID
+            FROM artmax_calendar_events 
+            WHERE DATE_FROM >= '$dateFrom' 
+              AND DATE_FROM <= '$dateTo'
+              AND EMPLOYEE_ID = " . (int)$employeeId . "
+              AND STATUS != 'cancelled'
+              AND (CONTACT_ENTITY_ID IS NULL OR CONTACT_ENTITY_ID = 0)
+              AND (DEAL_ENTITY_ID IS NULL OR DEAL_ENTITY_ID = 0)";
+        
+        if ($excludeEventId) {
+            $sql .= " AND ID != " . (int)$excludeEventId;
+        }
+        
+        $result = $this->connection->query($sql);
+        $availableTimes = [];
+        
+        // Собираем времена из существующих событий БЕЗ контактов/сделок
+        while ($event = $result->fetch()) {
+            $timeFrom = $event['TIME_FROM'];
+            $timeTo = $event['TIME_TO'];
+            
+            // Добавляем время начала события
+            $availableTimes[] = [
+                'time' => $timeFrom,
+                'available' => true
+            ];
+        }
+        
+        // Сортируем по времени
+        usort($availableTimes, function($a, $b) {
+            return strcmp($a['time'], $b['time']);
+        });
+        
+        return $availableTimes;
+    }
+
+    /**
+     * Переносит событие на новое время с обменом местами
+     */
+    public function moveEvent($eventId, $newDateFrom, $newDateTo, $employeeId = null)
+    {
+        try {
+            // Получаем данные о переносимом событии
+            $movingEvent = $this->getEvent($eventId);
+            if (!$movingEvent) {
+                return false;
+            }
+
+            // Получаем новую дату для поиска события на этом месте
+            $newDate = date('Y-m-d', strtotime($newDateFrom));
+            $newTimeFrom = date('H:i:s', strtotime($newDateFrom));
+            $newTimeTo = date('H:i:s', strtotime($newDateTo));
+
+            // Ищем событие на новом месте (в том же временном интервале)
+            $sql = "
+                SELECT ID, TITLE, DESCRIPTION, DATE_FROM, DATE_TO, EVENT_COLOR, 
+                       CONTACT_ENTITY_ID, DEAL_ENTITY_ID, EMPLOYEE_ID, BRANCH_ID
+                FROM artmax_calendar_events 
+                WHERE DATE_FROM = '$newDateFrom' 
+                  AND DATE_TO = '$newDateTo'
+                  AND STATUS != 'cancelled'
+                  AND ID != " . (int)$eventId;
+
+            $result = $this->connection->query($sql);
+            $targetEvent = $result->fetch();
+
+            // Начинаем транзакцию
+            $this->connection->startTransaction();
+
+            if ($targetEvent) {
+                // Если на новом месте есть событие - обмениваемся местами
+                
+                // 1. Обновляем событие на новом месте (становится переносимым)
+                $oldDateFrom = $movingEvent['DATE_FROM'];
+                $oldDateTo = $movingEvent['DATE_TO'];
+                
+                $updateTargetSql = "
+                    UPDATE artmax_calendar_events 
+                    SET DATE_FROM = '$oldDateFrom',
+                        DATE_TO = '$oldDateTo',
+                        ORIGINAL_DATE_FROM = '$oldDateFrom',
+                        ORIGINAL_DATE_TO = '$oldDateTo',
+                        TIME_IS_CHANGED = 0,
+                        UPDATED_AT = NOW()
+                    WHERE ID = " . (int)$targetEvent['ID'];
+
+                $this->connection->query($updateTargetSql);
+
+                // 2. Обновляем переносимое событие (получает новое время и флаг изменения)
+                $employeeUpdate = $employeeId ? ", EMPLOYEE_ID = " . (int)$employeeId : "";
+                $updateMovingSql = "
+                    UPDATE artmax_calendar_events 
+                    SET DATE_FROM = '$newDateFrom',
+                        DATE_TO = '$newDateTo',
+                        TIME_IS_CHANGED = 1
+                        $employeeUpdate,
+                        UPDATED_AT = NOW()
+                    WHERE ID = " . (int)$eventId;
+
+                $this->connection->query($updateMovingSql);
+
+            } else {
+                // Если на новом месте пусто - просто переносим событие
+                $employeeUpdate = $employeeId ? ", EMPLOYEE_ID = " . (int)$employeeId : "";
+                $updateMovingSql = "
+                    UPDATE artmax_calendar_events 
+                    SET DATE_FROM = '$newDateFrom',
+                        DATE_TO = '$newDateTo',
+                        TIME_IS_CHANGED = 1
+                        $employeeUpdate,
+                        UPDATED_AT = NOW()
+                    WHERE ID = " . (int)$eventId;
+
+                $this->connection->query($updateMovingSql);
+            }
+
+            // Подтверждаем транзакцию
+            $this->connection->commitTransaction();
+            return true;
+
+        } catch (\Exception $e) {
+            // Откатываем транзакцию в случае ошибки
+            $this->connection->rollbackTransaction();
+            error_log('Ошибка переноса события: ' . $e->getMessage());
             return false;
         }
     }

@@ -4,6 +4,10 @@ use Bitrix\Main\Localization\Loc;
 
 Loc::loadMessages(__FILE__);
 
+// Отладочная информация
+echo '<!-- STATIC LOAD DEBUG: Total events = ' . count($arResult['EVENTS']) . ' -->';
+echo '<!-- STATIC LOAD DEBUG: Events by date keys = ' . implode(', ', array_keys($arResult['EVENTS_BY_DATE'])) . ' -->';
+
 /**
  * Конвертирует дату из российского формата (день.месяц.год) в стандартный (год-месяц-день)
  * @param string $dateString Дата в формате "04.08.2025 09:00:00"
@@ -167,6 +171,8 @@ $totalDays = 42; // 6 недель * 7 дней
 
                         // Отображаем события для этого дня
                         if (isset($arResult['EVENTS_BY_DATE'][$dateKey])) {
+                            // Отладочная информация
+                            echo '<!-- STATIC LOAD: ' . count($arResult['EVENTS_BY_DATE'][$dateKey]) . ' events for ' . $dateKey . ' -->';
                             foreach ($arResult['EVENTS_BY_DATE'][$dateKey] as $event) {
                                 $eventColor = $event['EVENT_COLOR'] ?? '#3498db';
                                 $style = 'border-left: 4px solid ' . $eventColor . '; background-color: ' . $eventColor . '65;';
@@ -235,6 +241,58 @@ $totalDays = 42; // 6 недель * 7 дней
                 }
                 ?>
             </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно для переноса записи -->
+    <div class="event-form-modal" id="moveEventModal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Перенести запись</h3>
+                <button class="close-btn" onclick="closeMoveEventModal()">×</button>
+            </div>
+            <form id="move-event-form" novalidate onsubmit="handleMoveEventSubmit(event)">
+                <?= bitrix_sessid_post() ?>
+                <input type="hidden" id="move-event-id" name="eventId">
+                
+                <div class="form-group" id="move-employee-group">
+                    <label for="move-event-employee">Врач *</label>
+                    <select id="move-event-employee" name="employee_id" required onchange="onMoveEmployeeChange()">
+                        <option value="">Выберите врача</option>
+                        <!-- Опции будут загружены через JavaScript -->
+                    </select>
+                    <div class="error-message" style="display: none;">
+                        <span class="error-icon">⚠️</span>
+                        <span>Выберите врача.</span>
+                    </div>
+                </div>
+                
+                <div class="form-group" id="move-date-group">
+                    <label for="move-event-date">Дата *</label>
+                    <input type="date" id="move-event-date" name="date" required onchange="onMoveDateChange()">
+                    <div class="error-message" style="display: none;">
+                        <span class="error-icon">⚠️</span>
+                        <span>Выберите дату.</span>
+                    </div>
+                </div>
+                
+                <div class="form-group" id="move-time-group">
+                    <label for="move-event-time">Время *</label>
+                    <select id="move-event-time" name="time" required>
+                        <option value="">Выберите время</option>
+                        <!-- Опции будут загружены через JavaScript -->
+                    </select>
+                    <div class="error-message" style="display: none;">
+                        <span class="error-icon">⚠️</span>
+                        <span>Выберите время.</span>
+                    </div>
+                </div>
+                
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeMoveEventModal()">Отмена</button>
+                    <button type="submit" class="btn btn-primary">Перенести</button>
+                </div>
+            </form>
         </div>
     </div>
 
@@ -1249,6 +1307,7 @@ $totalDays = 42; // 6 недель * 7 дней
                     title: formData.get('title'),
                     date: formData.get('date'),
                     time: formData.get('time'),
+                    employee_id: formData.get('employee_id'),
                     repeat: formData.get('repeat') === 'on',
                     frequency: formData.get('frequency')
                 };
@@ -1257,7 +1316,7 @@ $totalDays = 42; // 6 недель * 7 дней
                 
                 // Здесь можно добавить AJAX запрос для сохранения расписания
                 // Пока просто показываем уведомление
-                alert('Расписание успешно создано!');
+                showNotification('Расписание успешно создано!', 'success');
                 closeScheduleModal();
             });
         }

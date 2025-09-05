@@ -16,6 +16,11 @@
     });
 
     function initCalendar() {
+        // Инициализация глобальных переменных для календаря
+        const now = new Date();
+        window.currentYear = now.getFullYear();
+        window.currentMonth = now.getMonth() + 1;
+        
         // Инициализация календарных ячеек
         initCalendarCells();
 
@@ -558,7 +563,8 @@
             dateFrom: formatLocalDateTime(startDateTime),
             dateTo: formatLocalDateTime(endDateTime),
             branchId: getBranchId() || 1,
-            eventColor: formData.get('event-color') || '#3498db'
+            eventColor: formData.get('event-color') || '#3498db',
+            employee_id: formData.get('employee_id') || null
         };
         
         // Логируем данные, которые отправляем
@@ -1671,20 +1677,26 @@
                 showNotification(message, 'success');
                 closeScheduleModal();
                 
-                // Динамически добавляем события расписания в календарь
+                // Динамически добавляем события расписания в календарь с анимацией
                 if (data.events && Array.isArray(data.events)) {
-                    console.log('Добавляем события в календарь:', data.events);
+                    console.log('Добавляем события расписания в календарь:', data.events);
                     data.events.forEach(event => {
-                        console.log('Добавляем событие:', event);
+                        console.log('Добавляем событие расписания:', event);
                         console.log('Цвет события:', event.EVENT_COLOR);
-                        addEventToCalendar({
+                        
+                        // Конвертируем данные события в формат, понятный для addEventToCalendar
+                        const eventData = {
                             id: event.ID,
                             title: event.TITLE,
                             description: event.DESCRIPTION,
                             dateFrom: event.DATE_FROM,
                             dateTo: event.DATE_TO,
-                            eventColor: event.EVENT_COLOR || scheduleData.eventColor || '#3498db'
-                        });
+                            eventColor: event.EVENT_COLOR || scheduleData.eventColor || '#3498db',
+                            contactEntityId: event.CONTACT_ENTITY_ID,
+                            dealEntityId: event.DEAL_ENTITY_ID
+                        };
+                        
+                        addEventToCalendar(eventData);
                     });
                 }
             } else {
@@ -5082,25 +5094,55 @@
         // Создаем объект Date из строки времени, избегая проблем с часовыми поясами
         let dateFrom;
         if (typeof eventData.dateFrom === 'string' && eventData.dateFrom.includes(' ')) {
-            // Если дата в формате "2025-08-04 12:00:00", парсим компоненты отдельно
-            const [datePart, timePart] = eventData.dateFrom.split(' ');
-            const [year, month, day] = datePart.split('-').map(Number);
-            const [hours, minutes, seconds] = timePart.split(':').map(Number);
-            // Создаем Date в локальном времени (month - 1, так как в JS месяцы начинаются с 0)
-            dateFrom = new Date(year, month - 1, day, hours, minutes, seconds);
+            // Проверяем, если дата в российском формате "01.09.2025 09:00:00"
+            if (eventData.dateFrom.match(/^\d{1,2}\.\d{1,2}\.\d{4}\s+\d{1,2}:\d{1,2}:\d{1,2}$/)) {
+                const [datePart, timePart] = eventData.dateFrom.split(' ');
+                const [day, month, year] = datePart.split('.').map(Number);
+                const [hours, minutes, seconds] = timePart.split(':').map(Number);
+                // Создаем Date в локальном времени (month - 1, так как в JS месяцы начинаются с 0)
+                dateFrom = new Date(year, month - 1, day, hours, minutes, seconds);
+                console.log('addEventToCalendar: Российский формат даты обработан:', eventData.dateFrom, '->', dateFrom);
+            } else if (eventData.dateFrom.match(/^\d{4}-\d{2}-\d{2}\s+\d{1,2}:\d{1,2}:\d{1,2}$/)) {
+                // Если дата в формате "2025-08-04 12:00:00", парсим компоненты отдельно
+                const [datePart, timePart] = eventData.dateFrom.split(' ');
+                const [year, month, day] = datePart.split('-').map(Number);
+                const [hours, minutes, seconds] = timePart.split(':').map(Number);
+                // Создаем Date в локальном времени (month - 1, так как в JS месяцы начинаются с 0)
+                dateFrom = new Date(year, month - 1, day, hours, minutes, seconds);
+                console.log('addEventToCalendar: Стандартный формат даты обработан:', eventData.dateFrom, '->', dateFrom);
+            } else {
+                // Если дата в ISO формате
+                dateFrom = new Date(eventData.dateFrom);
+                console.log('addEventToCalendar: ISO формат даты обработан:', eventData.dateFrom, '->', dateFrom);
+            }
         } else {
             // Если дата в ISO формате
             dateFrom = new Date(eventData.dateFrom);
+            console.log('addEventToCalendar: ISO формат даты (fallback):', eventData.dateFrom, '->', dateFrom);
         }
         
         // Получаем ключ даты в формате YYYY-MM-DD
         let dateKey;
         if (typeof eventData.dateFrom === 'string' && eventData.dateFrom.includes(' ')) {
-            // Если дата в формате "2025-08-04 12:00:00"
-            dateKey = eventData.dateFrom.split(' ')[0];
+            // Проверяем, если дата в российском формате "01.09.2025 09:00:00"
+            if (eventData.dateFrom.match(/^\d{1,2}\.\d{1,2}\.\d{4}\s+\d{1,2}:\d{1,2}:\d{1,2}$/)) {
+                const [datePart] = eventData.dateFrom.split(' ');
+                const [day, month, year] = datePart.split('.');
+                dateKey = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+                console.log('addEventToCalendar: Российский формат dateKey:', eventData.dateFrom, '->', dateKey);
+            } else if (eventData.dateFrom.match(/^\d{4}-\d{2}-\d{2}\s+\d{1,2}:\d{1,2}:\d{1,2}$/)) {
+                // Если дата в формате "2025-08-04 12:00:00"
+                dateKey = eventData.dateFrom.split(' ')[0];
+                console.log('addEventToCalendar: Стандартный формат dateKey:', eventData.dateFrom, '->', dateKey);
+            } else {
+                // Если дата в ISO формате, извлекаем дату без конвертации
+                dateKey = eventData.dateFrom.split('T')[0];
+                console.log('addEventToCalendar: ISO формат dateKey:', eventData.dateFrom, '->', dateKey);
+            }
         } else {
             // Если дата в ISO формате, извлекаем дату без конвертации
             dateKey = eventData.dateFrom.split('T')[0];
+            console.log('addEventToCalendar: ISO формат dateKey (fallback):', eventData.dateFrom, '->', dateKey);
         }
         
         // Находим ячейку календаря для этой даты
@@ -5127,17 +5169,26 @@
         
         let timeString;
         if (typeof eventData.dateFrom === 'string') {
-            // Если дата в формате "2025-08-04 12:00:00", извлекаем время напрямую
-            const timeMatch = eventData.dateFrom.match(/(\d{2}):(\d{2}):(\d{2})$/);
-            if (timeMatch) {
-                timeString = `${timeMatch[1]}:${timeMatch[2]}`;
-                console.log('addEventToCalendar: Время извлечено из пробела:', timeString);
+            // Проверяем, если дата в российском формате "01.09.2025 09:00:00"
+            if (eventData.dateFrom.match(/^\d{1,2}\.\d{1,2}\.\d{4}\s+\d{1,2}:\d{1,2}:\d{1,2}$/)) {
+                const timeMatch = eventData.dateFrom.match(/(\d{1,2}):(\d{1,2}):(\d{1,2})$/);
+                if (timeMatch) {
+                    timeString = `${timeMatch[1].padStart(2, '0')}:${timeMatch[2].padStart(2, '0')}`;
+                    console.log('addEventToCalendar: Время извлечено из российского формата:', timeString);
+                }
+            } else if (eventData.dateFrom.match(/^\d{4}-\d{2}-\d{2}\s+\d{1,2}:\d{1,2}:\d{1,2}$/)) {
+                // Если дата в формате "2025-08-04 12:00:00", извлекаем время напрямую
+                const timeMatch = eventData.dateFrom.match(/(\d{2}):(\d{2}):(\d{2})$/);
+                if (timeMatch) {
+                    timeString = `${timeMatch[1]}:${timeMatch[2]}`;
+                    console.log('addEventToCalendar: Время извлечено из стандартного формата:', timeString);
+                }
             } else {
                 // Если дата в ISO формате (с T), извлекаем время
                 const isoTimeMatch = eventData.dateFrom.match(/T(\d{2}):(\d{2}):/);
                 if (isoTimeMatch) {
                     timeString = `${isoTimeMatch[1]}:${isoTimeMatch[2]}`;
-                    console.log('addEventToCalendar: Время извлечено из T:', timeString);
+                    console.log('addEventToCalendar: Время извлечено из ISO формата:', timeString);
                 } else {
                     // Fallback на локальное время
                     timeString = dateFrom.toLocaleTimeString('ru-RU', { 
@@ -5161,10 +5212,18 @@
         // Получаем время окончания
         let endTimeString;
         if (typeof eventData.dateTo === 'string') {
-            // Если дата в формате "2025-08-04 12:00:00", извлекаем время напрямую
-            const endTimeMatch = eventData.dateTo.match(/(\d{2}):(\d{2}):(\d{2})$/);
-            if (endTimeMatch) {
-                endTimeString = `${endTimeMatch[1]}:${endTimeMatch[2]}`;
+            // Проверяем, если дата в российском формате "01.09.2025 09:00:00"
+            if (eventData.dateTo.match(/^\d{1,2}\.\d{1,2}\.\d{4}\s+\d{1,2}:\d{1,2}:\d{1,2}$/)) {
+                const endTimeMatch = eventData.dateTo.match(/(\d{1,2}):(\d{1,2}):(\d{1,2})$/);
+                if (endTimeMatch) {
+                    endTimeString = `${endTimeMatch[1].padStart(2, '0')}:${endTimeMatch[2].padStart(2, '0')}`;
+                }
+            } else if (eventData.dateTo.match(/^\d{4}-\d{2}-\d{2}\s+\d{1,2}:\d{1,2}:\d{1,2}$/)) {
+                // Если дата в формате "2025-08-04 12:00:00", извлекаем время напрямую
+                const endTimeMatch = eventData.dateTo.match(/(\d{2}):(\d{2}):(\d{2})$/);
+                if (endTimeMatch) {
+                    endTimeString = `${endTimeMatch[1]}:${endTimeMatch[2]}`;
+                }
             } else {
                 // Если дата в ISO формате (с T), извлекаем время
                 const isoEndTimeMatch = eventData.dateTo.match(/T(\d{2}):(\d{2}):/);
@@ -5277,11 +5336,13 @@
         console.log('refreshCalendarEvents: year =', year, 'month =', month);
         
         // Формируем диапазон дат для текущего месяца
+        // ВНИМАНИЕ: month в JavaScript это 1-12, но new Date() ожидает 0-11!
         const dateFrom = `${year}-${String(month).padStart(2, '0')}-01`;
-        const lastDay = new Date(year, month, 0).getDate();
+        const lastDay = new Date(year, month, 0).getDate(); // month (1-12) - получаем последний день текущего месяца
         const dateTo = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
         
-        console.log('refreshCalendarEvents: dateFrom =', dateFrom, 'dateTo =', dateTo);
+        console.log('DYNAMIC LOAD: dateFrom =', dateFrom, 'dateTo =', dateTo, 'lastDay =', lastDay);
+        console.log('DYNAMIC LOAD: new Date test =', new Date(year, month, 0));
         
         const csrfToken = getCSRFToken();
         fetch('/local/components/artmax/calendar/ajax.php', {
@@ -5301,8 +5362,12 @@
         })
         .then(response => response.json())
         .then(data => {
+            console.log('DYNAMIC LOAD: Server response:', data);
             if (data.success && data.events) {
+                console.log('DYNAMIC LOAD: Events received:', data.events.length);
                 updateCalendarEvents(data.events);
+            } else {
+                console.error('DYNAMIC LOAD: Error in response:', data);
             }
         })
         .catch(error => {
@@ -5392,10 +5457,15 @@
                             eventElement.style.opacity = '';
                             eventElement.style.transform = '';
                             
-                            // Восстанавливаем оригинальный цвет фона
+                            // Восстанавливаем оригинальный цвет фона с 40% прозрачностью
                             const originalColor = eventElement.getAttribute('data-original-color');
                             if (originalColor) {
-                                eventElement.style.backgroundColor = `${originalColor}40`;
+                                // Конвертируем hex в RGB и добавляем 40% прозрачность
+                                const hex = originalColor.replace('#', '');
+                                const r = parseInt(hex.substr(0, 2), 16);
+                                const g = parseInt(hex.substr(2, 2), 16);
+                                const b = parseInt(hex.substr(4, 2), 16);
+                                eventElement.style.backgroundColor = `rgba(${r}, ${g}, ${b}, 0.4)`;
                             } else {
                                 eventElement.style.backgroundColor = '';
                             }
@@ -5732,7 +5802,12 @@
         // Применяем цвет события
         if (event.EVENT_COLOR) {
             eventElement.style.borderLeft = `4px solid ${event.EVENT_COLOR}`;
-            eventElement.style.backgroundColor = `${event.EVENT_COLOR}40`;
+            // Конвертируем hex в RGB и добавляем 40% прозрачность
+            const hex = event.EVENT_COLOR.replace('#', '');
+            const r = parseInt(hex.substr(0, 2), 16);
+            const g = parseInt(hex.substr(2, 2), 16);
+            const b = parseInt(hex.substr(4, 2), 16);
+            eventElement.style.backgroundColor = `rgba(${r}, ${g}, ${b}, 0.4)`;
             // Сохраняем оригинальный цвет БЕЗ прозрачности в data-атрибуте
             eventElement.setAttribute('data-original-color', event.EVENT_COLOR);
         }
@@ -5906,6 +5981,10 @@
                 currentMonth--;
             }
             
+            // Обновляем глобальные переменные
+            window.currentYear = currentYear;
+            window.currentMonth = currentMonth + 1;
+            
             // Обновляем URL и перезагружаем страницу
             const newDate = new Date(currentYear, currentMonth, 1);
             // Форматируем дату в локальном формате, избегая проблем с часовыми поясами
@@ -5945,6 +6024,10 @@
             } else {
                 currentMonth++;
             }
+            
+            // Обновляем глобальные переменные
+            window.currentYear = currentYear;
+            window.currentMonth = currentMonth + 1;
             
             // Обновляем URL и перезагружаем страницу
             const newDate = new Date(currentYear, currentMonth, 1);
@@ -6035,9 +6118,34 @@
             showNotification('Ошибка: не найдено событие', 'error');
             return;
         }
-        
-        showNotification('Функция переноса записи будет реализована позже', 'info');
-        // TODO: Реализовать логику переноса записи
+
+        // Получаем данные о текущем событии
+        const csrfToken = getCSRFToken();
+        fetch('/local/components/artmax/calendar/ajax.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-Bitrix-Csrf-Token': csrfToken
+            },
+            body: new URLSearchParams({
+                action: 'getEvent',
+                eventId: window.currentEventId,
+                sessid: csrfToken
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                openMoveEventModal(data.event);
+            } else {
+                showNotification('Ошибка получения данных события', 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Ошибка при получении данных события:', error);
+            showNotification('Ошибка соединения с сервером', 'error');
+        });
     }
 
     // Функция для переключения статуса записи (отменить/вернуть)
@@ -6123,10 +6231,337 @@
         });
     }
 
+    // Функция открытия модального окна переноса записи
+    function openMoveEventModal(event) {
+        const modal = document.getElementById('moveEventModal');
+        if (!modal) {
+            console.error('Модальное окно переноса не найдено');
+            return;
+        }
+
+        // Заполняем форму данными события
+        document.getElementById('move-event-id').value = event.ID;
+        
+        // Устанавливаем текущую дату события
+        const eventDate = event.DATE_FROM.split(' ')[0];
+        const [day, month, year] = eventDate.split('.');
+        const standardDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+        document.getElementById('move-event-date').value = standardDate;
+        
+        // Очищаем селекторы
+        const timeSelect = document.getElementById('move-event-time');
+        timeSelect.innerHTML = '<option value="">Выберите время</option>';
+        
+        // Загружаем врачей и устанавливаем текущего
+        loadEmployeesForMove(event.EMPLOYEE_ID);
+        
+        // Показываем модальное окно
+        modal.style.display = 'flex';
+        setTimeout(() => {
+            modal.classList.add('show');
+        }, 10);
+        document.body.style.overflow = 'hidden';
+        
+        // Загружаем расписание врача для текущей даты
+        loadDoctorScheduleForMove(event.EMPLOYEE_ID, standardDate);
+    }
+
+    // Функция закрытия модального окна переноса
+    function closeMoveEventModal() {
+        const modal = document.getElementById('moveEventModal');
+        if (modal) {
+            modal.classList.remove('show');
+            setTimeout(() => {
+                modal.style.display = 'none';
+                document.body.style.overflow = '';
+            }, 300);
+        }
+    }
+
+    // Функция загрузки врачей для переноса
+    function loadEmployeesForMove(currentEmployeeId) {
+        const csrfToken = getCSRFToken();
+        fetch('/local/components/artmax/calendar/ajax.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-Bitrix-Csrf-Token': csrfToken
+            },
+            body: new URLSearchParams({
+                action: 'getEmployees',
+                sessid: csrfToken
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                populateEmployeeSelectForMove(data.employees, currentEmployeeId);
+            } else {
+                console.error('Ошибка загрузки врачей:', data.error);
+                showNotification('Ошибка загрузки врачей', 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Ошибка при загрузке врачей:', error);
+            showNotification('Ошибка соединения с сервером', 'error');
+        });
+    }
+
+    // Функция заполнения селектора врачей для переноса
+    function populateEmployeeSelectForMove(employees, currentEmployeeId) {
+        const employeeSelect = document.getElementById('move-event-employee');
+        employeeSelect.innerHTML = '<option value="">Выберите врача</option>';
+        
+        employees.forEach(employee => {
+            const option = document.createElement('option');
+            option.value = employee.ID;
+            option.textContent = `${employee.NAME} ${employee.LAST_NAME}`.trim() || employee.LOGIN;
+            
+            // Устанавливаем текущего врача как выбранного
+            if (employee.ID == currentEmployeeId) {
+                option.selected = true;
+            }
+            
+            employeeSelect.appendChild(option);
+        });
+    }
+
+    // Функция загрузки расписания врача для переноса
+    function loadDoctorScheduleForMove(employeeId, date) {
+        const csrfToken = getCSRFToken();
+        fetch('/local/components/artmax/calendar/ajax.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-Bitrix-Csrf-Token': csrfToken
+            },
+            body: new URLSearchParams({
+                action: 'getDoctorScheduleForMove',
+                employeeId: employeeId,
+                date: date,
+                excludeEventId: window.currentEventId,
+                sessid: csrfToken
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            console.log('Ответ сервера для getDoctorScheduleForMove:', data);
+            if (data.success) {
+                console.log('availableTimes:', data.availableTimes);
+                populateTimeSelectForMove(data.availableTimes);
+            } else {
+                console.error('Ошибка загрузки расписания врача:', data.error);
+                showNotification('Ошибка загрузки расписания врача', 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Ошибка при загрузке расписания врача:', error);
+            showNotification('Ошибка соединения с сервером', 'error');
+        });
+    }
+
+    // Функция загрузки доступных времен для переноса (устаревшая, оставляем для совместимости)
+    function loadAvailableTimesForMove(date) {
+        const employeeId = document.getElementById('move-event-employee').value;
+        if (!employeeId) {
+            const timeSelect = document.getElementById('move-event-time');
+            timeSelect.innerHTML = '<option value="">Сначала выберите врача</option>';
+            return;
+        }
+
+        loadDoctorScheduleForMove(employeeId, date);
+    }
+
+    // Функция заполнения селектора времени для переноса
+    function populateTimeSelectForMove(availableTimes) {
+        const timeSelect = document.getElementById('move-event-time');
+        timeSelect.innerHTML = '<option value="">Выберите время</option>';
+        
+        // Проверяем, что availableTimes является массивом
+        if (!Array.isArray(availableTimes)) {
+            console.error('availableTimes не является массивом:', availableTimes);
+            const option = document.createElement('option');
+            option.value = '';
+            option.textContent = 'Ошибка загрузки времен';
+            option.disabled = true;
+            timeSelect.appendChild(option);
+            return;
+        }
+        
+        if (availableTimes.length === 0) {
+            const option = document.createElement('option');
+            option.value = '';
+            option.textContent = 'Нет доступных времен';
+            option.disabled = true;
+            timeSelect.appendChild(option);
+            return;
+        }
+        
+        availableTimes.forEach(timeSlot => {
+            const option = document.createElement('option');
+            option.value = timeSlot.time;
+            option.textContent = timeSlot.time;
+            timeSelect.appendChild(option);
+        });
+    }
+
+    // Обработчик изменения врача в модальном окне переноса
+    function onMoveEmployeeChange() {
+        const employeeId = document.getElementById('move-event-employee').value;
+        const dateInput = document.getElementById('move-event-date');
+        const selectedDate = dateInput.value;
+        
+        if (!employeeId) {
+            const timeSelect = document.getElementById('move-event-time');
+            timeSelect.innerHTML = '<option value="">Сначала выберите врача</option>';
+            return;
+        }
+        
+        if (selectedDate) {
+            // Загружаем расписание врача для выбранной даты
+            loadDoctorScheduleForMove(employeeId, selectedDate);
+        } else {
+            const timeSelect = document.getElementById('move-event-time');
+            timeSelect.innerHTML = '<option value="">Выберите дату</option>';
+        }
+    }
+
+    // Обработчик изменения даты в модальном окне переноса
+    function onMoveDateChange() {
+        const employeeId = document.getElementById('move-event-employee').value;
+        const dateInput = document.getElementById('move-event-date');
+        const selectedDate = dateInput.value;
+        
+        if (!employeeId) {
+            const timeSelect = document.getElementById('move-event-time');
+            timeSelect.innerHTML = '<option value="">Сначала выберите врача</option>';
+            return;
+        }
+        
+        if (selectedDate) {
+            // Загружаем расписание врача для выбранной даты
+            loadDoctorScheduleForMove(employeeId, selectedDate);
+        } else {
+            const timeSelect = document.getElementById('move-event-time');
+            timeSelect.innerHTML = '<option value="">Выберите дату</option>';
+        }
+    }
+
+    // Обработчик отправки формы переноса
+    function handleMoveEventSubmit(event) {
+        event.preventDefault();
+        
+        const form = event.target;
+        const formData = new FormData(form);
+        const eventId = formData.get('eventId');
+        const employeeId = formData.get('employee_id');
+        const date = formData.get('date');
+        const time = formData.get('time');
+        
+        if (!eventId || !employeeId || !date || !time) {
+            showNotification('Заполните все поля', 'error');
+            return;
+        }
+        
+        // Создаем дату и время для переноса
+        const [year, month, day] = date.split('-');
+        const [hours, minutes] = time.split(':');
+        const newDateTime = `${year}-${month}-${day} ${hours}:${minutes}:00`;
+        
+        // Получаем длительность события из текущего события
+        const csrfToken = getCSRFToken();
+        fetch('/local/components/artmax/calendar/ajax.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-Bitrix-Csrf-Token': csrfToken
+            },
+            body: new URLSearchParams({
+                action: 'getEvent',
+                eventId: eventId,
+                sessid: csrfToken
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const event = data.event;
+                const duration = getEventDuration(event.DATE_FROM, event.DATE_TO);
+                
+                // Вычисляем новое время окончания
+                const startTime = new Date(newDateTime);
+                const endTime = new Date(startTime.getTime() + duration * 60 * 1000);
+                
+                const newEndDateTime = formatLocalDateTime(endTime);
+                
+                // Переносим событие с обменом местами
+                return fetch('/local/components/artmax/calendar/ajax.php', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'X-Bitrix-Csrf-Token': csrfToken
+                    },
+                    body: new URLSearchParams({
+                        action: 'moveEvent',
+                        eventId: eventId,
+                        employeeId: employeeId,
+                        dateFrom: newDateTime,
+                        dateTo: newEndDateTime,
+                        sessid: csrfToken
+                    })
+                });
+            } else {
+                throw new Error('Ошибка получения данных события');
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showNotification('Запись успешно перенесена', 'success');
+                closeMoveEventModal();
+                closeEventSidePanel();
+                refreshCalendarEvents();
+            } else {
+                showNotification('Ошибка переноса записи: ' + (data.error || 'Неизвестная ошибка'), 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Ошибка при переносе записи:', error);
+            showNotification('Ошибка соединения с сервером', 'error');
+        });
+    }
+
+    // Вспомогательная функция для получения длительности события в минутах
+    function getEventDuration(dateFrom, dateTo) {
+        const start = new Date(dateFrom);
+        const end = new Date(dateTo);
+        return Math.round((end - start) / (1000 * 60));
+    }
+
+    // Вспомогательная функция для форматирования даты и времени
+    function formatLocalDateTime(date) {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        const hours = String(date.getHours()).padStart(2, '0');
+        const minutes = String(date.getMinutes()).padStart(2, '0');
+        const seconds = String(date.getSeconds()).padStart(2, '0');
+        return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+    }
+
     // Делаем функции доступными глобально
     window.moveEventFromSidePanel = moveEventFromSidePanel;
     window.toggleEventStatusFromSidePanel = toggleEventStatusFromSidePanel;
     window.updateEventStatus = updateEventStatus;
     window.updateCancelButtonByStatus = updateCancelButtonByStatus;
+    window.openMoveEventModal = openMoveEventModal;
+    window.closeMoveEventModal = closeMoveEventModal;
+    window.onMoveDateChange = onMoveDateChange;
+    window.onMoveEmployeeChange = onMoveEmployeeChange;
+    window.handleMoveEventSubmit = handleMoveEventSubmit;
 
 })();
