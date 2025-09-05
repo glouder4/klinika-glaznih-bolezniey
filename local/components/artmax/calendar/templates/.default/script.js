@@ -648,7 +648,9 @@
         
         // Проверяем корректность даты
         if (!dateValue || !timeValue) {
-            showNotification('Ошибка: некорректные дата или время', 'error');
+            showNotification('Ошибка: некорректные дата или время. Возможно время уже занято.', 'error');
+            submitBtn.textContent = 'Сохранить';
+            submitBtn.disabled = false;
             return;
         }
         
@@ -1001,6 +1003,10 @@
                 
                 // Загружаем и отображаем заметку
                 loadEventNote(eventId);
+                
+                // Обновляем кнопку в зависимости от статуса события
+                console.log('showEventSidePanel: Статус события:', event.STATUS);
+                updateCancelButtonByStatus(event.STATUS);
             } else {
                 showNotification('Ошибка при загрузке события', 'error');
                 // Сбрасываем счетчик загрузки при ошибке основного запроса
@@ -5206,6 +5212,19 @@
     function refreshCalendarEvents() {
         const branchId = getBranchId() || 1;
         
+        // Получаем текущий месяц и год из глобальных переменных
+        const year = window.currentYear || new Date().getFullYear();
+        const month = window.currentMonth || (new Date().getMonth() + 1);
+        
+        console.log('refreshCalendarEvents: year =', year, 'month =', month);
+        
+        // Формируем диапазон дат для текущего месяца
+        const dateFrom = `${year}-${String(month).padStart(2, '0')}-01`;
+        const lastDay = new Date(year, month, 0).getDate();
+        const dateTo = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+        
+        console.log('refreshCalendarEvents: dateFrom =', dateFrom, 'dateTo =', dateTo);
+        
         const csrfToken = getCSRFToken();
         fetch('/local/components/artmax/calendar/ajax.php', {
             method: 'POST',
@@ -5217,6 +5236,8 @@
             body: new URLSearchParams({
                 action: 'getEvents',
                 branchId: branchId,
+                dateFrom: dateFrom,
+                dateTo: dateTo,
                 sessid: csrfToken
             })
         })
@@ -5245,12 +5266,20 @@
             console.log('updateCalendarEvents: Обрабатываем событие:', event);
             console.log('updateCalendarEvents: event.DATE_FROM =', event.DATE_FROM);
             
-            // Получаем ключ даты, избегая проблем с часовыми поясами
+            // Получаем ключ даты, конвертируя российский формат в стандартный
             let dateKey;
             if (typeof event.DATE_FROM === 'string' && event.DATE_FROM.includes(' ')) {
-                // Если дата в формате "2025-08-04 12:00:00"
-                dateKey = event.DATE_FROM.split(' ')[0];
-                console.log('updateCalendarEvents: Дата извлечена из пробела:', dateKey);
+                const datePart = event.DATE_FROM.split(' ')[0];
+                // Проверяем, если дата в российском формате "01.09.2025"
+                if (datePart.match(/^\d{1,2}\.\d{1,2}\.\d{4}$/)) {
+                    const [day, month, year] = datePart.split('.');
+                    dateKey = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+                    console.log('updateCalendarEvents: Российский формат конвертирован:', datePart, '->', dateKey);
+                } else {
+                    // Если дата в стандартном формате "2025-08-04"
+                    dateKey = datePart;
+                    console.log('updateCalendarEvents: Стандартный формат:', dateKey);
+                }
             } else {
                 // Если дата в ISO формате, извлекаем дату без конвертации
                 dateKey = event.DATE_FROM.split('T')[0];
@@ -5270,6 +5299,32 @@
                 eventsByDate[dateKey].forEach(event => {
                     const eventElement = createEventElement(event);
                     calendarDay.appendChild(eventElement);
+                    
+                    // Анимация появления
+                    eventElement.style.opacity = '0';
+                    eventElement.style.transform = 'scale(0.8)';
+                    
+                    // Плавное появление
+                    setTimeout(() => {
+                        eventElement.style.transition = 'all 0.3s ease-out';
+                        eventElement.style.opacity = '1';
+                        eventElement.style.transform = 'scale(1)';
+                        
+                        // Убираем временные стили после анимации и восстанавливаем оригинальный цвет
+                        setTimeout(() => {
+                            eventElement.style.transition = '';
+                            eventElement.style.opacity = '';
+                            eventElement.style.transform = '';
+                            
+                            // Восстанавливаем оригинальный цвет фона
+                            const originalColor = eventElement.getAttribute('data-original-color');
+                            if (originalColor) {
+                                eventElement.style.backgroundColor = `${originalColor}40`;
+                            } else {
+                                eventElement.style.backgroundColor = '';
+                            }
+                        }, 300);
+                    }, 50);
                 });
             }
         });
@@ -5528,12 +5583,22 @@
     function createEventElement(event) {
         const eventElement = document.createElement('div');
         eventElement.className = 'calendar-event';
+        
+        // Добавляем класс статуса
+        if (event.STATUS) {
+            eventElement.classList.add(`status-${event.STATUS}`);
+        } else {
+            eventElement.classList.add('status-active');
+        }
+            
         eventElement.setAttribute('data-event-id', event.ID);
         
         // Применяем цвет события
         if (event.EVENT_COLOR) {
             eventElement.style.borderLeft = `4px solid ${event.EVENT_COLOR}`;
-            eventElement.style.backgroundColor = `${event.EVENT_COLOR}15`;
+            eventElement.style.backgroundColor = `${event.EVENT_COLOR}40`;
+            // Сохраняем оригинальный цвет БЕЗ прозрачности в data-атрибуте
+            eventElement.setAttribute('data-original-color', event.EVENT_COLOR);
         }
         
         // Форматируем время, избегая проблем с часовыми поясами
@@ -5827,5 +5892,105 @@
             console.error('updateOccupiedTimeSlots: Ошибка запроса:', error);
         });
     }
+
+    // Функция для переноса записи
+    function moveEventFromSidePanel() {
+        if (!window.currentEventId) {
+            showNotification('Ошибка: не найдено событие', 'error');
+            return;
+        }
+        
+        showNotification('Функция переноса записи будет реализована позже', 'info');
+        // TODO: Реализовать логику переноса записи
+    }
+
+    // Функция для переключения статуса записи (отменить/вернуть)
+    function toggleEventStatusFromSidePanel() {
+        if (!window.currentEventId) {
+            showNotification('Ошибка: не найдено событие', 'error');
+            return;
+        }
+        
+        // Получаем текущий статус из кнопки
+        const cancelBtn = document.getElementById('cancel-event-btn');
+        const isCurrentlyCancelled = cancelBtn.textContent.includes('Вернуть');
+        
+        if (isCurrentlyCancelled) {
+            // Возвращаем в расписание
+            if (confirm('Вы уверены, что хотите вернуть эту запись в расписание?')) {
+                updateEventStatus(window.currentEventId, 'active');
+            }
+        } else {
+            // Отменяем запись
+            if (confirm('Вы уверены, что хотите отменить эту запись?')) {
+                updateEventStatus(window.currentEventId, 'cancelled');
+            }
+        }
+    }
+    
+    // Функция для обновления кнопки в зависимости от статуса
+    function updateCancelButtonByStatus(status) {
+        console.log('updateCancelButtonByStatus: Обновляем кнопку для статуса:', status);
+        const cancelBtn = document.getElementById('cancel-event-btn');
+        if (!cancelBtn) {
+            console.log('updateCancelButtonByStatus: Кнопка не найдена');
+            return;
+        }
+        
+        if (status === 'cancelled') {
+            console.log('updateCancelButtonByStatus: Устанавливаем кнопку "Вернуть в расписание"');
+            cancelBtn.innerHTML = '✅ Вернуть в расписание';
+            cancelBtn.className = 'cancel-event-btn return-event-btn';
+        } else {
+            console.log('updateCancelButtonByStatus: Устанавливаем кнопку "Отменить запись"');
+            cancelBtn.innerHTML = '❌ Отменить запись';
+            cancelBtn.className = 'cancel-event-btn';
+        }
+    }
+
+    // Функция для обновления статуса события
+    function updateEventStatus(eventId, status) {
+        const csrfToken = getCSRFToken();
+        fetch('/local/components/artmax/calendar/ajax.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-Bitrix-Csrf-Token': csrfToken
+            },
+            body: new URLSearchParams({
+                action: 'updateEventStatus',
+                eventId: eventId,
+                status: status,
+                sessid: csrfToken
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const statusText = status === 'cancelled' ? 'отменена' : 
+                                 status === 'moved' ? 'перенесена' : 'активна';
+                showNotification(`Запись ${statusText}`, 'success');
+                
+                // Обновляем кнопку в боковой панели
+                updateCancelButtonByStatus(status);
+                
+                closeEventSidePanel();
+                refreshCalendarEvents();
+            } else {
+                showNotification('Ошибка обновления статуса: ' + (data.error || 'Неизвестная ошибка'), 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Ошибка при обновлении статуса:', error);
+            showNotification('Ошибка соединения с сервером', 'error');
+        });
+    }
+
+    // Делаем функции доступными глобально
+    window.moveEventFromSidePanel = moveEventFromSidePanel;
+    window.toggleEventStatusFromSidePanel = toggleEventStatusFromSidePanel;
+    window.updateEventStatus = updateEventStatus;
+    window.updateCancelButtonByStatus = updateCancelButtonByStatus;
 
 })();

@@ -10,7 +10,22 @@ require($_SERVER['DOCUMENT_ROOT'].'/bitrix/modules/main/include/prolog_before.ph
 // Подключаем класс компонента
 require_once($_SERVER['DOCUMENT_ROOT'].'/local/components/artmax/calendar/class.php');
 
-
+/**
+ * Конвертирует дату из российского формата в стандартный для SQL
+ */
+function convertRussianDateToStandard($dateString)
+{
+    if (preg_match('/^(\d{1,2})\.(\d{1,2})\.(\d{4})\s+(\d{1,2}):(\d{1,2}):(\d{1,2})$/', $dateString, $matches)) {
+        $day = str_pad($matches[1], 2, '0', STR_PAD_LEFT);
+        $month = str_pad($matches[2], 2, '0', STR_PAD_LEFT);
+        $year = $matches[3];
+        $hour = str_pad($matches[4], 2, '0', STR_PAD_LEFT);
+        $minute = str_pad($matches[5], 2, '0', STR_PAD_LEFT);
+        $second = str_pad($matches[6], 2, '0', STR_PAD_LEFT);
+        return "{$year}-{$month}-{$day} {$hour}:{$minute}:{$second}";
+    }
+    return $dateString;
+}
 
 /**
  * Получение следующего дня недели для еженедельного повторения
@@ -300,6 +315,59 @@ switch ($action) {
         try {
             $occupiedTimes = $calendarObj->getOccupiedTimesForDoctor($date, $employeeId, $excludeEventId);
             die(json_encode(['success' => true, 'occupiedTimes' => $occupiedTimes]));
+        } catch (Exception $e) {
+            die(json_encode(['success' => false, 'error' => $e->getMessage()]));
+        }
+        break;
+
+    case 'updateEventStatus':
+        $eventId = (int)($_POST['eventId'] ?? 0);
+        $status = $_POST['status'] ?? '';
+
+        if (!$eventId || !in_array($status, ['active', 'moved', 'cancelled'])) {
+            http_response_code(400);
+            die(json_encode(['success' => false, 'error' => 'Некорректные параметры']));
+        }
+
+        $event = $calendarObj->getEvent($eventId);
+        if (!$event) {
+            die(json_encode(['success' => false, 'error' => 'Событие не найдено']));
+        }
+
+        // Проверяем права на редактирование (только автор события)
+        if ($event['USER_ID'] != $GLOBALS['USER']->GetID()) {
+            http_response_code(403);
+            die(json_encode(['success' => false, 'error' => 'Нет прав на редактирование']));
+        }
+
+        try {
+            // Если возвращаем отмененную запись в расписание, проверяем доступность времени
+            if ($event['STATUS'] === 'cancelled' && $status === 'active') {
+                // Конвертируем даты из российского формата в стандартный для SQL
+                $dateFromStandard = convertRussianDateToStandard($event['DATE_FROM']);
+                $dateToStandard = convertRussianDateToStandard($event['DATE_TO']);
+                
+                $isAvailable = $calendarObj->isTimeAvailableForDoctor(
+                    $dateFromStandard, 
+                    $dateToStandard, 
+                    $event['EMPLOYEE_ID'], 
+                    $eventId
+                );
+                
+                if (!$isAvailable) {
+                    die(json_encode([
+                        'success' => false, 
+                        'error' => 'Время уже занято другой записью. Пожалуйста, измените время записи перед возвратом в расписание.'
+                    ]));
+                }
+            }
+            
+            $result = $calendarObj->updateEventStatus($eventId, $status);
+            if ($result) {
+                die(json_encode(['success' => true]));
+            } else {
+                die(json_encode(['success' => false, 'error' => 'Ошибка обновления статуса']));
+            }
         } catch (Exception $e) {
             die(json_encode(['success' => false, 'error' => $e->getMessage()]));
         }

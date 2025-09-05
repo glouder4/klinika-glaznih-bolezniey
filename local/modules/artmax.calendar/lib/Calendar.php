@@ -180,6 +180,8 @@ class Calendar
         $sql = "
             SELECT 
                 ID,
+                DATE_FORMAT(DATE_FROM, '%Y-%m-%d %H:%i:%s') AS DATE_FROM,
+                DATE_FORMAT(DATE_TO, '%Y-%m-%d %H:%i:%s') AS DATE_TO,
                 DATE_FORMAT(DATE_FROM, '%d.%m.%Y %H:%i:%s') AS DATE_FROM_RAW,
                 DATE_FORMAT(DATE_TO, '%d.%m.%Y %H:%i:%s') AS DATE_TO_RAW,
                 TITLE,
@@ -192,6 +194,7 @@ class Calendar
                 NOTE,
                 EMPLOYEE_ID,
                 CONFIRMATION_STATUS,
+                STATUS,
                 VISIT_STATUS,
                 CREATED_AT,
                 UPDATED_AT
@@ -306,11 +309,11 @@ class Calendar
             "IS_TIME_AVAILABLE_FOR_DOCTOR: Checking for employeeId=" . $employeeId . ", dateFrom=" . $dateFrom . ", dateTo=" . $dateTo . "\n", 
             FILE_APPEND | LOCK_EX);
         
-        // Проверяем пересечение временных интервалов только для конкретного врача
+        // Проверяем пересечение временных интервалов только для конкретного врача и только активных записей
         if ($employeeId === null) {
-            $sql = "SELECT COUNT(*) as count FROM artmax_calendar_events WHERE EMPLOYEE_ID IS NULL AND DATE_FROM < '" . $this->connection->getSqlHelper()->forSql($dateTo) . "' AND DATE_TO > '" . $this->connection->getSqlHelper()->forSql($dateFrom) . "'";
+            $sql = "SELECT COUNT(*) as count FROM artmax_calendar_events WHERE EMPLOYEE_ID IS NULL AND STATUS != 'cancelled' AND DATE_FROM < '" . $this->connection->getSqlHelper()->forSql($dateTo) . "' AND DATE_TO > '" . $this->connection->getSqlHelper()->forSql($dateFrom) . "'";
         } else {
-            $sql = "SELECT COUNT(*) as count FROM artmax_calendar_events WHERE EMPLOYEE_ID = " . (int)$employeeId . " AND DATE_FROM < '" . $this->connection->getSqlHelper()->forSql($dateTo) . "' AND DATE_TO > '" . $this->connection->getSqlHelper()->forSql($dateFrom) . "'";
+            $sql = "SELECT COUNT(*) as count FROM artmax_calendar_events WHERE EMPLOYEE_ID = " . (int)$employeeId . " AND STATUS != 'cancelled' AND DATE_FROM < '" . $this->connection->getSqlHelper()->forSql($dateTo) . "' AND DATE_TO > '" . $this->connection->getSqlHelper()->forSql($dateFrom) . "'";
         }
         
         if ($excludeId) {
@@ -332,9 +335,9 @@ class Calendar
         // Если есть конфликты, показываем какие именно события конфликтуют
         if ($count > 0) {
             if ($employeeId === null) {
-                $conflictSql = "SELECT ID, TITLE, DATE_FROM, DATE_TO FROM artmax_calendar_events WHERE EMPLOYEE_ID IS NULL AND DATE_FROM < '" . $this->connection->getSqlHelper()->forSql($dateTo) . "' AND DATE_TO > '" . $this->connection->getSqlHelper()->forSql($dateFrom) . "'";
+                $conflictSql = "SELECT ID, TITLE, DATE_FROM, DATE_TO FROM artmax_calendar_events WHERE EMPLOYEE_ID IS NULL AND STATUS != 'cancelled' AND DATE_FROM < '" . $this->connection->getSqlHelper()->forSql($dateTo) . "' AND DATE_TO > '" . $this->connection->getSqlHelper()->forSql($dateFrom) . "'";
             } else {
-                $conflictSql = "SELECT ID, TITLE, DATE_FROM, DATE_TO FROM artmax_calendar_events WHERE EMPLOYEE_ID = " . (int)$employeeId . " AND DATE_FROM < '" . $this->connection->getSqlHelper()->forSql($dateTo) . "' AND DATE_TO > '" . $this->connection->getSqlHelper()->forSql($dateFrom) . "'";
+                $conflictSql = "SELECT ID, TITLE, DATE_FROM, DATE_TO FROM artmax_calendar_events WHERE EMPLOYEE_ID = " . (int)$employeeId . " AND STATUS != 'cancelled' AND DATE_FROM < '" . $this->connection->getSqlHelper()->forSql($dateTo) . "' AND DATE_TO > '" . $this->connection->getSqlHelper()->forSql($dateFrom) . "'";
             }
             if ($excludeId) {
                 $conflictSql .= " AND ID != " . (int)$excludeId;
@@ -366,15 +369,17 @@ class Calendar
         $dateFrom = $date . ' 00:00:00';
         $dateTo = $date . ' 23:59:59';
 
-        // Получаем все события врача на эту дату
+        // Получаем все активные события врача на эту дату
         if ($employeeId === null) {
             $sql = "SELECT DATE_FORMAT(DATE_FROM, '%H:%i') as TIME_FROM, DATE_FORMAT(DATE_TO, '%H:%i') as TIME_TO FROM artmax_calendar_events 
                     WHERE EMPLOYEE_ID IS NULL 
+                    AND STATUS != 'cancelled'
                     AND DATE_FROM >= '" . $this->connection->getSqlHelper()->forSql($dateFrom) . "' 
                     AND DATE_TO <= '" . $this->connection->getSqlHelper()->forSql($dateTo) . "'";
         } else {
             $sql = "SELECT DATE_FORMAT(DATE_FROM, '%H:%i') as TIME_FROM, DATE_FORMAT(DATE_TO, '%H:%i') as TIME_TO FROM artmax_calendar_events 
                     WHERE EMPLOYEE_ID = " . (int)$employeeId . " 
+                    AND STATUS != 'cancelled'
                     AND DATE_FROM >= '" . $this->connection->getSqlHelper()->forSql($dateFrom) . "' 
                     AND DATE_TO <= '" . $this->connection->getSqlHelper()->forSql($dateTo) . "'";
         }
@@ -405,6 +410,20 @@ class Calendar
     }
 
     /**
+     * Обновить статус события
+     */
+    public function updateEventStatus($eventId, $status)
+    {
+        $sql = "
+            UPDATE artmax_calendar_events 
+            SET STATUS = '" . $this->connection->getSqlHelper()->forSql($status) . "',
+                UPDATED_AT = NOW()
+            WHERE ID = " . (int)$eventId;
+        
+        return $this->connection->query($sql);
+    }
+
+    /**
      * Получить события по филиалу
      */
     public function getEventsByBranch($branchId, $dateFrom = null, $dateTo = null, $userId = null, $limit = null)
@@ -428,6 +447,7 @@ class Calendar
             CONTACT_ENTITY_ID,
             DEAL_ENTITY_ID,
             CONFIRMATION_STATUS,
+            STATUS,
             VISIT_STATUS,
             DATE_FORMAT(CREATED_AT, '%d.%m.%Y %H:%i:%s') AS CREATED_AT,
             DATE_FORMAT(UPDATED_AT, '%d.%m.%Y %H:%i:%s') AS UPDATED_AT

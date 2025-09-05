@@ -415,7 +415,7 @@ input:checked + .toggle-slider:before {
 }
 
 .calendar-event {
-    background: #27ae60;
+    background: #f2f2f2;
     color: white;
     padding: 8px;
     border-radius: 6px;
@@ -2971,7 +2971,7 @@ input:checked + .toggle-slider:before {
 }
 
 .edit-event-btn {
-    background: #28a745;
+    /*background: #28a745;*/
     color: white;
     border: none;
     padding: 12px;
@@ -2981,21 +2981,22 @@ input:checked + .toggle-slider:before {
     transition: all 0.3s ease;
 }
 
-.edit-event-btn:hover {
+/*.edit-event-btn:hover {
     background: #218838;
-}
+}*/
 
 .delete-event-btn {
     background: none;
     color: #6c757d;
     border: none;
-    padding: 8px 0;
+    padding: 0;
     cursor: pointer;
     font-weight: 400;
     transition: all 0.3s ease;
     text-decoration: underline;
     text-decoration-style: dashed;
     text-align: left;
+    font-size: 12px;
 }
 
 .delete-event-btn:hover {
@@ -4246,4 +4247,125 @@ input:checked + .toggle-slider:before {
 
 .create-new-deal-btn:hover {
     background: #bbdefb;
+}
+
+/* Стили для статусов событий */
+.calendar-event.status-active {
+    /* Активная запись - без изменений */
+}
+
+.calendar-event.status-moved {
+    border: 3px solid #ff9500 !important;
+    background: #fff3e0 !important;
+    color: #e65100 !important;
+}
+
+.calendar-event.status-cancelled {
+    background: #ffcdd2 !important;
+    color: #b71c1c !important;
+    border: 2px solid #f44336 !important;
+    opacity: 0.8;
+}
+
+.calendar-event.status-cancelled:hover {
+    background: #ffebee !important;
+    color: #c62828 !important;
+    border-color: #d32f2f !important;
+}
+
+/* Стили для новых кнопок в боковой панели */
+.move-event-btn {
+    background: none;
+    color: #6c757d;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    font-weight: 400;
+    transition: all 0.3s ease;
+    text-decoration: underline;
+    text-decoration-style: dashed;
+    text-align: left;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    margin-bottom: 8px;
+    width: 100%;
+    justify-content: flex-start;
+}
+
+.move-event-btn:hover {
+    color: #ff9500;
+}
+
+.cancel-event-btn {
+    background: none;
+    color: #6c757d;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    font-weight: 400;
+    transition: all 0.3s ease;
+    text-decoration: underline;
+    text-decoration-style: dashed;
+    text-align: left;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    margin-bottom: 8px;
+    width: 100%;
+    justify-content: flex-start;
+}
+
+.cancel-event-btn:hover {
+    color: #f44336;
+}
+
+.return-event-btn {
+    background: none;
+    color: #6c757d;
+    border: none;
+    padding: 8px 0;
+    cursor: pointer;
+    font-weight: 400;
+    transition: all 0.3s ease;
+    text-decoration: underline;
+    text-decoration-style: dashed;
+    text-align: left;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    margin-bottom: 8px;
+    width: 100%;
+    justify-content: flex-start;
+}
+
+.return-event-btn:hover {
+    color: #4caf50;
+}
+
+.edit-event-btn {
+    background: none;
+    color: #6c757d;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    font-weight: 400;
+    transition: all 0.3s ease;
+    text-decoration: underline;
+    text-decoration-style: dashed;
+    text-align: left;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    margin-bottom: 8px;
+    width: 100%;
+    justify-content: flex-start;
+}
+
+.edit-event-btn:hover {
+    color: #2196f3;
 }

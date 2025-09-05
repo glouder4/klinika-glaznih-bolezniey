@@ -180,7 +180,9 @@ $totalDays = 42; // 6 недель * 7 дней
                                 // Получаем время окончания
                                 $eventEndTime = extractTimeFromDate($event['DATE_TO']);
                                 
-                                echo '<div class="calendar-event" data-event-id="' . $event['ID'] . '" style="' . $style . '" onclick="event.stopPropagation();">';
+                                // Добавляем класс статуса
+                                $statusClass = isset($event['STATUS']) ? 'status-' . $event['STATUS'] : 'status-active';
+                                echo '<div class="calendar-event ' . $statusClass . '" data-event-id="' . $event['ID'] . '" style="' . $style . '" onclick="event.stopPropagation();">';
                                 echo '<div class="event-content">';
                                 echo '<div class="event-title">' . htmlspecialchars($event['TITLE']) . '</div>';
                                 echo '<div class="event-time">';
@@ -786,8 +788,10 @@ $totalDays = 42; // 6 недель * 7 дней
 
                 <!-- Кнопки действий -->
                 <div class="side-panel-actions">
-                    <button class="edit-event-btn" onclick="openEditEventModalFromSidePanel()">Редактировать</button>
-                    <button class="delete-event-btn" onclick="deleteEventFromSidePanel()">🗑️ Удалить</button>
+                    <button class="edit-event-btn" onclick="openEditEventModalFromSidePanel()">✏️ Редактировать</button>
+                    <button class="move-event-btn" onclick="moveEventFromSidePanel()">📅 Перенести запись</button>
+                    <button id="cancel-event-btn" class="cancel-event-btn" onclick="toggleEventStatusFromSidePanel()">❌ Отменить запись</button>
+                    <button class="delete-event-btn" style="display: none;" onclick="deleteEventFromSidePanel()">🗑️ Удалить</button>
                 </div>
             </div>
         </div>

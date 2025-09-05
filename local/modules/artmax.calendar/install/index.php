@@ -63,6 +63,7 @@ class artmax_calendar extends CModule
             NOTE text DEFAULT NULL COMMENT 'Заметка к событию',
             EMPLOYEE_ID int(11) DEFAULT NULL COMMENT 'ID ответственного сотрудника',
             CONFIRMATION_STATUS enum('pending','confirmed','not_confirmed') DEFAULT 'pending' COMMENT 'Статус подтверждения события',
+            STATUS enum('active','moved','cancelled') DEFAULT 'active' COMMENT 'Статус события',
             CREATED_AT datetime DEFAULT CURRENT_TIMESTAMP,
             UPDATED_AT datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             PRIMARY KEY (ID),
@@ -72,9 +73,14 @@ class artmax_calendar extends CModule
             KEY CONTACT_ENTITY_ID (CONTACT_ENTITY_ID),
             KEY DEAL_ENTITY_ID (DEAL_ENTITY_ID),
             KEY EMPLOYEE_ID (EMPLOYEE_ID),
-            KEY CONFIRMATION_STATUS (CONFIRMATION_STATUS)
+            KEY CONFIRMATION_STATUS (CONFIRMATION_STATUS),
+            KEY STATUS (STATUS)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
         ";
+        
+        // Добавляем поле STATUS если его нет
+        $sqlAddStatus = "ALTER TABLE artmax_calendar_events 
+                         ADD COLUMN IF NOT EXISTS STATUS enum('active','moved','cancelled') DEFAULT 'active' COMMENT 'Статус события'";
         
         // Таблица филиалов
         $sqlBranches = "
@@ -115,6 +121,7 @@ class artmax_calendar extends CModule
         $connection->query($sqlBranches);
         $connection->query($sqlBranchesSettings);
         $connection->query($sqlModifier);
+        $connection->query($sqlAddStatus);
     }
 
     public function UnInstallDB()
