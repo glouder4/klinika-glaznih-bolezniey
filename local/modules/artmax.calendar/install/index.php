@@ -60,6 +60,7 @@ class artmax_calendar extends CModule
             EVENT_COLOR varchar(7) DEFAULT '#3498db',
             CONTACT_ENTITY_ID int(11) DEFAULT NULL COMMENT 'ID контакта из CRM',
             DEAL_ENTITY_ID int(11) DEFAULT NULL COMMENT 'ID сделки из CRM',
+            NOTE text DEFAULT NULL COMMENT 'Заметка к событию',
             CONFIRMATION_STATUS enum('pending','confirmed','not_confirmed') DEFAULT 'pending' COMMENT 'Статус подтверждения события',
             CREATED_AT datetime DEFAULT CURRENT_TIMESTAMP,
             UPDATED_AT datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

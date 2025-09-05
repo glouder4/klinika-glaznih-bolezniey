@@ -612,6 +612,23 @@ switch ($action) {
         }
         break;
 
+    case 'saveEventNote':
+        $eventId = $_POST['eventId'] ?? 0;
+        $noteText = $_POST['noteText'] ?? '';
+        
+        if (empty($eventId) || empty($noteText)) {
+            die(json_encode(['success' => false, 'error' => 'ID события или текст заметки не указан']));
+        }
+        
+        try {
+            $component = new ArtmaxCalendarComponent();
+            $result = $component->saveEventNoteAction($eventId, $noteText);
+            die(json_encode($result));
+        } catch (Exception $e) {
+            die(json_encode(['success' => false, 'error' => 'Ошибка сохранения заметки: ' . $e->getMessage()]));
+        }
+        break;
+
     case 'saveEventDeal':
         $eventId = $_POST['eventId'] ?? 0;
         $dealData = $_POST['dealData'] ?? array();

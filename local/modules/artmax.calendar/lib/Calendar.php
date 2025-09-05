@@ -188,6 +188,7 @@ class Calendar
                 EVENT_COLOR,
                 CONTACT_ENTITY_ID,
                 DEAL_ENTITY_ID,
+                NOTE,
                 CONFIRMATION_STATUS,
                 VISIT_STATUS,
                 CREATED_AT,
@@ -539,6 +540,40 @@ class Calendar
             // Логируем ошибку
             file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
                 "Error updating contact for event {$eventId}: " . $e->getMessage() . "\n", 
+                FILE_APPEND | LOCK_EX);
+            
+            return false;
+        }
+    }
+
+    /**
+     * Обновить заметку для события
+     */
+    public function updateEventNote($eventId, $noteText)
+    {
+        $noteText = $this->connection->getSqlHelper()->forSql($noteText);
+        $sql = "UPDATE artmax_calendar_events SET NOTE = '{$noteText}' WHERE ID = " . (int)$eventId;
+        
+        // Логируем SQL запрос
+        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+            "SQL Query updateEventNote: {$sql}\n", 
+            FILE_APPEND | LOCK_EX);
+        
+        try {
+            $this->connection->query($sql);
+            
+            // Логируем успешное выполнение
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "Successfully updated note for event {$eventId}\n", 
+                FILE_APPEND | LOCK_EX);
+            
+            return true;
+        } catch (\Exception $e) {
+            error_log('Ошибка обновления заметки события: ' . $e->getMessage());
+            
+            // Логируем ошибку
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "Error updating note for event {$eventId}: " . $e->getMessage() . "\n", 
                 FILE_APPEND | LOCK_EX);
             
             return false;

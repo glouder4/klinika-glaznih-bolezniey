@@ -1130,6 +1130,38 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
     }
 
     /**
+     * Сохранение заметки к событию
+     */
+    public function saveEventNoteAction($eventId, $noteText)
+    {
+        if (!$GLOBALS['USER'] || !$GLOBALS['USER']->IsAuthorized()) {
+            return ['success' => false, 'error' => 'Необходима авторизация'];
+        }
+
+        try {
+            if (!CModule::IncludeModule('artmax.calendar')) {
+                return ['success' => false, 'error' => 'Модуль календаря не установлен'];
+            }
+
+            $calendar = new \Artmax\Calendar\Calendar();
+            
+            // Обновляем событие с заметкой
+            $result = $calendar->updateEventNote($eventId, $noteText);
+            
+            if ($result) {
+                return [
+                    'success' => true, 
+                    'message' => 'Заметка успешно сохранена'
+                ];
+            } else {
+                return ['success' => false, 'error' => 'Ошибка сохранения заметки'];
+            }
+        } catch (\Exception $e) {
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+
+    /**
      * Получение контакта из CRM по ID
      */
     public function getContactFromCRM($contactId)

@@ -661,7 +661,13 @@ $totalDays = 42; // 6 недель * 7 дней
                         </div>
                     </div>
                     <div class="add-note-section">
-                        <button class="add-note-btn">+ Добавить заметку к записи</button>
+                        <button class="add-note-btn" id="add-note-btn" onclick="event.stopPropagation(); openNoteModal();">+ Добавить заметку к записи</button>
+                        <div class="note-display" id="note-display" style="display: none;">
+                            <div class="note-content">
+                                <span class="note-text" id="note-text-display"></span>
+                                <button class="edit-note-btn" onclick="event.stopPropagation(); editNote();" title="Редактировать заметку">✏️</button>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -871,6 +877,25 @@ $totalDays = 42; // 6 недель * 7 дней
             <div class="deal-modal-footer" style="display: none;">
                 <button type="button" class="btn btn-secondary" onclick="closeDealModal()">ОТМЕНА</button>
                 <button type="button" class="btn btn-primary" onclick="saveDealData()">СОХРАНИТЬ</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно для добавления заметки -->
+    <div id="noteModal" class="note-modal" style="display: none;">
+        <div class="note-modal-content">
+            <div class="note-modal-header">
+                <h3>Заметка</h3>
+                <button class="close-note-modal" onclick="closeNoteModal()">×</button>
+            </div>
+            <div class="note-modal-body">
+                <div class="form-group">
+                    <textarea id="note-text" placeholder="Запишите важные данные, пожелания, нюансы" rows="6"></textarea>
+                </div>
+                <div class="note-modal-actions">
+                    <button type="button" class="btn btn-primary" onclick="saveNote()">СОХРАНИТЬ</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeNoteModal()">ОТМЕНИТЬ</button>
+                </div>
             </div>
         </div>
     </div>

@@ -956,6 +956,9 @@
                 
                 // Загружаем и отображаем статус визита
                 loadEventVisitStatus(eventId);
+                
+                // Загружаем и отображаем заметку
+                loadEventNote(eventId);
             } else {
                 showNotification('Ошибка при загрузке события', 'error');
                 // Сбрасываем счетчик загрузки при ошибке основного запроса
@@ -3446,11 +3449,164 @@
         }
     }
 
+    // Функции для работы с модальным окном заметок
+    function openNoteModal() {
+        const modal = document.getElementById('noteModal');
+        if (modal) {
+            modal.style.display = 'flex';
+            setTimeout(() => {
+                modal.classList.add('show');
+            }, 10);
+            
+            // Фокусируемся на textarea
+            const textarea = document.getElementById('note-text');
+            if (textarea) {
+                setTimeout(() => {
+                    textarea.focus();
+                }, 300);
+            }
+        }
+    }
+
+    function closeNoteModal() {
+        const modal = document.getElementById('noteModal');
+        if (modal) {
+            modal.classList.remove('show');
+            setTimeout(() => {
+                modal.style.display = 'none';
+                // Очищаем textarea
+                const textarea = document.getElementById('note-text');
+                if (textarea) {
+                    textarea.value = '';
+                }
+            }, 300);
+        }
+    }
+
+    function saveNote() {
+        const textarea = document.getElementById('note-text');
+        const noteText = textarea ? textarea.value.trim() : '';
+        
+        if (!noteText) {
+            showNotification('Введите текст заметки', 'warning');
+            return;
+        }
+        
+        const eventId = getCurrentEventId();
+        if (!eventId) {
+            showNotification('Ошибка: не удалось определить событие', 'error');
+            return;
+        }
+        
+        // Отправляем AJAX запрос для сохранения заметки
+        const csrfToken = getCSRFToken();
+        fetch('/local/components/artmax/calendar/ajax.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-Bitrix-Csrf-Token': csrfToken
+            },
+            body: new URLSearchParams({
+                action: 'saveEventNote',
+                eventId: eventId,
+                noteText: noteText,
+                sessid: csrfToken
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showNotification('Заметка успешно сохранена', 'success');
+                closeNoteModal();
+                // Обновляем отображение заметки
+                updateNoteDisplay(noteText);
+            } else {
+                showNotification('Ошибка сохранения заметки: ' + (data.error || 'Неизвестная ошибка'), 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Ошибка при сохранении заметки:', error);
+            showNotification('Ошибка соединения с сервером', 'error');
+        });
+    }
+
+    function editNote() {
+        const noteTextElement = document.getElementById('note-text-display');
+        const currentNote = noteTextElement ? noteTextElement.textContent : '';
+        
+        // Заполняем модальное окно текущим текстом заметки
+        const textarea = document.getElementById('note-text');
+        if (textarea) {
+            textarea.value = currentNote;
+        }
+        
+        // Открываем модальное окно для редактирования
+        openNoteModal();
+    }
+
+    function updateNoteDisplay(noteText) {
+        const addNoteBtn = document.getElementById('add-note-btn');
+        const noteDisplay = document.getElementById('note-display');
+        const noteTextDisplay = document.getElementById('note-text-display');
+        
+        if (addNoteBtn && noteDisplay && noteTextDisplay) {
+            if (noteText && noteText.trim()) {
+                // Показываем заметку, скрываем кнопку
+                addNoteBtn.style.display = 'none';
+                noteDisplay.style.display = 'flex';
+                noteTextDisplay.textContent = noteText;
+            } else {
+                // Скрываем заметку, показываем кнопку
+                addNoteBtn.style.display = 'block';
+                noteDisplay.style.display = 'none';
+            }
+        }
+    }
+
+    function loadEventNote(eventId) {
+        console.log('loadEventNote: Загружаем заметку для события:', eventId);
+        
+        const csrfToken = getCSRFToken();
+        fetch('/local/components/artmax/calendar/ajax.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-Bitrix-Csrf-Token': csrfToken
+            },
+            body: new URLSearchParams({
+                action: 'getEventData',
+                eventId: eventId,
+                sessid: csrfToken
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.event) {
+                console.log('loadEventNote: Получены данные события:', data.event);
+                const noteText = data.event.NOTE || '';
+                updateNoteDisplay(noteText);
+            } else {
+                console.log('loadEventNote: Ошибка загрузки данных события:', data.error);
+                updateNoteDisplay('');
+            }
+        })
+        .catch(error => {
+            console.error('loadEventNote: Ошибка при загрузке заметки:', error);
+            updateNoteDisplay('');
+        });
+    }
+
     // Делаем функции глобальными
     window.showCreateContactForm = showCreateContactForm;
     window.hideCreateContactForm = hideCreateContactForm;
     window.createContact = createContact;
     window.openContactDetails = openContactDetails;
+    window.openNoteModal = openNoteModal;
+    window.closeNoteModal = closeNoteModal;
+    window.saveNote = saveNote;
+    window.editNote = editNote;
 
     // Функция обновления иконки сделки в календаре
     function updateEventDealIcon(eventId, dealId) {
