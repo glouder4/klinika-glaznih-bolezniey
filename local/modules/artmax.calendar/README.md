@@ -111,11 +111,11 @@ $calendar->updateEvent(
 // Удаление события
 $calendar->deleteEvent($eventId);
 
-// Проверка доступности времени
-$isAvailable = $calendar->isTimeAvailable(
+// Проверка доступности времени для врача
+$isAvailable = $calendar->isTimeAvailableForDoctor(
     '2024-01-01 10:00:00',
     '2024-01-01 11:00:00',
-    $userId
+    $employeeId
 );
 ```
 

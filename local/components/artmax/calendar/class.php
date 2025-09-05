@@ -213,10 +213,9 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
             $calendarObj = new \Artmax\Calendar\Calendar();
             $userId = $GLOBALS['USER']->GetID();
 
-            // Проверяем доступность времени
-            
-            if (!$calendarObj->isTimeAvailable($dateFrom, $dateTo, $userId)) {
-                return ['success' => false, 'error' => 'Время уже занято'];
+            // Проверяем доступность времени для врача
+            if (!$calendarObj->isTimeAvailableForDoctor($dateFrom, $dateTo, $employeeId)) {
+                return ['success' => false, 'error' => 'Время уже занято для выбранного врача'];
             }
             
             $eventId = $calendarObj->addEvent($title, $description, $dateFrom, $dateTo, $userId, $branchId, $eventColor);
@@ -311,9 +310,9 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
             $dateTo = clone $dateFrom;
             $dateTo->add(new \DateInterval('PT1H')); // Добавляем 1 час по умолчанию
 
-            // Проверяем доступность времени
-            if (!$calendarObj->isTimeAvailable($dateFrom->format('Y-m-d H:i:s'), $dateTo->format('Y-m-d H:i:s'), $userId)) {
-                return ['success' => false, 'error' => 'Время уже занято'];
+            // Проверяем доступность времени для врача
+            if (!$calendarObj->isTimeAvailableForDoctor($dateFrom->format('Y-m-d H:i:s'), $dateTo->format('Y-m-d H:i:s'), $employeeId)) {
+                return ['success' => false, 'error' => 'Время уже занято для выбранного врача'];
             }
 
             // Создаем событие
@@ -426,7 +425,7 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                             $eventDateTo->add($duration);
                             
                             // Проверяем доступность времени для повторяющегося события
-                            if ($calendarObj->isTimeAvailable($eventDate->format('Y-m-d H:i:s'), $eventDateTo->format('Y-m-d H:i:s'), $originalEvent['USER_ID'])) {
+                            if ($calendarObj->isTimeAvailableForDoctor($eventDate->format('Y-m-d H:i:s'), $eventDateTo->format('Y-m-d H:i:s'), $employeeId)) {
                                 // Создаем повторяющееся событие
                                 $recurringEventId = $calendarObj->addEvent(
                                     $originalEvent['TITLE'],
@@ -487,7 +486,7 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                     }
 
                     // Проверяем доступность времени для повторяющегося события
-                    if ($calendarObj->isTimeAvailable($newDateFrom->format('Y-m-d H:i:s'), $newDateTo->format('Y-m-d H:i:s'), $originalEvent['USER_ID'])) {
+                    if ($calendarObj->isTimeAvailableForDoctor($newDateFrom->format('Y-m-d H:i:s'), $newDateTo->format('Y-m-d H:i:s'), $employeeId)) {
                         // Создаем повторяющееся событие
                         $recurringEventId = $calendarObj->addEvent(
                             $originalEvent['TITLE'],
@@ -575,9 +574,9 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                 return ['success' => false, 'error' => 'Нет прав на редактирование'];
             }
 
-            // Проверяем доступность времени (исключая текущее событие)
-            if (!$calendarObj->isTimeAvailable($dateFrom, $dateTo, $userId, $eventId)) {
-                return ['success' => false, 'error' => 'Время уже занято'];
+            // Проверяем доступность времени для врача (исключая текущее событие)
+            if (!$calendarObj->isTimeAvailableForDoctor($dateFrom, $dateTo, $employeeId, $eventId)) {
+                return ['success' => false, 'error' => 'Время уже занято для выбранного врача'];
             }
 
             // Обновляем событие

@@ -1415,6 +1415,16 @@
                     modal.style.display = 'block';
                     document.body.style.overflow = 'hidden';
                 }
+                
+                // Обновляем занятые временные слоты
+                updateOccupiedTimeSlots(event.EMPLOYEE_ID, eventId);
+                
+                // Добавляем обработчик изменения даты
+                if (dateInput) {
+                    dateInput.addEventListener('change', () => {
+                        updateOccupiedTimeSlots(event.EMPLOYEE_ID, eventId);
+                    });
+                }
             } else {
                 showNotification('Ошибка при загрузке события', 'error');
             }
@@ -5754,6 +5764,68 @@
         const day = String(today.getDate()).padStart(2, '0');
         const todayString = `${year}-${month}-${day}`;
         window.location.href = window.location.pathname + '?date=' + todayString;
+    }
+
+    // Функция для обновления занятых временных слотов в форме редактирования
+    function updateOccupiedTimeSlots(employeeId, excludeEventId) {
+        const dateInput = document.getElementById('edit-event-date');
+        const timeSelect = document.getElementById('edit-event-time');
+        
+        if (!dateInput || !timeSelect) {
+            console.error('updateOccupiedTimeSlots: Не найдены поля даты или времени');
+            return;
+        }
+        
+        const selectedDate = dateInput.value;
+        if (!selectedDate) {
+            console.log('updateOccupiedTimeSlots: Дата не выбрана');
+            return;
+        }
+        
+        // Получаем занятые слоты с сервера
+        const csrfToken = getCSRFToken();
+        fetch('/local/components/artmax/calendar/ajax.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-Bitrix-Csrf-Token': csrfToken
+            },
+            body: new URLSearchParams({
+                action: 'getOccupiedTimes',
+                date: selectedDate,
+                employee_id: employeeId || '',
+                excludeEventId: excludeEventId || '',
+                sessid: csrfToken
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.occupiedTimes) {
+                // Сбрасываем все disabled состояния
+                const options = timeSelect.querySelectorAll('option');
+                options.forEach(option => {
+                    option.disabled = false;
+                    option.style.color = '';
+                });
+                
+                // Устанавливаем disabled для занятых слотов
+                data.occupiedTimes.forEach(occupiedTime => {
+                    const option = timeSelect.querySelector(`option[value="${occupiedTime}"]`);
+                    if (option) {
+                        option.disabled = true;
+                        option.style.color = '#ccc';
+                    }
+                });
+                
+                console.log('updateOccupiedTimeSlots: Обновлены занятые слоты:', data.occupiedTimes);
+            } else {
+                console.error('updateOccupiedTimeSlots: Ошибка получения занятых слотов:', data.error);
+            }
+        })
+        .catch(error => {
+            console.error('updateOccupiedTimeSlots: Ошибка запроса:', error);
+        });
     }
 
 })();

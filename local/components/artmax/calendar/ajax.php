@@ -146,9 +146,9 @@ switch ($action) {
         // Сохраняем время как есть, без конвертации в UTC
         // Это позволит избежать проблем с часовыми поясами
 
-        // Проверяем доступность времени
-        if (!$calendarObj->isTimeAvailable($dateFrom, $dateTo, $userId)) {
-            die(json_encode(['success' => false, 'error' => 'Время уже занято']));
+        // Проверяем доступность времени для врача
+        if (!$calendarObj->isTimeAvailableForDoctor($dateFrom, $dateTo, $employeeId)) {
+            die(json_encode(['success' => false, 'error' => 'Время уже занято для выбранного врача']));
         }
 
         // Добавляем событие с цветом (без конвертации в UTC)
@@ -215,6 +215,34 @@ switch ($action) {
             die(json_encode(['success' => false, 'error' => 'Нет прав на редактирование']));
         }
 
+        // Проверяем доступность времени для врача при изменении времени
+        $timeChanged = ($event['DATE_FROM'] != $dateFrom || $event['DATE_TO'] != $dateTo);
+        $doctorChanged = ((int)$event['EMPLOYEE_ID'] != (int)$employeeId);
+        
+        // Логируем для отладки
+        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+            "UPDATE_EVENT_DEBUG: timeChanged=" . ($timeChanged ? 'true' : 'false') . ", doctorChanged=" . ($doctorChanged ? 'true' : 'false') . "\n", 
+            FILE_APPEND | LOCK_EX);
+        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+            "UPDATE_EVENT_DEBUG: oldTime=" . $event['DATE_FROM'] . " - " . $event['DATE_TO'] . ", newTime=" . $dateFrom . " - " . $dateTo . "\n", 
+            FILE_APPEND | LOCK_EX);
+        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+            "UPDATE_EVENT_DEBUG: oldDoctor=" . $event['EMPLOYEE_ID'] . ", newDoctor=" . $employeeId . "\n", 
+            FILE_APPEND | LOCK_EX);
+        
+        if ($timeChanged || $doctorChanged) {
+            // Проверяем конфликты с текущим врачом события (не с новым)
+            $doctorToCheck = $event['EMPLOYEE_ID'] ? $event['EMPLOYEE_ID'] : null;
+            
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "UPDATE_EVENT_DEBUG: Checking conflicts with doctorToCheck=" . $doctorToCheck . "\n", 
+                FILE_APPEND | LOCK_EX);
+            
+            if (!$calendarObj->isTimeAvailableForDoctor($dateFrom, $dateTo, $doctorToCheck, $eventId)) {
+                die(json_encode(['success' => false, 'error' => 'Время уже занято для выбранного врача']));
+            }
+        }
+
         try {
             $result = $calendarObj->updateEvent($eventId, $title, $description, $dateFrom, $dateTo, $eventColor, $branchId, $employeeId);
             if ($result) {
@@ -254,6 +282,24 @@ switch ($action) {
             } else {
                 die(json_encode(['success' => false, 'error' => 'Ошибка назначения врача']));
             }
+        } catch (Exception $e) {
+            die(json_encode(['success' => false, 'error' => $e->getMessage()]));
+        }
+        break;
+
+    case 'getOccupiedTimes':
+        $date = $_POST['date'] ?? '';
+        $employeeId = $_POST['employee_id'] ?? null;
+        $excludeEventId = $_POST['excludeEventId'] ?? null;
+
+        if (!$date) {
+            http_response_code(400);
+            die(json_encode(['success' => false, 'error' => 'Дата обязательна']));
+        }
+
+        try {
+            $occupiedTimes = $calendarObj->getOccupiedTimesForDoctor($date, $employeeId, $excludeEventId);
+            die(json_encode(['success' => true, 'occupiedTimes' => $occupiedTimes]));
         } catch (Exception $e) {
             die(json_encode(['success' => false, 'error' => $e->getMessage()]));
         }

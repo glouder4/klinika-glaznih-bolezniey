@@ -291,27 +291,34 @@ class Calendar
         return $this->connection->query($sql);
     }
 
-        /**
-     * Проверить доступность времени
+    /**
+     * Проверить доступность времени для конкретного врача
      */
-    public function isTimeAvailable($dateFrom, $dateTo, $userId, $excludeId = null)
+    public function isTimeAvailableForDoctor($dateFrom, $dateTo, $employeeId, $excludeId = null)
     {
-        // Используем время как есть, без всяких конвертаций
+        // Если врач не указан, проверяем конфликты с событиями без врача
+        if (!$employeeId) {
+            $employeeId = null;
+        }
+
         // Логируем параметры
         file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-            "IS_TIME_AVAILABLE: Checking for userId=" . $userId . ", dateFrom=" . $dateFrom . ", dateTo=" . $dateTo . "\n", 
+            "IS_TIME_AVAILABLE_FOR_DOCTOR: Checking for employeeId=" . $employeeId . ", dateFrom=" . $dateFrom . ", dateTo=" . $dateTo . "\n", 
             FILE_APPEND | LOCK_EX);
         
-        // Проверяем пересечение временных интервалов
-        // Интервалы пересекаются, если: начало существующего < конец нового И конец существующего > начало нового
-        $sql = "SELECT COUNT(*) as count FROM artmax_calendar_events WHERE USER_ID = " . (int)$userId . " AND DATE_FROM < '" . $this->connection->getSqlHelper()->forSql($dateTo) . "' AND DATE_TO > '" . $this->connection->getSqlHelper()->forSql($dateFrom) . "'";
+        // Проверяем пересечение временных интервалов только для конкретного врача
+        if ($employeeId === null) {
+            $sql = "SELECT COUNT(*) as count FROM artmax_calendar_events WHERE EMPLOYEE_ID IS NULL AND DATE_FROM < '" . $this->connection->getSqlHelper()->forSql($dateTo) . "' AND DATE_TO > '" . $this->connection->getSqlHelper()->forSql($dateFrom) . "'";
+        } else {
+            $sql = "SELECT COUNT(*) as count FROM artmax_calendar_events WHERE EMPLOYEE_ID = " . (int)$employeeId . " AND DATE_FROM < '" . $this->connection->getSqlHelper()->forSql($dateTo) . "' AND DATE_TO > '" . $this->connection->getSqlHelper()->forSql($dateFrom) . "'";
+        }
         
         if ($excludeId) {
             $sql .= " AND ID != " . (int)$excludeId;
         }
         
         file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-            "IS_TIME_AVAILABLE: SQL = " . $sql . "\n", 
+            "IS_TIME_AVAILABLE_FOR_DOCTOR: SQL = " . $sql . "\n", 
             FILE_APPEND | LOCK_EX);
         
         $result = $this->connection->query($sql);
@@ -319,22 +326,82 @@ class Calendar
         
         $count = $row['count'];
         file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-            "IS_TIME_AVAILABLE: Found " . $count . " conflicting events\n", 
+            "IS_TIME_AVAILABLE_FOR_DOCTOR: Found " . $count . " conflicting events for doctor\n", 
             FILE_APPEND | LOCK_EX);
         
         // Если есть конфликты, показываем какие именно события конфликтуют
         if ($count > 0) {
-            // Используем время как есть, без всяких конвертаций
-            $conflictSql = "SELECT ID, TITLE, DATE_FROM, DATE_TO FROM artmax_calendar_events WHERE USER_ID = " . (int)$userId . " AND DATE_FROM < '" . $this->connection->getSqlHelper()->forSql($dateTo) . "' AND DATE_TO > '" . $this->connection->getSqlHelper()->forSql($dateFrom) . "'";
+            if ($employeeId === null) {
+                $conflictSql = "SELECT ID, TITLE, DATE_FROM, DATE_TO FROM artmax_calendar_events WHERE EMPLOYEE_ID IS NULL AND DATE_FROM < '" . $this->connection->getSqlHelper()->forSql($dateTo) . "' AND DATE_TO > '" . $this->connection->getSqlHelper()->forSql($dateFrom) . "'";
+            } else {
+                $conflictSql = "SELECT ID, TITLE, DATE_FROM, DATE_TO FROM artmax_calendar_events WHERE EMPLOYEE_ID = " . (int)$employeeId . " AND DATE_FROM < '" . $this->connection->getSqlHelper()->forSql($dateTo) . "' AND DATE_TO > '" . $this->connection->getSqlHelper()->forSql($dateFrom) . "'";
+            }
+            if ($excludeId) {
+                $conflictSql .= " AND ID != " . (int)$excludeId;
+            }
             $conflictResult = $this->connection->query($conflictSql);
             $conflicts = $conflictResult->fetchAll();
             
             file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "IS_TIME_AVAILABLE: Conflicting events: " . json_encode($conflicts) . "\n", 
+                "IS_TIME_AVAILABLE_FOR_DOCTOR: Conflicting events: " . json_encode($conflicts) . "\n", 
                 FILE_APPEND | LOCK_EX);
         }
         
         return $count == 0; 
+    }
+
+    /**
+     * Получить занятые временные слоты для врача на конкретную дату
+     */
+    public function getOccupiedTimesForDoctor($date, $employeeId, $excludeEventId = null)
+    {
+        $occupiedTimes = [];
+        
+        // Если врач не указан, возвращаем пустой массив
+        if (!$employeeId) {
+            return $occupiedTimes;
+        }
+
+        // Формируем дату начала и конца дня
+        $dateFrom = $date . ' 00:00:00';
+        $dateTo = $date . ' 23:59:59';
+
+        // Получаем все события врача на эту дату
+        if ($employeeId === null) {
+            $sql = "SELECT DATE_FORMAT(DATE_FROM, '%H:%i') as TIME_FROM, DATE_FORMAT(DATE_TO, '%H:%i') as TIME_TO FROM artmax_calendar_events 
+                    WHERE EMPLOYEE_ID IS NULL 
+                    AND DATE_FROM >= '" . $this->connection->getSqlHelper()->forSql($dateFrom) . "' 
+                    AND DATE_TO <= '" . $this->connection->getSqlHelper()->forSql($dateTo) . "'";
+        } else {
+            $sql = "SELECT DATE_FORMAT(DATE_FROM, '%H:%i') as TIME_FROM, DATE_FORMAT(DATE_TO, '%H:%i') as TIME_TO FROM artmax_calendar_events 
+                    WHERE EMPLOYEE_ID = " . (int)$employeeId . " 
+                    AND DATE_FROM >= '" . $this->connection->getSqlHelper()->forSql($dateFrom) . "' 
+                    AND DATE_TO <= '" . $this->connection->getSqlHelper()->forSql($dateTo) . "'";
+        }
+
+        if ($excludeEventId) {
+            $sql .= " AND ID != " . (int)$excludeEventId;
+        }
+
+        $result = $this->connection->query($sql);
+        
+        while ($row = $result->fetch()) {
+            // Используем время как строку из DATE_FORMAT
+            $startTime = $row['TIME_FROM'];
+            $endTime = $row['TIME_TO'];
+            
+            // Генерируем временные слоты с интервалом 30 минут
+            $currentTime = strtotime($startTime);
+            $endTimestamp = strtotime($endTime);
+            
+            while ($currentTime < $endTimestamp) {
+                $timeSlot = date('H:i', $currentTime);
+                $occupiedTimes[] = $timeSlot;
+                $currentTime += 30 * 60; // Добавляем 30 минут
+            }
+        }
+
+        return array_unique($occupiedTimes);
     }
 
     /**
