@@ -55,6 +55,9 @@ class artmax_calendar extends CModule
             DESCRIPTION text,
             DATE_FROM datetime NOT NULL,
             DATE_TO datetime NOT NULL,
+            ORIGINAL_DATE_FROM datetime DEFAULT NULL COMMENT 'Оригинальная дата начала (заполняется только при создании)',
+            ORIGINAL_DATE_TO datetime DEFAULT NULL COMMENT 'Оригинальная дата окончания (заполняется только при создании)',
+            TIME_IS_CHANGED tinyint(1) DEFAULT 0 COMMENT 'Флаг изменения времени записи',
             USER_ID int(11) NOT NULL,
             BRANCH_ID int(11) NOT NULL DEFAULT 1,
             EVENT_COLOR varchar(7) DEFAULT '#3498db',
@@ -74,13 +77,10 @@ class artmax_calendar extends CModule
             KEY DEAL_ENTITY_ID (DEAL_ENTITY_ID),
             KEY EMPLOYEE_ID (EMPLOYEE_ID),
             KEY CONFIRMATION_STATUS (CONFIRMATION_STATUS),
-            KEY STATUS (STATUS)
+            KEY STATUS (STATUS),
+            KEY TIME_IS_CHANGED (TIME_IS_CHANGED)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
         ";
-        
-        // Добавляем поле STATUS если его нет
-        $sqlAddStatus = "ALTER TABLE artmax_calendar_events 
-                         ADD COLUMN IF NOT EXISTS STATUS enum('active','moved','cancelled') DEFAULT 'active' COMMENT 'Статус события'";
         
         // Таблица филиалов
         $sqlBranches = "
@@ -108,20 +108,10 @@ class artmax_calendar extends CModule
             FOREIGN KEY (BRANCH_ID) REFERENCES artmax_calendar_branches(ID) ON DELETE CASCADE ON UPDATE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
         ";
-        $sqlModifier = "
-        INSERT IGNORE INTO artmax_calendar_branches (ID, NAME, TIMEZONE_NAME) VALUES
-        (1, 'Главный офис', 'Europe/Moscow'),
-        (2, 'Филиал Москва', 'Europe/Moscow'),
-        (3, 'Филиал Екатеринбург', 'Asia/Yekaterinburg'),
-        (4, 'Филиал Новосибирск', 'Asia/Novosibirsk'),
-        (5, 'Филиал Владивосток', 'Asia/Vladivostok');
-        ";
         
         $connection->query($sqlEvents);
         $connection->query($sqlBranches);
         $connection->query($sqlBranchesSettings);
-        $connection->query($sqlModifier);
-        $connection->query($sqlAddStatus);
     }
 
     public function UnInstallDB()

@@ -4273,6 +4273,22 @@ input:checked + .toggle-slider:before {
     border-color: #d32f2f !important;
 }
 
+/* Стили для перенесенных записей */
+.calendar-event.time-changed {
+    border: 2px dashed #ff9800 !important;
+    position: relative;
+}
+
+.calendar-event.time-changed::before {
+    content: "↕";
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    font-size: 10px;
+    color: #ff9800;
+    font-weight: bold;
+}
+
 /* Стили для новых кнопок в боковой панели */
 .move-event-btn {
     background: none;

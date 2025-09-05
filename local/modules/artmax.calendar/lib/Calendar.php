@@ -46,11 +46,13 @@ class Calendar
             FILE_APPEND | LOCK_EX);
         
         // Используем время как есть, без всяких конвертаций
-        $sql = "INSERT INTO artmax_calendar_events (TITLE, DESCRIPTION, DATE_FROM, DATE_TO, USER_ID, BRANCH_ID, EVENT_COLOR, EMPLOYEE_ID) VALUES ('" . 
+        $sql = "INSERT INTO artmax_calendar_events (TITLE, DESCRIPTION, DATE_FROM, DATE_TO, ORIGINAL_DATE_FROM, ORIGINAL_DATE_TO, TIME_IS_CHANGED, USER_ID, BRANCH_ID, EVENT_COLOR, EMPLOYEE_ID) VALUES ('" . 
                $this->connection->getSqlHelper()->forSql($title) . "', '" . 
                $this->connection->getSqlHelper()->forSql($description) . "', '" .
                $this->connection->getSqlHelper()->forSql($dateFrom) . "', '" .
-               $this->connection->getSqlHelper()->forSql($dateTo) . "', " . 
+               $this->connection->getSqlHelper()->forSql($dateTo) . "', '" .
+               $this->connection->getSqlHelper()->forSql($dateFrom) . "', '" .
+               $this->connection->getSqlHelper()->forSql($dateTo) . "', 0, " . 
                (int)$userId . ", " . 
                (int)$branchId . ", '" . 
                $this->connection->getSqlHelper()->forSql($eventColor) . "', " . 
@@ -195,6 +197,7 @@ class Calendar
                 EMPLOYEE_ID,
                 CONFIRMATION_STATUS,
                 STATUS,
+                TIME_IS_CHANGED,
                 VISIT_STATUS,
                 CREATED_AT,
                 UPDATED_AT
@@ -235,11 +238,28 @@ class Calendar
      */
     public function updateEvent($id, $title, $description, $dateFrom, $dateTo, $eventColor = null, $branchId = null, $employeeId = null)
     {
-        // Если branchId не передан, получаем его из существующего события
+        // Получаем существующее событие для проверки изменения времени
+        $existingEvent = $this->getEvent($id);
+        if (!$existingEvent) {
+            return false;
+        }
+        
+        // Если branchId не передан, используем из существующего события
         if (!$branchId) {
-            $existingEvent = $this->getEvent($id);
-            if ($existingEvent) {
-                $branchId = $existingEvent['BRANCH_ID'];
+            $branchId = $existingEvent['BRANCH_ID'];
+        }
+        
+        // Проверяем, изменилось ли время
+        $timeChanged = 0;
+        if ($existingEvent['ORIGINAL_DATE_FROM'] && $existingEvent['ORIGINAL_DATE_TO']) {
+            // Если есть оригинальные даты, сравниваем с ними
+            if ($existingEvent['ORIGINAL_DATE_FROM'] != $dateFrom || $existingEvent['ORIGINAL_DATE_TO'] != $dateTo) {
+                $timeChanged = 1;
+            }
+        } else {
+            // Если нет оригинальных дат, сравниваем с текущими
+            if ($existingEvent['DATE_FROM'] != $dateFrom || $existingEvent['DATE_TO'] != $dateTo) {
+                $timeChanged = 1;
             }
         }
         
@@ -250,6 +270,7 @@ class Calendar
                 DESCRIPTION = '" . $this->connection->getSqlHelper()->forSql($description) . "', 
                 DATE_FROM = '" . $this->connection->getSqlHelper()->forSql($dateFrom) . "', 
                 DATE_TO = '" . $this->connection->getSqlHelper()->forSql($dateTo) . "', 
+                TIME_IS_CHANGED = " . $timeChanged . ",
                 UPDATED_AT = NOW()";
         
         if ($eventColor !== null) {
@@ -448,6 +469,7 @@ class Calendar
             DEAL_ENTITY_ID,
             CONFIRMATION_STATUS,
             STATUS,
+            TIME_IS_CHANGED,
             VISIT_STATUS,
             DATE_FORMAT(CREATED_AT, '%d.%m.%Y %H:%i:%s') AS CREATED_AT,
             DATE_FORMAT(UPDATED_AT, '%d.%m.%Y %H:%i:%s') AS UPDATED_AT

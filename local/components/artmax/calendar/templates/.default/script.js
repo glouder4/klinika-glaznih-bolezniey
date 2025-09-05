@@ -3886,6 +3886,7 @@
             return;
         }
 
+        // Сначала получаем данные о текущем событии для проверки времени
         const csrfToken = getCSRFToken();
         fetch('/local/components/artmax/calendar/ajax.php', {
             method: 'POST',
@@ -3895,11 +3896,65 @@
                 'X-Bitrix-Csrf-Token': csrfToken
             },
             body: new URLSearchParams({
-                action: 'assignDoctor',
+                action: 'getEvent',
                 eventId: window.currentEventId,
-                employee_id: employeeId,
                 sessid: csrfToken
             })
+        })
+        .then(response => response.json())
+        .then(eventData => {
+            if (!eventData.success) {
+                showNotification('Ошибка получения данных события', 'error');
+                return Promise.reject('Failed to get event data');
+            }
+
+            const event = eventData.event;
+            
+            // Проверяем занятость времени для выбранного врача
+            return fetch('/local/components/artmax/calendar/ajax.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-Bitrix-Csrf-Token': csrfToken
+                },
+                body: new URLSearchParams({
+                    action: 'checkTimeAvailability',
+                    dateFrom: event.DATE_FROM,
+                    dateTo: event.DATE_TO,
+                    employeeId: employeeId,
+                    excludeEventId: window.currentEventId,
+                    sessid: csrfToken
+                })
+            });
+        })
+        .then(response => response.json())
+        .then(availabilityData => {
+            if (!availabilityData.success) {
+                showNotification('Ошибка проверки времени: ' + (availabilityData.error || 'Неизвестная ошибка'), 'error');
+                return Promise.reject('Failed to check time availability');
+            }
+
+            if (!availabilityData.available) {
+                showNotification('Время занято у выбранного врача. Выберите другое время или другого врача.', 'error');
+                return Promise.reject('Time not available');
+            }
+
+            // Если время свободно, назначаем врача
+            return fetch('/local/components/artmax/calendar/ajax.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-Bitrix-Csrf-Token': csrfToken
+                },
+                body: new URLSearchParams({
+                    action: 'assignDoctor',
+                    eventId: window.currentEventId,
+                    employee_id: employeeId,
+                    sessid: csrfToken
+                })
+            });
         })
         .then(response => response.json())
         .then(data => {
@@ -3914,7 +3969,10 @@
         })
         .catch(error => {
             console.error('Ошибка при назначении врача:', error);
-            showNotification('Ошибка соединения с сервером', 'error');
+            // Показываем общую ошибку только если это не была ошибка занятости времени
+            if (error !== 'Time not available') {
+                showNotification('Ошибка соединения с сервером', 'error');
+            }
         });
     }
 
@@ -5296,6 +5354,24 @@
         Object.keys(eventsByDate).forEach(dateKey => {
             const calendarDay = document.querySelector(`[data-date="${dateKey}"]`);
             if (calendarDay) {
+                // Сортируем события по времени начала
+                eventsByDate[dateKey].sort((a, b) => {
+                    const timeA = a.DATE_FROM || '';
+                    const timeB = b.DATE_FROM || '';
+                    
+                    // Извлекаем время из даты
+                    const timeMatchA = timeA.match(/(\d{2}):(\d{2}):(\d{2})$/);
+                    const timeMatchB = timeB.match(/(\d{2}):(\d{2}):(\d{2})$/);
+                    
+                    if (timeMatchA && timeMatchB) {
+                        const timeStrA = `${timeMatchA[1]}:${timeMatchA[2]}`;
+                        const timeStrB = `${timeMatchB[1]}:${timeMatchB[2]}`;
+                        return timeStrA.localeCompare(timeStrB);
+                    }
+                    
+                    return 0;
+                });
+                
                 eventsByDate[dateKey].forEach(event => {
                     const eventElement = createEventElement(event);
                     calendarDay.appendChild(eventElement);
@@ -5371,6 +5447,11 @@
                     eventElement.style.opacity = '0';
                     
                     setTimeout(() => {
+                        // Получаем данные о статусе и времени из существующего элемента
+                        const currentStatus = eventElement.classList.contains('status-cancelled') ? 'cancelled' :
+                                           eventElement.classList.contains('status-moved') ? 'moved' : 'active';
+                        const isTimeChanged = eventElement.classList.contains('time-changed') ? 1 : 0;
+                        
                         // Удаляем событие со старой позиции
                         eventElement.remove();
                         
@@ -5381,7 +5462,9 @@
                             DESCRIPTION: eventData.description || '',
                             DATE_FROM: eventData.dateFrom,
                             DATE_TO: eventData.dateTo,
-                            EVENT_COLOR: eventData.eventColor || '#3498db'
+                            EVENT_COLOR: eventData.eventColor || '#3498db',
+                            STATUS: currentStatus,
+                            TIME_IS_CHANGED: isTimeChanged
                         });
                         
                         // Добавляем событие в новую ячейку
@@ -5404,6 +5487,14 @@
                                 if (blinkCount >= maxBlinks) {
                                     clearInterval(blinkInterval);
                                     newEventElement.style.boxShadow = 'none';
+                                    
+                                    // Очищаем стили после анимации
+                                    setTimeout(() => {
+                                        newEventElement.style.transition = '';
+                                        newEventElement.style.opacity = '';
+                                        newEventElement.style.transform = '';
+                                        newEventElement.style.boxShadow = '';
+                                    }, 300);
                                     return;
                                 }
                                 
@@ -5501,22 +5592,62 @@
                 // Обновляем цвет события
                 if (eventData.eventColor) {
                     eventElement.style.borderLeft = `4px solid ${eventData.eventColor}`;
-                    eventElement.style.backgroundColor = `${eventData.eventColor}15`;
+                    eventElement.style.backgroundColor = `${eventData.eventColor}40`;
+                    // Сохраняем оригинальный цвет в data-атрибуте
+                    eventElement.setAttribute('data-original-color', eventData.eventColor);
                 }
                 
                 // Анимация обновления
+                eventElement.style.transition = 'all 0.3s ease';
                 eventElement.style.transform = 'scale(1.05)';
                 eventElement.style.boxShadow = '0 0 20px rgba(52, 152, 219, 0.6)';
                 
                 setTimeout(() => {
-                    eventElement.style.transition = 'all 0.3s ease';
                     eventElement.style.transform = 'scale(1)';
                     eventElement.style.boxShadow = 'none';
+                    
+                    // Очищаем стили после анимации
+                    setTimeout(() => {
+                        eventElement.style.transition = '';
+                        eventElement.style.transform = '';
+                        eventElement.style.boxShadow = '';
+                    }, 300);
                 }, 200);
+                
+                // Сортируем события по времени в том же дне
+                sortEventsInDay(currentParent);
             }
         } else {
             console.error('updateEventInCalendar: Событие не найдено в календаре, ID:', eventId);
         }
+    }
+
+    /**
+     * Сортирует события в дне по времени начала
+     */
+    function sortEventsInDay(dayElement) {
+        if (!dayElement) return;
+        
+        const events = Array.from(dayElement.querySelectorAll('.calendar-event'));
+        if (events.length <= 1) return;
+        
+        // Сортируем события по времени начала
+        events.sort((a, b) => {
+            const timeA = a.querySelector('.event-time')?.textContent || '';
+            const timeB = b.querySelector('.event-time')?.textContent || '';
+            
+            // Извлекаем время начала (до "–")
+            const startTimeA = timeA.split('–')[0]?.trim() || '';
+            const startTimeB = timeB.split('–')[0]?.trim() || '';
+            
+            // Сравниваем время в формате HH:MM
+            return startTimeA.localeCompare(startTimeB);
+        });
+        
+        // Переставляем события в отсортированном порядке
+        events.forEach(event => {
+            dayElement.appendChild(event);
+        });
     }
 
     /**
@@ -5589,6 +5720,11 @@
             eventElement.classList.add(`status-${event.STATUS}`);
         } else {
             eventElement.classList.add('status-active');
+        }
+        
+        // Добавляем класс для перенесенных записей
+        if (event.TIME_IS_CHANGED == 1 || event.TIME_IS_CHANGED === '1') {
+            eventElement.classList.add('time-changed');
         }
             
         eventElement.setAttribute('data-event-id', event.ID);

@@ -182,7 +182,11 @@ $totalDays = 42; // 6 недель * 7 дней
                                 
                                 // Добавляем класс статуса
                                 $statusClass = isset($event['STATUS']) ? 'status-' . $event['STATUS'] : 'status-active';
-                                echo '<div class="calendar-event ' . $statusClass . '" data-event-id="' . $event['ID'] . '" style="' . $style . '" onclick="event.stopPropagation();">';
+                                
+                                // Добавляем класс для перенесенных записей
+                                $timeChangedClass = (isset($event['TIME_IS_CHANGED']) && $event['TIME_IS_CHANGED'] == 1) ? ' time-changed' : '';
+                                
+                                echo '<div class="calendar-event ' . $statusClass . $timeChangedClass . '" data-event-id="' . $event['ID'] . '" style="' . $style . '" onclick="event.stopPropagation();">';
                                 echo '<div class="event-content">';
                                 echo '<div class="event-title">' . htmlspecialchars($event['TITLE']) . '</div>';
                                 echo '<div class="event-time">';

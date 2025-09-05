@@ -320,6 +320,29 @@ switch ($action) {
         }
         break;
 
+    case 'checkTimeAvailability':
+        $dateFrom = $_POST['dateFrom'] ?? '';
+        $dateTo = $_POST['dateTo'] ?? '';
+        $employeeId = $_POST['employeeId'] ?? null;
+        $excludeEventId = $_POST['excludeEventId'] ?? null;
+
+        if (!$dateFrom || !$dateTo) {
+            http_response_code(400);
+            die(json_encode(['success' => false, 'error' => 'Даты обязательны']));
+        }
+
+        try {
+            // Конвертируем даты из российского формата в стандартный
+            $convertedDateFrom = convertRussianDateToStandard($dateFrom);
+            $convertedDateTo = convertRussianDateToStandard($dateTo);
+            
+            $available = $calendarObj->isTimeAvailableForDoctor($convertedDateFrom, $convertedDateTo, $employeeId, $excludeEventId);
+            die(json_encode(['success' => true, 'available' => $available]));
+        } catch (Exception $e) {
+            die(json_encode(['success' => false, 'error' => $e->getMessage()]));
+        }
+        break;
+
     case 'updateEventStatus':
         $eventId = (int)($_POST['eventId'] ?? 0);
         $status = $_POST['status'] ?? '';
