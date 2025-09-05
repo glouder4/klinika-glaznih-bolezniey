@@ -52,16 +52,17 @@ function extractTimeFromDate($dateString)
 {
     // Извлекаем время напрямую из строки, избегая проблем с часовыми поясами
     if (preg_match('/\s+(\d{2}):(\d{2}):(\d{2})$/', $dateString, $timeMatches)) {
-        return $timeMatches[1] . ':' . $timeMatches[2];
+        $result = $timeMatches[1] . ':' . $timeMatches[2];
+        return $result;
     }
     
-    // Fallback на старый способ
-    $timestamp = strtotime($dateString);
-    if ($timestamp !== false) {
-        return date('H:i', $timestamp);
+    // Если дата в ISO формате (с T), извлекаем время
+    if (preg_match('/T(\d{2}):(\d{2}):(\d{2})/', $dateString, $timeMatches)) {
+        $result = $timeMatches[1] . ':' . $timeMatches[2];
+        return $result;
     }
-    
-    return '00:00';
+
+    return '??:??';
 }
 
 // Получаем текущую дату или выбранную дату
@@ -89,7 +90,7 @@ $startDate->modify('-' . ($firstDayOfWeek - 1) . ' days');
 $totalDays = 42; // 6 недель * 7 дней
 ?>
 
-<div class="artmax-calendar">
+<div class="artmax-calendar" data-branch-id="<?= $arResult['BRANCH']['ID'] ?>">
     <!-- Заголовок календаря -->
     <div class="calendar-header">
         <div class="header-left">
@@ -103,6 +104,12 @@ $totalDays = 42; // 6 недель * 7 дней
             <button class="btn btn-primary btn-create">
                 СОЗДАТЬ РАСПИСАНИЕ
             </button> 
+        </div>
+        
+        <div class="header-right">
+            <button class="btn btn-secondary btn-branch" id="branch-settings-btn" title="Настройки филиала">
+                ⚙️ Настройки филиала
+            </button>
         </div>
     </div>
 
@@ -163,10 +170,52 @@ $totalDays = 42; // 6 недель * 7 дней
                             foreach ($arResult['EVENTS_BY_DATE'][$dateKey] as $event) {
                                 $eventColor = $event['EVENT_COLOR'] ?? '#3498db';
                                 $style = 'border-left: 4px solid ' . $eventColor . '; background-color: ' . $eventColor . '65;';
-                                echo '<div class="calendar-event" data-event-id="' . $event['ID'] . '" style="' . $style . '">';
-                                echo '<div class="event-dot"></div>';
-                                echo '<span class="event-title">' . htmlspecialchars($event['TITLE']) . '</span>';
-                                echo '<span class="event-time">' . extractTimeFromDate(convertRussianDateToStandard($event['DATE_FROM'])) . '</span>';
+                                
+                                // Логируем данные события перед извлечением времени
+                                error_log("Отображение события ID=" . $event['ID'] . ", DATE_FROM=" . $event['DATE_FROM']);
+                                
+                                // Получаем время напрямую из БД, избегая проблем с часовыми поясами
+                                $eventTime = extractTimeFromDate($event['DATE_FROM']);
+                                
+                                // Получаем время окончания
+                                $eventEndTime = extractTimeFromDate($event['DATE_TO']);
+                                
+                                echo '<div class="calendar-event" data-event-id="' . $event['ID'] . '" style="' . $style . '" onclick="event.stopPropagation();">';
+                                echo '<div class="event-content">';
+                                echo '<div class="event-title">' . htmlspecialchars($event['TITLE']) . '</div>';
+                                echo '<div class="event-time">';
+                                echo '<span>';
+                                echo $eventTime . ' – ' . $eventEndTime;
+                                echo '</span>';
+                                echo '<div class="event-icons">';
+                                echo '<span class="event-icon contact-icon ' . ($event['CONTACT_ENTITY_ID'] ? 'active' : '') . '" title="Контакт">👤</span>';
+                                echo '<span class="event-icon deal-icon ' . ($event['DEAL_ENTITY_ID'] ? 'active' : '') . '" title="Сделка">💼</span>';
+                                
+                                // Логика для иконки визита
+                                $visitActive = '';
+                                if (isset($event['VISIT_STATUS'])) {
+                                    if ($event['VISIT_STATUS'] === 'client_came') {
+                                        $visitActive = 'active';
+                                    } elseif ($event['VISIT_STATUS'] === 'client_did_not_come') {
+                                        $visitActive = 'inactive';
+                                    }
+                                }
+                                echo '<span class="event-icon visit-icon ' . $visitActive . '" title="Визит">🏥</span>';
+                                
+                                // Логика для иконки подтверждения
+                                $confirmationActive = '';
+                                if (isset($event['CONFIRMATION_STATUS'])) {
+                                    if ($event['CONFIRMATION_STATUS'] === 'confirmed') {
+                                        $confirmationActive = 'active';
+                                    } elseif ($event['CONFIRMATION_STATUS'] === 'not_confirmed') {
+                                        $confirmationActive = 'inactive';
+                                    }
+                                }
+                                echo '<span class="event-icon confirmation-icon ' . $confirmationActive . '" title="Подтверждение">✅</span>';
+                                echo '</div>';
+                                echo '</div>';
+                                echo '</div>';
+                                echo '<div class="event-arrow" onclick="event.stopPropagation(); showEventSidePanel(' . $event['ID'] . ');">▼</div>';
                                 echo '</div>';
                             }
                         }
@@ -205,6 +254,18 @@ $totalDays = 42; // 6 недель * 7 дней
                     <div class="form-group" id="description-group">
                         <label for="event-description">Описание</label>
                         <textarea id="event-description" name="description" rows="3"></textarea>
+                    </div>
+                    
+                    <div class="form-group" id="employee-group">
+                        <label for="event-employee">Ответственный сотрудник *</label>
+                        <select id="event-employee" name="employee_id" required>
+                            <option value="">Выберите сотрудника</option>
+                            <!-- Опции будут загружены через JavaScript -->
+                        </select>
+                        <div class="error-message" style="display: none;">
+                            <span class="error-icon">⚠️</span>
+                            <span>Выберите ответственного сотрудника.</span>
+                        </div>
                     </div>
                     
                     <div class="form-group" id="date-group">
@@ -321,6 +382,18 @@ $totalDays = 42; // 6 недель * 7 дней
                     <textarea id="edit-event-description" name="description" rows="3"></textarea>
                 </div>
                 
+                <div class="form-group" id="edit-employee-group">
+                    <label for="edit-event-employee">Ответственный сотрудник *</label>
+                    <select id="edit-event-employee" name="employee_id" required>
+                        <option value="">Выберите сотрудника</option>
+                        <!-- Опции будут загружены через JavaScript -->
+                    </select>
+                    <div class="error-message" style="display: none;">
+                        <span class="error-icon">⚠️</span>
+                        <span>Выберите ответственного сотрудника.</span>
+                    </div>
+                </div>
+                
                 <div class="form-group" id="edit-date-group">
                     <label for="edit-event-date">ДАТА *</label>
                     <input type="date" id="edit-event-date" name="date" required>
@@ -422,6 +495,18 @@ $totalDays = 42; // 6 недель * 7 дней
                 <div class="form-group">
                     <label for="schedule-title">Название *</label>
                     <input type="text" id="schedule-title" name="title" required placeholder="Введите название расписания">
+                </div>
+                
+                <div class="form-group">
+                    <label for="schedule-employee">Ответственный сотрудник *</label>
+                    <select id="schedule-employee" name="employee_id" required>
+                        <option value="">Выберите сотрудника</option>
+                        <!-- Опции будут загружены через JavaScript -->
+                    </select>
+                    <div class="error-message" style="display: none;">
+                        <span class="error-icon">⚠️</span>
+                        <span>Выберите ответственного сотрудника.</span>
+                    </div>
                 </div>
                 
                 <div class="form-row">
@@ -538,11 +623,396 @@ $totalDays = 42; // 6 недель * 7 дней
             </form>
         </div>
     </div>
+
+    <!-- Модальное окно для настроек филиала -->
+    <div id="branchModal" class="event-form-modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Настройки филиала</h3>
+                <button class="close-btn" id="close-branch-modal">×</button>
+            </div>
+            <form id="branch-form" novalidate>
+                <?= bitrix_sessid_post() ?>
+                <input type="hidden" name="branch_id" value="<?= $arResult['BRANCH']['ID'] ?>">
+                
+                <div class="form-group">
+                    <label for="timezone-name">Часовой пояс</label>
+                    <select id="timezone-name" name="timezone_name" class="timezone-select">
+                        <option value="">Выберите часовой пояс</option>
+                        <?php
+                        $timezoneManager = new \Artmax\Calendar\TimezoneManager();
+                        $availableTimezones = $timezoneManager->getAvailableTimezones();
+                        $currentTimezone = null;
+                        
+                        // Получаем текущие настройки часового пояса для филиала
+                        if (isset($arResult['BRANCH']['ID'])) {
+                            $currentTimezone = $timezoneManager->getBranchTimezone($arResult['BRANCH']['ID']);
+                        }
+                        
+                        foreach ($availableTimezones as $timezoneName => $timezoneLabel) {
+                            $selected = ($currentTimezone && $currentTimezone['TIMEZONE_NAME'] === $timezoneName) ? 'selected' : '';
+                            echo '<option value="' . htmlspecialchars($timezoneName) . '" ' . $selected . '>' . htmlspecialchars($timezoneLabel) . '</option>';
+                        }
+                        ?>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="branch-employees">Сотрудники филиала</label>
+                    <div class="multiselect-container">
+                        <div class="multiselect-input" id="multiselect-input">
+                            <span class="placeholder">Выберите сотрудников</span>
+                            <span class="dropdown-arrow">▼</span>
+                        </div>
+                        <div class="multiselect-dropdown" id="multiselect-dropdown" style="display: none;">
+                            <div class="multiselect-search">
+                                <input type="text" id="employee-search" placeholder="Поиск сотрудников..." autocomplete="off">
+                            </div>
+                            <div class="multiselect-options" id="multiselect-options">
+                                <!-- Опции будут загружены через AJAX -->
+                            </div>
+                        </div>
+                    </div>
+                    <div class="selected-employees" id="selected-employees">
+                        <!-- Выбранные сотрудники будут отображаться здесь -->
+                    </div>
+                </div>
+                
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" id="cancel-branch-modal">ОТМЕНА</button>
+                    <button type="submit" class="btn btn-primary">СОХРАНИТЬ</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Боковое окно для просмотра деталей события -->
+    <div id="eventSidePanel" class="event-side-panel" style="display: none;">
+        <!-- Прелоадер -->
+        <div class="side-panel-preloader" id="sidePanelPreloader">
+            <div class="preloader-spinner"></div>
+            <div class="preloader-text">Загрузка данных...</div>
+        </div>
+        
+        <div class="side-panel-content">
+            <div class="side-panel-header">
+                <h3 id="sidePanelTitle">Детали записи</h3>
+                <button class="close-side-panel" onclick="closeEventSidePanel()">×</button>
+            </div>
+            
+            <div class="side-panel-body">
+                <!-- Информация о клиенте -->
+                <div class="client-section" onclick="openContactDetails()">
+                    <div class="client-info">
+                        <div class="client-icon">👤</div>
+                        <div class="client-details">
+                            <div class="client-name">Нет клиента</div>
+                            <div class="client-placeholder">Добавьте информацию о клиенте</div>
+                        </div>
+                        <div class="client-actions">
+                            <button class="action-btn add-contact-btn" title="Добавить" onclick="event.stopPropagation(); openClientModal();">➕</button>
+                        </div>
+                    </div>
+                    <div class="add-note-section">
+                        <button class="add-note-btn" id="add-note-btn" onclick="event.stopPropagation(); openNoteModal();">+ Добавить заметку к записи</button>
+                        <div class="note-display" id="note-display" style="display: none;">
+                            <div class="note-content">
+                                <span class="note-text" id="note-text-display"></span>
+                                <button class="edit-note-btn" onclick="event.stopPropagation(); editNote();" title="Редактировать заметку">✏️</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Карточки действий -->
+                <div class="action-cards">
+
+                    <div class="action-card" id="deal-card" onclick="openDealDetails()">
+                        <div class="card-icon">🤝</div>
+                        <div class="card-content">
+                            <div class="card-title">Сделка</div>
+                            <div class="card-status" id="deal-status">Не добавлена</div>
+                        </div>
+                        <div class="card-actions" onclick="event.stopPropagation()">
+                            <button class="card-action-btn add-btn" onclick="createNewDeal()" title="Создать новую сделку">+</button>
+                            <button class="card-action-btn select-btn" onclick="openDealModal()">Выбрать</button>
+                        </div>
+                    </div>
+
+                    <div class="action-card" id="employee-card" onclick="openEmployeeDetails()">
+                        <div class="card-icon">👨‍⚕️</div>
+                        <div class="card-content">
+                            <div class="card-title">Ответственный врач</div>
+                            <div class="card-status" id="employee-status">Не назначен</div>
+                        </div>
+                        <div class="card-actions" onclick="event.stopPropagation()">
+                            <button class="card-action-btn add-btn" onclick="openEmployeeModal()" title="Назначить врача">+</button>
+                        </div>
+                    </div>
+
+                    <div class="action-card">
+                        <div class="card-icon">
+                            <div class="booking-actions-popup-item-icon">✓</div>
+                        </div>
+                        <div class="card-content">
+                            <div class="card-title">Подтверждение</div>
+                            <div class="card-status" id="confirmation-status">Ожидается подтверждение</div>
+                        </div>
+                        <button class="card-action-btn" id="confirmation-select-btn" onclick="toggleConfirmationDropdown()">Выбрать ▼</button>
+                        
+                        <!-- Выпадающее меню подтверждения -->
+                        <div class="confirmation-dropdown" id="confirmation-dropdown">
+                            <div class="confirmation-dropdown-item" onclick="setConfirmationStatus('confirmed')">Подтверждено</div>
+                            <div class="confirmation-dropdown-item" onclick="setConfirmationStatus('not_confirmed')">Не подтверждено</div>
+                        </div>
+                    </div>
+
+                    <div class="action-card">
+                        <div class="card-icon">🏥</div>
+                        <div class="card-content">
+                            <div class="card-title">Визит</div>
+                            <div class="card-status" id="visit-status">Не указано</div>
+                        </div>
+                        <button class="card-action-btn" id="visit-select-btn" onclick="toggleVisitDropdown()">Выбрать ▼</button>
+                        
+                        <!-- Выпадающее меню визита -->
+                        <div class="visit-dropdown" id="visit-dropdown">
+                            <div class="visit-dropdown-item" onclick="setVisitStatus('not_specified')">Не указано</div>
+                            <div class="visit-dropdown-item" onclick="setVisitStatus('client_came')">Клиент пришел</div>
+                            <div class="visit-dropdown-item" onclick="setVisitStatus('client_did_not_come')">Клиент не пришел</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Кнопки действий -->
+                <div class="side-panel-actions">
+                    <button class="edit-event-btn" onclick="openEditEventModalFromSidePanel()">Редактировать</button>
+                    <button class="delete-event-btn" onclick="deleteEventFromSidePanel()">🗑️ Удалить</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно для выбора клиента -->
+    <div id="clientModal" class="client-modal" style="display: none;">
+        <div class="client-modal-content">
+            <div class="client-modal-header">
+                <h3>Добавить или выбрать клиента</h3>
+                <button class="close-client-modal" onclick="closeClientModal()">×</button>
+            </div>
+            <div class="client-modal-body">
+                <div class="client-modal-form-wrapper">
+                    <!-- Скрытое поле для ID контакта -->
+                    <input type="hidden" id="contact-id" value="">
+                    
+                    <div class="form-group" id="contact-search-group">
+                        <label for="contact-input">Контакт</label>
+                        <div class="input-with-icons">
+                            <div class="input-icon left">👤</div>
+                            <input type="text" id="contact-input" placeholder="Имя, email или номер телефона">
+                            <div class="input-icon right">🔍</div>
+                        </div>
+                        <!-- Кнопка создания нового контакта -->
+                        <div class="create-contact-section">
+                            <button class="create-new-contact-btn" onclick="showCreateContactForm()">
+                                <span class="plus-icon">+</span>
+                                Создать новый контакт
+                            </button>
+                        </div>
+                        <!-- Выпадающее окошко с результатами поиска -->
+                        <div id="contact-search-dropdown" class="search-dropdown" style="display: none;">
+                            <div class="search-suggestion">
+                                <span class="search-text">«Поиск»</span>
+                            </div>
+                            <button class="create-new-contact-btn" onclick="showCreateContactForm()">
+                                <span class="plus-icon">+</span>
+                                создать новый контакт
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Кнопка "Назад" для возврата к поиску -->
+                    <div id="back-to-search" class="back-to-search" style="display: none;">
+                        <button class="back-btn" onclick="hideCreateContactForm()">
+                            <span class="back-icon">←</span>
+                            Назад к поиску
+                        </button>
+                    </div>
+                    
+                    <!-- Форма создания нового контакта -->
+                    <div id="create-contact-form" class="create-contact-form" style="display: none;">
+                        <div class="form-group">
+                            <label for="new-contact-name">Имя *</label>
+                            <input type="text" id="new-contact-name" placeholder="Введите имя" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="new-contact-lastname">Фамилия</label>
+                            <input type="text" id="new-contact-lastname" placeholder="Введите фамилию">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="new-contact-phone">Телефон</label>
+                            <input type="tel" id="new-contact-phone" placeholder="Введите номер телефона">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="new-contact-email">E-mail</label>
+                            <input type="email" id="new-contact-email" placeholder="Введите email">
+                        </div>
+                        
+                        <div class="create-contact-actions">
+                            <button type="button" class="btn btn-primary" onclick="createContact()">Создать контакт</button>
+                            <button type="button" class="btn btn-secondary" onclick="hideCreateContactForm()">Отмена</button>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group contact-details-field" style="display: none;">
+                        <label for="phone-input">Телефон</label>
+                        <div class="input-with-icons">
+                            <div class="input-icon left">🇷🇺</div>
+                            <input type="tel" id="phone-input" placeholder="Номер телефона">
+                        </div>
+                    </div>
+                    
+                    <div class="form-group contact-details-field" style="display: none;">
+                        <label for="email-input">E-mail</label>
+                        <div class="input-with-icons">
+                            <div class="input-icon left">✉️</div>
+                            <input type="email" id="email-input" placeholder="Адрес электронной почты">
+                        </div>
+                    </div>
+                    
+                    <!--<div class="form-group contact-details-field" style="display: none;">
+                        <label for="company-input">Компания</label>
+                        <div class="input-with-icons">
+                            <div class="input-icon left">🏢</div>
+                            <input type="text" id="company-input" placeholder="Название компании">
+                            <div class="input-icon right">🔍</div>
+                        </div>
+                    </div>-->
+                </div>
+                <div class="modal-instruction">
+                    Чтобы выбрать клиента из CRM, начните вводить имя, телефон или e-mail
+                </div>
+            </div>
+            <div class="client-modal-footer" style="display: none;">
+                <button type="button" class="btn btn-secondary" onclick="closeClientModal()">ОТМЕНА</button>
+                <button type="button" class="btn btn-primary" onclick="saveClientData()">СОХРАНИТЬ</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно для выбора сделки -->
+    <div id="dealModal" class="deal-modal" style="display: none;">
+        <div class="deal-modal-content">
+            <div class="deal-modal-header">
+                <h3>Добавить или выбрать сделку</h3>
+                <button class="close-deal-modal" onclick="closeDealModal()">×</button>
+            </div>
+            <div class="deal-modal-body">
+                <div class="deal-modal-form-wrapper">
+                    <!-- Скрытое поле для ID сделки -->
+                    <input type="hidden" id="deal-id" value="">
+                    
+                    <div class="form-group">
+                        <label for="deal-input">Сделка</label>
+                        <div class="input-with-icons">
+                            <div class="input-icon left">💼</div>
+                            <input type="text" id="deal-input" placeholder="Название сделки">
+                            <div class="input-icon right">🔍</div>
+                        </div>
+                        <!-- Выпадающее окошко с результатами поиска -->
+                        <div id="deal-search-dropdown" class="search-dropdown" style="display: none;">
+                            <div class="search-suggestion">
+                                <span class="search-text">«Поиск»</span>
+                            </div>
+                            <button class="create-new-deal-btn">
+                                <span class="plus-icon">+</span>
+                                создать новую сделку
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-instruction">
+                    Чтобы выбрать сделку из CRM, начните вводить название сделки
+                </div>
+            </div>
+            <div class="deal-modal-footer" style="display: none;">
+                <button type="button" class="btn btn-secondary" onclick="closeDealModal()">ОТМЕНА</button>
+                <button type="button" class="btn btn-primary" onclick="saveDealData()">СОХРАНИТЬ</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно для добавления заметки -->
+    <div id="noteModal" class="note-modal" style="display: none;">
+        <div class="note-modal-content">
+            <div class="note-modal-header">
+                <h3>Заметка</h3>
+                <button class="close-note-modal" onclick="closeNoteModal()">×</button>
+            </div>
+            <div class="note-modal-body">
+                <div class="form-group">
+                    <textarea id="note-text" placeholder="Запишите важные данные, пожелания, нюансы" rows="6"></textarea>
+                </div>
+                <div class="note-modal-actions">
+                    <button type="button" class="btn btn-primary" onclick="saveNote()">СОХРАНИТЬ</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeNoteModal()">ОТМЕНИТЬ</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно для выбора врача -->
+    <div id="employeeModal" class="employee-modal" style="display: none;">
+        <div class="employee-modal-content">
+            <div class="employee-modal-header">
+                <h3>Назначить ответственного врача</h3>
+                <button class="close-employee-modal" onclick="closeEmployeeModal()">×</button>
+            </div>
+            <div class="employee-modal-body">
+                <div class="form-group">
+                    <label for="employee-select">Выберите врача</label>
+                    <select id="employee-select" class="employee-select">
+                        <option value="">Выберите врача</option>
+                        <!-- Опции будут загружены через JavaScript -->
+                    </select>
+                </div>
+                <div class="modal-instruction">
+                    Выберите ответственного врача для данного события
+                </div>
+            </div>
+            <div class="employee-modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeEmployeeModal()">ОТМЕНА</button>
+                <button type="button" class="btn btn-primary" onclick="saveEmployee()">СОХРАНИТЬ</button>
+            </div>
+        </div>
+    </div>
 </div>
 
 <script>
     let currentYear = <?= $year ?>;
     let currentMonth = <?= $month ?>;
+
+    // Функции для работы с модальным окном настроек филиала
+    function openTimezoneModal() {
+        const modal = document.getElementById('timezoneModal');
+        if (modal) {
+            modal.style.display = 'block';
+            document.body.style.overflow = 'hidden';
+        }
+    }
+
+    function closeTimezoneModal() {
+        const modal = document.getElementById('timezoneModal');
+        if (modal) {
+            modal.style.display = 'none';
+            document.body.style.overflow = 'auto';
+        }
+    }
+
+
 
     function previousMonth() {
         currentMonth--;
@@ -717,6 +1187,32 @@ $totalDays = 42; // 6 недель * 7 дней
             });
         });
 
+        // Обработка кнопки настроек филиала
+        const branchBtn = document.getElementById('branch-settings-btn');
+        if (branchBtn) {
+            branchBtn.addEventListener('click', function() {
+                openBranchModal();
+            });
+        }
+
+        // Обработка кнопки закрытия модального окна настроек
+        const closeBranchBtn = document.getElementById('close-branch-modal');
+        if (closeBranchBtn) {
+            closeBranchBtn.addEventListener('click', function() {
+                closeBranchModal();
+            });
+        }
+
+        // Обработка кнопки "ОТМЕНА" в форме настроек
+        const cancelBranchBtn = document.getElementById('cancel-branch-modal');
+        if (cancelBranchBtn) {
+            cancelBranchBtn.addEventListener('click', function() {
+                closeBranchModal();
+            });
+        }
+
+
+
         // Обработка формы добавления события уже настроена в script.js
     });
 
@@ -764,6 +1260,10 @@ $totalDays = 42; // 6 недель * 7 дней
         if (e.key === 'Escape') {
             closeEventForm();
             closeScheduleModal();
+            closeTimezoneModal();
         }
     });
-</script> 
+
+
+
+</script>

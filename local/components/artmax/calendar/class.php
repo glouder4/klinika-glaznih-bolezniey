@@ -291,7 +291,7 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
     /**
      * Добавление расписания
      */
-    public function addScheduleAction($title, $date, $time, $repeat = false, $frequency = null, $weekdays = [], $repeatEnd = 'never', $repeatCount = null, $repeatEndDate = null, $eventColor = '#3498db')
+    public function addScheduleAction($title, $date, $time, $employeeId = null, $repeat = false, $frequency = null, $weekdays = [], $repeatEnd = 'never', $repeatCount = null, $repeatEndDate = null, $eventColor = '#3498db')
     {
         if (!$GLOBALS['USER'] || !$GLOBALS['USER']->IsAuthorized()) {
             return ['success' => false, 'error' => 'Необходима авторизация'];
@@ -317,7 +317,7 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
             }
 
             // Создаем событие
-            $eventId = $calendarObj->addEvent($title, '', $dateFrom->format('Y-m-d H:i:s'), $dateTo->format('Y-m-d H:i:s'), $userId, 1, $eventColor);
+            $eventId = $calendarObj->addEvent($title, '', $dateFrom->format('Y-m-d H:i:s'), $dateTo->format('Y-m-d H:i:s'), $userId, 1, $eventColor, $employeeId);
 
             if ($eventId) {
                 $eventsCreated = 1; // Основное событие
@@ -335,7 +335,7 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                 
                 // Если событие повторяемое, создаем повторения
                 if ($repeat && $frequency) {
-                    $recurringResult = $this->createRecurringEvents($eventId, $frequency, $weekdays, $repeatEnd, $repeatCount, $repeatEndDate, $eventColor);
+                    $recurringResult = $this->createRecurringEvents($eventId, $frequency, $weekdays, $repeatEnd, $repeatCount, $repeatEndDate, $eventColor, $employeeId);
                     if ($recurringResult && $recurringResult['count'] > 0) {
                         $eventsCreated += $recurringResult['count'];
                         
@@ -370,7 +370,7 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
     /**
      * Создание повторяющихся событий
      */
-    private function createRecurringEvents($originalEventId, $frequency, $weekdays = [], $repeatEnd = 'never', $repeatCount = null, $repeatEndDate = null, $eventColor = '#3498db')
+    private function createRecurringEvents($originalEventId, $frequency, $weekdays = [], $repeatEnd = 'never', $repeatCount = null, $repeatEndDate = null, $eventColor = '#3498db', $employeeId = null)
     {
         try {
             if (!CModule::IncludeModule('artmax.calendar')) {
@@ -435,7 +435,8 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                                     $eventDateTo->format('Y-m-d H:i:s'),
                                     $originalEvent['USER_ID'],
                                     1,
-                                    $eventColor
+                                    $eventColor,
+                                    $employeeId
                                 );
 
                                 if ($recurringEventId) {
@@ -495,7 +496,8 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                             $newDateTo->format('Y-m-d H:i:s'),
                             $originalEvent['USER_ID'],
                             1,
-                            $eventColor
+                            $eventColor,
+                            $employeeId
                         );
 
                         if ($recurringEventId) {

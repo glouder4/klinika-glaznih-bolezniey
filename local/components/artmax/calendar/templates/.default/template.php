@@ -256,6 +256,18 @@ $totalDays = 42; // 6 недель * 7 дней
                         <textarea id="event-description" name="description" rows="3"></textarea>
                     </div>
                     
+                    <div class="form-group" id="employee-group">
+                        <label for="event-employee">Ответственный сотрудник *</label>
+                        <select id="event-employee" name="employee_id" required>
+                            <option value="">Выберите сотрудника</option>
+                            <!-- Опции будут загружены через JavaScript -->
+                        </select>
+                        <div class="error-message" style="display: none;">
+                            <span class="error-icon">⚠️</span>
+                            <span>Выберите ответственного сотрудника.</span>
+                        </div>
+                    </div>
+                    
                     <div class="form-group" id="date-group">
                         <label for="event-date">ДАТА *</label>
                         <input type="date" id="event-date" name="date" required>
@@ -370,6 +382,18 @@ $totalDays = 42; // 6 недель * 7 дней
                     <textarea id="edit-event-description" name="description" rows="3"></textarea>
                 </div>
                 
+                <div class="form-group" id="edit-employee-group">
+                    <label for="edit-event-employee">Ответственный сотрудник *</label>
+                    <select id="edit-event-employee" name="employee_id" required>
+                        <option value="">Выберите сотрудника</option>
+                        <!-- Опции будут загружены через JavaScript -->
+                    </select>
+                    <div class="error-message" style="display: none;">
+                        <span class="error-icon">⚠️</span>
+                        <span>Выберите ответственного сотрудника.</span>
+                    </div>
+                </div>
+                
                 <div class="form-group" id="edit-date-group">
                     <label for="edit-event-date">ДАТА *</label>
                     <input type="date" id="edit-event-date" name="date" required>
@@ -471,6 +495,18 @@ $totalDays = 42; // 6 недель * 7 дней
                 <div class="form-group">
                     <label for="schedule-title">Название *</label>
                     <input type="text" id="schedule-title" name="title" required placeholder="Введите название расписания">
+                </div>
+                
+                <div class="form-group">
+                    <label for="schedule-employee">Ответственный сотрудник *</label>
+                    <select id="schedule-employee" name="employee_id" required>
+                        <option value="">Выберите сотрудника</option>
+                        <!-- Опции будут загружены через JavaScript -->
+                    </select>
+                    <div class="error-message" style="display: none;">
+                        <span class="error-icon">⚠️</span>
+                        <span>Выберите ответственного сотрудника.</span>
+                    </div>
                 </div>
                 
                 <div class="form-row">
@@ -703,6 +739,17 @@ $totalDays = 42; // 6 недель * 7 дней
                         </div>
                     </div>
 
+                    <div class="action-card" id="employee-card" onclick="openEmployeeDetails()">
+                        <div class="card-icon">👨‍⚕️</div>
+                        <div class="card-content">
+                            <div class="card-title">Ответственный врач</div>
+                            <div class="card-status" id="employee-status">Не назначен</div>
+                        </div>
+                        <div class="card-actions" onclick="event.stopPropagation()">
+                            <button class="card-action-btn add-btn" onclick="openEmployeeModal()" title="Назначить врача">+</button>
+                        </div>
+                    </div>
+
                     <div class="action-card">
                         <div class="card-icon">
                             <div class="booking-actions-popup-item-icon">✓</div>
@@ -913,6 +960,32 @@ $totalDays = 42; // 6 недель * 7 дней
                     <button type="button" class="btn btn-primary" onclick="saveNote()">СОХРАНИТЬ</button>
                     <button type="button" class="btn btn-secondary" onclick="closeNoteModal()">ОТМЕНИТЬ</button>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно для выбора врача -->
+    <div id="employeeModal" class="employee-modal" style="display: none;">
+        <div class="employee-modal-content">
+            <div class="employee-modal-header">
+                <h3>Назначить ответственного врача</h3>
+                <button class="close-employee-modal" onclick="closeEmployeeModal()">×</button>
+            </div>
+            <div class="employee-modal-body">
+                <div class="form-group">
+                    <label for="employee-select">Выберите врача</label>
+                    <select id="employee-select" class="employee-select">
+                        <option value="">Выберите врача</option>
+                        <!-- Опции будут загружены через JavaScript -->
+                    </select>
+                </div>
+                <div class="modal-instruction">
+                    Выберите ответственного врача для данного события
+                </div>
+            </div>
+            <div class="employee-modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeEmployeeModal()">ОТМЕНА</button>
+                <button type="button" class="btn btn-primary" onclick="saveEmployee()">СОХРАНИТЬ</button>
             </div>
         </div>
     </div>

@@ -20,7 +20,7 @@ class Calendar
     /**
      * Добавить новое событие
      */
-    public function addEvent($title, $description, $dateFrom, $dateTo, $userId, $branchId = 1, $eventColor = '#3498db')
+    public function addEvent($title, $description, $dateFrom, $dateTo, $userId, $branchId = 1, $eventColor = '#3498db', $employeeId = null)
     {
                 // Простое логирование
         file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
@@ -46,14 +46,15 @@ class Calendar
             FILE_APPEND | LOCK_EX);
         
         // Используем время как есть, без всяких конвертаций
-        $sql = "INSERT INTO artmax_calendar_events (TITLE, DESCRIPTION, DATE_FROM, DATE_TO, USER_ID, BRANCH_ID, EVENT_COLOR) VALUES ('" . 
+        $sql = "INSERT INTO artmax_calendar_events (TITLE, DESCRIPTION, DATE_FROM, DATE_TO, USER_ID, BRANCH_ID, EVENT_COLOR, EMPLOYEE_ID) VALUES ('" . 
                $this->connection->getSqlHelper()->forSql($title) . "', '" . 
                $this->connection->getSqlHelper()->forSql($description) . "', '" .
                $this->connection->getSqlHelper()->forSql($dateFrom) . "', '" .
                $this->connection->getSqlHelper()->forSql($dateTo) . "', " . 
                (int)$userId . ", " . 
                (int)$branchId . ", '" . 
-               $this->connection->getSqlHelper()->forSql($eventColor) . "')";
+               $this->connection->getSqlHelper()->forSql($eventColor) . "', " . 
+               ($employeeId ? (int)$employeeId : 'NULL') . ")";
 
         // Логируем SQL запрос
         file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
@@ -189,6 +190,7 @@ class Calendar
                 CONTACT_ENTITY_ID,
                 DEAL_ENTITY_ID,
                 NOTE,
+                EMPLOYEE_ID,
                 CONFIRMATION_STATUS,
                 VISIT_STATUS,
                 CREATED_AT,
@@ -228,7 +230,7 @@ class Calendar
     /**
      * Обновить событие
      */
-    public function updateEvent($id, $title, $description, $dateFrom, $dateTo, $eventColor = null, $branchId = null)
+    public function updateEvent($id, $title, $description, $dateFrom, $dateTo, $eventColor = null, $branchId = null, $employeeId = null)
     {
         // Если branchId не передан, получаем его из существующего события
         if (!$branchId) {
@@ -255,9 +257,27 @@ class Calendar
             $sql .= ", BRANCH_ID = " . (int)$branchId;
         }
         
+        if ($employeeId !== null) {
+            $sql .= ", EMPLOYEE_ID = " . ($employeeId ? (int)$employeeId : 'NULL');
+        }
+        
         $sql .= " WHERE ID = " . (int)$id;
 
         // Используем время как есть, без всяких конвертаций
+        return $this->connection->query($sql);
+    }
+
+    /**
+     * Назначить врача событию
+     */
+    public function assignDoctor($eventId, $employeeId)
+    {
+        $sql = "
+            UPDATE artmax_calendar_events 
+            SET EMPLOYEE_ID = " . ($employeeId ? (int)$employeeId : 'NULL') . ",
+                UPDATED_AT = NOW()
+            WHERE ID = " . (int)$eventId;
+        
         return $this->connection->query($sql);
     }
 

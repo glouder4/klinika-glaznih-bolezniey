@@ -25,6 +25,9 @@
         // Инициализация мультиселектора сотрудников
         initMultiselect();
         
+        // Загрузка сотрудников для селекторов форм
+        loadEmployeesForSelectors();
+        
         // Инициализация обработчиков для модального окна настроек филиала
         initBranchModal();
 
@@ -230,6 +233,11 @@
             if (durationSelect) {
                 durationSelect.addEventListener('change', () => clearFieldError('duration-group'));
             }
+            
+            const employeeSelect = document.getElementById('event-employee');
+            if (employeeSelect) {
+                employeeSelect.addEventListener('change', () => clearFieldError('employee-group'));
+            }
         }
 
         // Инициализация формы редактирования
@@ -256,6 +264,11 @@
             const editDurationSelect = document.getElementById('edit-event-duration');
             if (editDurationSelect) {
                 editDurationSelect.addEventListener('change', () => clearFieldError('edit-duration-group'));
+            }
+            
+            const editEmployeeSelect = document.getElementById('edit-event-employee');
+            if (editEmployeeSelect) {
+                editEmployeeSelect.addEventListener('change', () => clearFieldError('edit-employee-group'));
             }
         }
     }
@@ -344,6 +357,7 @@
         const date = document.getElementById('event-date');
         const timeSelect = document.getElementById('event-time');
         const duration = document.getElementById('event-duration');
+        const employee = document.getElementById('event-employee');
 
         let isValid = true;
 
@@ -371,6 +385,12 @@
             showFieldError('duration-group', 'Выберите длительность приема.');
         }
 
+        // Проверка врача
+        if (!employee.value) {
+            isValid = false;
+            showFieldError('employee-group', 'Выберите ответственного сотрудника.');
+        }
+
         if (!isValid) {
             return;
         }
@@ -389,6 +409,7 @@
         const date = document.getElementById('edit-event-date');
         const timeSelect = document.getElementById('edit-event-time');
         const duration = document.getElementById('edit-event-duration');
+        const employee = document.getElementById('edit-event-employee');
 
         let isValid = true;
 
@@ -408,6 +429,12 @@
         if (!timeSelect.value) {
             isValid = false;
             showFieldError('edit-time-group', 'Выберите время приема.');
+        }
+
+        // Проверка врача
+        if (!employee.value) {
+            isValid = false;
+            showFieldError('edit-employee-group', 'Выберите ответственного сотрудника.');
         }
 
         // Проверка длительности
@@ -835,7 +862,7 @@
         openEditEventModal(eventId);
     }
 
-    function showEventSidePanel(eventId) {
+    window.showEventSidePanel = function(eventId) {
         console.log('showEventSidePanel: Показываем боковое окно для события:', eventId);
         
         // Сохраняем ID текущего события
@@ -949,6 +976,15 @@
                 } else {
                     // Сбрасываем информацию о сделке, если сделки нет
                     resetDealInfoInSidePanel();
+                }
+                
+                // Загружаем данные врача, если есть EMPLOYEE_ID
+                if (event.EMPLOYEE_ID) {
+                    loadingCount++; // Увеличиваем счетчик только если будет запрос
+                    loadEventEmployee(event.EMPLOYEE_ID);
+                } else {
+                    // Сбрасываем информацию о враче, если врача нет
+                    resetEmployeeInfoInSidePanel();
                 }
                 
                 // Инициализируем счетчик загрузки
@@ -1151,6 +1187,7 @@
                 const durationInput = document.getElementById('edit-event-duration');
                 const descriptionInput = document.getElementById('edit-event-description');
                 const colorInput = document.getElementById('edit-selected-color');
+                const employeeSelect = document.getElementById('edit-event-employee');
                 
                 // Проверяем, что все поля найдены
                 console.log('showEventDetails: Заполняем форму события:', event.TITLE);
@@ -1312,6 +1349,9 @@
                     }
                 }
                 if (descriptionInput) descriptionInput.value = event.DESCRIPTION || '';
+                if (employeeSelect) {
+                    setSelectedEmployee('edit-event-employee', event.EMPLOYEE_ID);
+                }
                 if (colorInput) {
                     const eventColor = event.EVENT_COLOR || '#3498db';
                     console.log('showEventDetails: Устанавливаем цвет события:', eventColor);
@@ -1578,6 +1618,7 @@
             title: scheduleData.title,
             date: scheduleData.date,
             time: scheduleData.time,
+            employee_id: scheduleData.employee_id,
             repeat: scheduleData.repeat,
             frequency: scheduleData.frequency || null,
             weekdays: scheduleData.weekdays || [],
@@ -1652,6 +1693,42 @@
             scheduleForm.addEventListener('submit', function(e) {
                 e.preventDefault();
                 
+                // Валидация формы расписания
+                const title = document.getElementById('schedule-title');
+                const date = document.getElementById('schedule-date');
+                const time = document.getElementById('schedule-time');
+                const employee = document.getElementById('schedule-employee');
+                
+                let isValid = true;
+                
+                // Проверка названия
+                if (!title.value.trim()) {
+                    isValid = false;
+                    showFieldError('schedule-title', 'Заполните название расписания.');
+                }
+                
+                // Проверка даты
+                if (!date.value) {
+                    isValid = false;
+                    showFieldError('schedule-date', 'Выберите дату.');
+                }
+                
+                // Проверка времени
+                if (!time.value) {
+                    isValid = false;
+                    showFieldError('schedule-time', 'Выберите время.');
+                }
+                
+                // Проверка врача
+                if (!employee.value) {
+                    isValid = false;
+                    showFieldError('schedule-employee', 'Выберите ответственного сотрудника.');
+                }
+                
+                if (!isValid) {
+                    return;
+                }
+                
                 const formData = new FormData(this);
                 // Проверяем значение скрытого поля перед отправкой
                 const selectedColorInput = document.getElementById('selected-color');
@@ -1664,6 +1741,7 @@
                     title: formData.get('title'),
                     date: formData.get('date'),
                     time: formData.get('time'),
+                    employee_id: formData.get('employee_id'),
                     repeat: formData.get('repeat') === 'on',
                     frequency: formData.get('frequency'),
                     weekdays: formData.getAll('weekdays[]'),
@@ -3639,6 +3717,293 @@
     let selectedEmployees = [];
     let allEmployees = [];
 
+    // Загрузка сотрудников в селекторы форм
+    function loadEmployeesForSelectors() {
+        const csrfToken = getCSRFToken();
+        fetch('/local/components/artmax/calendar/ajax.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-Bitrix-Csrf-Token': csrfToken
+            },
+            body: new URLSearchParams({
+                action: 'getEmployees',
+                sessid: csrfToken
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.employees) {
+                // Сохраняем сотрудников для повторного использования
+                window.allEmployees = data.employees;
+                
+                // Заполняем селектор в форме добавления события
+                populateEmployeeSelector('event-employee', data.employees);
+                // Заполняем селектор в форме редактирования события
+                populateEmployeeSelector('edit-event-employee', data.employees);
+                // Заполняем селектор в форме создания расписания
+                populateEmployeeSelector('schedule-employee', data.employees);
+            }
+        })
+        .catch(error => {
+            console.error('Ошибка при загрузке сотрудников для селекторов:', error);
+        });
+    }
+
+    // Заполнение селектора сотрудников
+    function populateEmployeeSelector(selectorId, employees) {
+        const selector = document.getElementById(selectorId);
+        if (!selector) return;
+
+        // Очищаем селектор, оставляя только первую опцию
+        selector.innerHTML = '<option value="">Выберите сотрудника</option>';
+        
+        // Добавляем сотрудников
+        employees.forEach(employee => {
+            const option = document.createElement('option');
+            option.value = employee.ID;
+            option.textContent = `${employee.NAME} ${employee.LAST_NAME}`.trim() || employee.LOGIN;
+            selector.appendChild(option);
+        });
+    }
+
+    // Установка выбранного сотрудника в селекторе
+    function setSelectedEmployee(selectorId, employeeId) {
+        const selector = document.getElementById(selectorId);
+        if (selector) {
+            selector.value = employeeId || '';
+        }
+    }
+
+    // Функции для работы с модальным окном врача
+    window.openEmployeeModal = function() {
+        const modal = document.getElementById('employeeModal');
+        if (modal) {
+            modal.style.display = 'flex';
+            document.body.style.overflow = 'hidden';
+            
+            // Загружаем сотрудников в селектор только если они еще не загружены
+            const selector = document.getElementById('employee-select');
+            if (selector && selector.children.length <= 1) {
+                loadEmployeesForEmployeeModal();
+            } else {
+                // Если сотрудники уже загружены, просто устанавливаем текущего врача
+                if (window.currentEventEmployee) {
+                    selector.value = window.currentEventEmployee.ID;
+                }
+            }
+        }
+    }
+
+    window.closeEmployeeModal = function() {
+        const modal = document.getElementById('employeeModal');
+        if (modal) {
+            modal.style.display = 'none';
+            document.body.style.overflow = 'auto';
+        }
+    }
+
+    function loadEmployeesForEmployeeModal() {
+        // Проверяем, есть ли уже загруженные сотрудники
+        if (window.allEmployees && window.allEmployees.length > 0) {
+            populateEmployeeModalSelector(window.allEmployees);
+            return;
+        }
+        
+        const csrfToken = getCSRFToken();
+        fetch('/local/components/artmax/calendar/ajax.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-Bitrix-Csrf-Token': csrfToken
+            },
+            body: new URLSearchParams({
+                action: 'getEmployees',
+                sessid: csrfToken
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.employees) {
+                // Сохраняем сотрудников для повторного использования
+                window.allEmployees = data.employees;
+                populateEmployeeModalSelector(data.employees);
+            }
+        })
+        .catch(error => {
+            console.error('Ошибка при загрузке сотрудников для модального окна:', error);
+        });
+    }
+
+    function populateEmployeeModalSelector(employees) {
+        const selector = document.getElementById('employee-select');
+        if (!selector) return;
+
+        // Очищаем селектор, оставляя только первую опцию
+        selector.innerHTML = '<option value="">Выберите врача</option>';
+        
+        // Добавляем сотрудников
+        employees.forEach(employee => {
+            const option = document.createElement('option');
+            option.value = employee.ID;
+            option.textContent = `${employee.NAME} ${employee.LAST_NAME}`.trim() || employee.LOGIN;
+            selector.appendChild(option);
+        });
+        
+        // Если есть текущий врач события, устанавливаем его как выбранного
+        if (window.currentEventEmployee) {
+            selector.value = window.currentEventEmployee.ID;
+        }
+    }
+
+    window.saveEmployee = function() {
+        const employeeId = document.getElementById('employee-select').value;
+        if (!employeeId) {
+            showNotification('Выберите врача', 'error');
+            return;
+        }
+
+        if (!window.currentEventId) {
+            showNotification('Ошибка: не найдено событие', 'error');
+            return;
+        }
+
+        const csrfToken = getCSRFToken();
+        fetch('/local/components/artmax/calendar/ajax.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-Bitrix-Csrf-Token': csrfToken
+            },
+            body: new URLSearchParams({
+                action: 'assignDoctor',
+                eventId: window.currentEventId,
+                employee_id: employeeId,
+                sessid: csrfToken
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showNotification('Врач назначен', 'success');
+                closeEmployeeModal();
+                // Обновляем отображение в боковой панели
+                updateEmployeeCard(employeeId);
+            } else {
+                showNotification('Ошибка назначения врача: ' + (data.error || 'Неизвестная ошибка'), 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Ошибка при назначении врача:', error);
+            showNotification('Ошибка соединения с сервером', 'error');
+        });
+    }
+
+    function updateEmployeeCard(employeeId) {
+        // Находим врача по ID и обновляем карточку
+        const csrfToken = getCSRFToken();
+        fetch('/local/components/artmax/calendar/ajax.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-Bitrix-Csrf-Token': csrfToken
+            },
+            body: new URLSearchParams({
+                action: 'getEmployees',
+                sessid: csrfToken
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.employees) {
+                const employee = data.employees.find(emp => emp.ID === employeeId);
+                if (employee) {
+                    const statusElement = document.getElementById('employee-status');
+                    if (statusElement) {
+                        statusElement.textContent = `${employee.NAME} ${employee.LAST_NAME}`.trim() || employee.LOGIN;
+                    }
+                }
+            }
+        })
+        .catch(error => {
+            console.error('Ошибка при получении данных врача:', error);
+        });
+    }
+
+    window.openEmployeeDetails = function() {
+        // Пока что просто открываем модальное окно для выбора врача
+        openEmployeeModal();
+    }
+
+    // Загрузка данных врача для боковой панели
+    function loadEventEmployee(employeeId) {
+        const csrfToken = getCSRFToken();
+        fetch('/local/components/artmax/calendar/ajax.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-Bitrix-Csrf-Token': csrfToken
+            },
+            body: new URLSearchParams({
+                action: 'getEmployees',
+                sessid: csrfToken
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.employees) {
+                const employee = data.employees.find(emp => emp.ID === employeeId);
+                if (employee) {
+                    updateEmployeeCardInSidePanel(employee);
+                } else {
+                    resetEmployeeInfoInSidePanel();
+                }
+            } else {
+                resetEmployeeInfoInSidePanel();
+            }
+            
+            // Увеличиваем счетчик завершенных загрузок
+            window.sidePanelLoadingComplete++;
+            checkSidePanelLoadingComplete();
+        })
+        .catch(error => {
+            console.error('Ошибка при загрузке данных врача:', error);
+            resetEmployeeInfoInSidePanel();
+            
+            // Увеличиваем счетчик завершенных загрузок даже при ошибке
+            window.sidePanelLoadingComplete++;
+            checkSidePanelLoadingComplete();
+        });
+    }
+
+    // Обновление карточки врача в боковой панели
+    function updateEmployeeCardInSidePanel(employee) {
+        const statusElement = document.getElementById('employee-status');
+        if (statusElement) {
+            const employeeName = `${employee.NAME} ${employee.LAST_NAME}`.trim() || employee.LOGIN;
+            statusElement.textContent = employeeName;
+        }
+        
+        // Сохраняем данные врача для использования в модальном окне
+        window.currentEventEmployee = employee;
+    }
+
+    // Сброс информации о враче в боковой панели
+    function resetEmployeeInfoInSidePanel() {
+        const statusElement = document.getElementById('employee-status');
+        if (statusElement) {
+            statusElement.textContent = 'Не назначен';
+        }
+        
+        // Сбрасываем данные врача
+        window.currentEventEmployee = null;
+    }
+
     // Загрузка выбранных сотрудников филиала
     function loadBranchEmployees(branchId) {
         const csrfToken = getCSRFToken();
@@ -5261,6 +5626,46 @@
     }
 
     // Функции навигации по календарю
+    window.previousMonth = function() {
+        const currentMonthElement = document.querySelector('.current-month');
+        if (currentMonthElement) {
+            const currentText = currentMonthElement.textContent;
+            const currentDate = new Date();
+            
+            // Парсим текущий месяц и год
+            const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+                               'July', 'August', 'September', 'October', 'November', 'December'];
+            
+            let currentMonth = currentDate.getMonth();
+            let currentYear = currentDate.getFullYear();
+            
+            // Пытаемся найти месяц в тексте
+            for (let i = 0; i < monthNames.length; i++) {
+                if (currentText.includes(monthNames[i])) {
+                    currentMonth = i;
+                    break;
+                }
+            }
+            
+            // Переходим к предыдущему месяцу
+            if (currentMonth === 0) {
+                currentMonth = 11;
+                currentYear--;
+            } else {
+                currentMonth--;
+            }
+            
+            // Обновляем URL и перезагружаем страницу
+            const newDate = new Date(currentYear, currentMonth, 1);
+            // Форматируем дату в локальном формате, избегая проблем с часовыми поясами
+            const year = newDate.getFullYear();
+            const month = String(newDate.getMonth() + 1).padStart(2, '0');
+            const day = String(newDate.getDate()).padStart(2, '0');
+            const newDateString = `${year}-${month}-${day}`;
+            window.location.href = window.location.pathname + '?date=' + newDateString;
+        }
+    }
+
     function previousMonth() {
         const currentMonthElement = document.querySelector('.current-month');
         if (currentMonthElement) {

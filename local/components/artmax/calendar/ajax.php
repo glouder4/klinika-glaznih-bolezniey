@@ -111,6 +111,7 @@ switch ($action) {
         $dateTo = $_POST['dateTo'] ?? '';
         $branchId = (int)($_POST['branchId'] ?? 1);
         $eventColor = $_POST['eventColor'] ?? '#3498db';
+        $employeeId = $_POST['employee_id'] ?? null;
 
         if (empty($title) || empty($dateFrom) || empty($dateTo)) {
             http_response_code(400);
@@ -151,7 +152,7 @@ switch ($action) {
         }
 
         // Добавляем событие с цветом (без конвертации в UTC)
-        $eventId = $calendarObj->addEvent($title, $description, $dateFrom, $dateTo, $userId, $branchId, $eventColor);
+        $eventId = $calendarObj->addEvent($title, $description, $dateFrom, $dateTo, $userId, $branchId, $eventColor, $employeeId);
 
         if ($eventId) {
             die(json_encode(['success' => true, 'eventId' => $eventId]));
@@ -196,6 +197,7 @@ switch ($action) {
         $dateTo = $_POST['dateTo'] ?? '';
         $eventColor = $_POST['eventColor'] ?? '#3498db';
         $branchId = (int)($_POST['branchId'] ?? 1);
+        $employeeId = $_POST['employee_id'] ?? null;
 
         if (!$eventId || empty($title) || empty($dateFrom) || empty($dateTo)) {
             http_response_code(400);
@@ -214,11 +216,43 @@ switch ($action) {
         }
 
         try {
-            $result = $calendarObj->updateEvent($eventId, $title, $description, $dateFrom, $dateTo, $eventColor, $branchId);
+            $result = $calendarObj->updateEvent($eventId, $title, $description, $dateFrom, $dateTo, $eventColor, $branchId, $employeeId);
             if ($result) {
                 die(json_encode(['success' => true]));
             } else {
                 die(json_encode(['success' => false, 'error' => 'Ошибка обновления события']));
+            }
+        } catch (Exception $e) {
+            die(json_encode(['success' => false, 'error' => $e->getMessage()]));
+        }
+        break;
+
+    case 'assignDoctor':
+        $eventId = (int)($_POST['eventId'] ?? 0);
+        $employeeId = $_POST['employee_id'] ?? null;
+
+        if (!$eventId || !$employeeId) {
+            http_response_code(400);
+            die(json_encode(['success' => false, 'error' => 'ID события и врача обязательны']));
+        }
+
+        $event = $calendarObj->getEvent($eventId);
+        if (!$event) {
+            die(json_encode(['success' => false, 'error' => 'Событие не найдено']));
+        }
+
+        // Проверяем права на редактирование (только автор события)
+        if ($event['USER_ID'] != $GLOBALS['USER']->GetID()) {
+            http_response_code(403);
+            die(json_encode(['success' => false, 'error' => 'Нет прав на редактирование']));
+        }
+
+        try {
+            $result = $calendarObj->assignDoctor($eventId, $employeeId);
+            if ($result) {
+                die(json_encode(['success' => true]));
+            } else {
+                die(json_encode(['success' => false, 'error' => 'Ошибка назначения врача']));
             }
         } catch (Exception $e) {
             die(json_encode(['success' => false, 'error' => $e->getMessage()]));
@@ -388,6 +422,7 @@ switch ($action) {
             $_POST['title'] ?? '',
             $_POST['date'] ?? '',
             $_POST['time'] ?? '',
+            $_POST['employee_id'] ?? null,
             $_POST['repeat'] === 'on' || $_POST['repeat'] === 'true',
             $_POST['frequency'] ?? null,
             $weekdays,

@@ -61,6 +61,7 @@ class artmax_calendar extends CModule
             CONTACT_ENTITY_ID int(11) DEFAULT NULL COMMENT 'ID контакта из CRM',
             DEAL_ENTITY_ID int(11) DEFAULT NULL COMMENT 'ID сделки из CRM',
             NOTE text DEFAULT NULL COMMENT 'Заметка к событию',
+            EMPLOYEE_ID int(11) DEFAULT NULL COMMENT 'ID ответственного сотрудника',
             CONFIRMATION_STATUS enum('pending','confirmed','not_confirmed') DEFAULT 'pending' COMMENT 'Статус подтверждения события',
             CREATED_AT datetime DEFAULT CURRENT_TIMESTAMP,
             UPDATED_AT datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -70,6 +71,7 @@ class artmax_calendar extends CModule
             KEY BRANCH_ID (BRANCH_ID),
             KEY CONTACT_ENTITY_ID (CONTACT_ENTITY_ID),
             KEY DEAL_ENTITY_ID (DEAL_ENTITY_ID),
+            KEY EMPLOYEE_ID (EMPLOYEE_ID),
             KEY CONFIRMATION_STATUS (CONFIRMATION_STATUS)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
         ";

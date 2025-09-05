@@ -589,6 +589,190 @@ input:checked + .toggle-slider:before {
     border: none;
 }
 
+/* Стили для селектора сотрудника */
+#event-employee, #edit-event-employee, #schedule-employee {
+    width: 100%;
+    padding: 12px 16px;
+    border: 2px solid #e1e5e9;
+    border-radius: 8px;
+    background: #fff;
+    font-size: 14px;
+    color: #2c3e50;
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+#event-employee:focus, #edit-event-employee:focus, #schedule-employee:focus {
+    outline: none;
+    border-color: #3498db;
+    box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+    transform: translateY(-1px);
+}
+
+#event-employee:hover, #edit-event-employee:hover, #schedule-employee:hover {
+    border-color: #bdc3c7;
+    transform: translateY(-1px);
+}
+
+#employee-group, #edit-employee-group {
+    margin-bottom: 20px;
+}
+
+#employee-group label, #edit-employee-group label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 600;
+    color: #2c3e50;
+    font-size: 14px;
+}
+
+/* Стили для обязательных полей врача */
+#event-employee:required:invalid, #edit-event-employee:required:invalid, #schedule-employee:required:invalid {
+    border-color: #e74c3c;
+    box-shadow: 0 0 0 3px rgba(231, 76, 60, 0.1);
+}
+
+#event-employee:required:valid, #edit-event-employee:required:valid, #schedule-employee:required:valid {
+    border-color: #27ae60;
+    box-shadow: 0 0 0 3px rgba(39, 174, 96, 0.1);
+}
+
+/* Стили для сообщений об ошибках в полях врача */
+#employee-group .error-message, #edit-employee-group .error-message {
+    display: none;
+    margin-top: 8px;
+    padding: 8px 12px;
+    background: #fdf2f2;
+    border: 1px solid #fecaca;
+    border-radius: 6px;
+    color: #dc2626;
+    font-size: 13px;
+    align-items: center;
+    gap: 8px;
+}
+
+#employee-group .error-message.show, #edit-employee-group .error-message.show {
+    display: flex;
+}
+
+#employee-group .error-icon, #edit-employee-group .error-icon {
+    font-size: 14px;
+}
+
+/* Стили для модального окна врача */
+.employee-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 10000;
+}
+
+.employee-modal-content {
+    background: white;
+    border-radius: 12px;
+    width: 90%;
+    max-width: 500px;
+    max-height: 80vh;
+    overflow-y: auto;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+    animation: modalSlideIn 0.3s ease-out;
+}
+
+.employee-modal-header {
+    padding: 20px 24px 16px;
+    border-bottom: 1px solid #e1e5e9;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.employee-modal-header h3 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+    color: #2c3e50;
+}
+
+.close-employee-modal {
+    background: none;
+    border: none;
+    font-size: 24px;
+    color: #95a5a6;
+    cursor: pointer;
+    padding: 0;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: all 0.2s ease;
+}
+
+.close-employee-modal:hover {
+    background: #f8f9fa;
+    color: #e74c3c;
+}
+
+.employee-modal-body {
+    padding: 24px;
+}
+
+.employee-modal-body .form-group {
+    margin-bottom: 20px;
+}
+
+.employee-modal-body label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 600;
+    color: #2c3e50;
+    font-size: 14px;
+}
+
+.employee-select {
+    width: 100%;
+    padding: 12px 16px;
+    border: 2px solid #e1e5e9;
+    border-radius: 8px;
+    background: #fff;
+    font-size: 14px;
+    color: #2c3e50;
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+.employee-select:focus {
+    outline: none;
+    border-color: #3498db;
+    box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+}
+
+.employee-select:hover {
+    border-color: #bdc3c7;
+}
+
+.modal-instruction {
+    font-size: 13px;
+    color: #7f8c8d;
+    margin-top: 12px;
+    line-height: 1.4;
+}
+
+.employee-modal-footer {
+    padding: 16px 24px 24px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    border-top: 1px solid #e1e5e9;
+}
+
 /* Стили для мультиселектора сотрудников */
 .multiselect-container {
     position: relative;

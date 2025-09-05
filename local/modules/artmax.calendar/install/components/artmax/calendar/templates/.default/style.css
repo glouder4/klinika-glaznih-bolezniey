@@ -330,6 +330,7 @@ input:checked + .toggle-slider:before {
     font-weight: 600;
     color: #6c757d;
     border-right: 1px solid #e9ecef;
+    box-sizing: border-box;
 }
 
 .weekday:last-child {
@@ -339,6 +340,7 @@ input:checked + .toggle-slider:before {
 .calendar-days {
     display: grid;
     grid-template-columns: repeat(7, 1fr);
+    grid-auto-rows: minmax(120px, auto);
 }
 
 .calendar-week {
@@ -353,10 +355,35 @@ input:checked + .toggle-slider:before {
     cursor: pointer;
     transition: all 0.3s ease;
     position: relative;
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+    overflow-y: auto;
+    overflow-x: hidden;
+    max-height: 300px;
+    gap: 0;
 }
 
 .calendar-day:hover {
     background: #f8f9fa;
+}
+
+/* Стили для скроллбара в ячейках календаря */
+.calendar-day::-webkit-scrollbar {
+    width: 4px;
+}
+
+.calendar-day::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.calendar-day::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 2px;
+}
+
+.calendar-day::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 0, 0, 0.3);
 }
 
 .calendar-day:last-child {
@@ -390,39 +417,121 @@ input:checked + .toggle-slider:before {
 .calendar-event {
     background: #27ae60;
     color: white;
-    padding: 4px 8px;
-    border-radius: 4px;
-    margin-bottom: 3px;
+    padding: 8px;
+    border-radius: 6px;
+    margin-bottom: 6px;
     font-size: 12px;
     display: flex;
-    align-items: center;
-    gap: 5px;
+    align-items: flex-start;
+    justify-content: space-between;
     cursor: pointer;
     transition: all 0.3s ease;
+    height: auto;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    width: 100%;
+    box-sizing: border-box;
+    position: relative;
+    z-index: 1;
 }
 
 .calendar-event:hover {
     background: #229954;
     transform: scale(1.02);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.15);
 }
 
-.event-dot {
-    width: 6px;
-    height: 6px;
-    background: white;
-    border-radius: 50%;
+.event-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-height: 0;
+    overflow: visible;
 }
 
 .event-title {
-    flex: 1;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    font-weight: 600;
+    font-size: 13px;
+    line-height: 1.2;
+    word-wrap: break-word;
+    word-break: break-word;
+    hyphens: auto;
 }
 
 .event-time {
+    font-size: 11px;
+    font-weight: 400;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+.event-time>span{
+    display: block;
+    width: 65px;
+}
+.event-icons {
+    display: flex;
+    gap: 2px;
+    align-items: center;
+}
+
+.event-icon {
     font-size: 10px;
+    opacity: 0.3;
+    transition: all 0.3s ease;
+    cursor: pointer;
+    padding: 1px;
+    border-radius: 2px;
+}
+
+.event-icon:hover {
+    opacity: 0.6;
+    transform: scale(1.1);
+}
+
+.event-icon.active {
+    opacity: 1;
+    /*background: rgba(255, 255, 255, 0.2);*/
+    border-radius: 2px;
+}
+
+/*.event-icon.contact-icon.active {
+    background: rgba(52, 152, 219, 0.3);
+}
+
+.event-icon.deal-icon.active {
+    background: rgba(46, 204, 113, 0.3);
+}
+
+.event-icon.visit-icon.active {
+    background: rgba(231, 76, 60, 0.3);
+}
+
+.event-icon.confirmation-icon.active {
+    background: rgba(241, 196, 15, 0.3);
+}*/
+
+.event-arrow {
+    font-size: 12px;
+    opacity: 0.7;
+    margin-left: 8px;
+    transition: all 0.3s ease;
+    flex-shrink: 0;
+    cursor: pointer;
+    padding: 2px 4px;
+    border-radius: 3px;
+    background: rgba(255,255,255,0.1);
+}
+
+.event-arrow:hover {
+    opacity: 1;
+    background: rgba(255,255,255,0.2);
+    transform: translateY(1px);
+}
+
+.calendar-event:hover .event-arrow {
     opacity: 0.9;
+    background: rgba(255,255,255,0.15);
 }
 
 /* Модальное окно формы */
@@ -439,7 +548,9 @@ input:checked + .toggle-slider:before {
     align-items: center;
     z-index: 10000;
 }
-
+#branch-form{
+    margin-top: 35px;
+}
 .modal-content {
     background: white;
     border-radius: 12px;
@@ -447,6 +558,7 @@ input:checked + .toggle-slider:before {
     max-width: 500px;
     width: 90%;
     max-height: 90vh;
+    height: -webkit-fill-available;
     overflow-y: auto;
     box-shadow: 0 10px 40px rgba(0,0,0,0.3);
 
@@ -455,7 +567,7 @@ input:checked + .toggle-slider:before {
 
     display: flex;
     flex-direction: column;
-    justify-content: center;
+    justify-content: flex-start;
     align-items: center;
 }
 
@@ -475,6 +587,420 @@ input:checked + .toggle-slider:before {
     margin: 0;
     color: white;
     border: none;
+}
+
+/* Стили для селектора сотрудника */
+#event-employee, #edit-event-employee, #schedule-employee {
+    width: 100%;
+    padding: 12px 16px;
+    border: 2px solid #e1e5e9;
+    border-radius: 8px;
+    background: #fff;
+    font-size: 14px;
+    color: #2c3e50;
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+#event-employee:focus, #edit-event-employee:focus, #schedule-employee:focus {
+    outline: none;
+    border-color: #3498db;
+    box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+    transform: translateY(-1px);
+}
+
+#event-employee:hover, #edit-event-employee:hover, #schedule-employee:hover {
+    border-color: #bdc3c7;
+    transform: translateY(-1px);
+}
+
+#employee-group, #edit-employee-group {
+    margin-bottom: 20px;
+}
+
+#employee-group label, #edit-employee-group label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 600;
+    color: #2c3e50;
+    font-size: 14px;
+}
+
+/* Стили для обязательных полей врача */
+#event-employee:required:invalid, #edit-event-employee:required:invalid, #schedule-employee:required:invalid {
+    border-color: #e74c3c;
+    box-shadow: 0 0 0 3px rgba(231, 76, 60, 0.1);
+}
+
+#event-employee:required:valid, #edit-event-employee:required:valid, #schedule-employee:required:valid {
+    border-color: #27ae60;
+    box-shadow: 0 0 0 3px rgba(39, 174, 96, 0.1);
+}
+
+/* Стили для сообщений об ошибках в полях врача */
+#employee-group .error-message, #edit-employee-group .error-message {
+    display: none;
+    margin-top: 8px;
+    padding: 8px 12px;
+    background: #fdf2f2;
+    border: 1px solid #fecaca;
+    border-radius: 6px;
+    color: #dc2626;
+    font-size: 13px;
+    align-items: center;
+    gap: 8px;
+}
+
+#employee-group .error-message.show, #edit-employee-group .error-message.show {
+    display: flex;
+}
+
+#employee-group .error-icon, #edit-employee-group .error-icon {
+    font-size: 14px;
+}
+
+/* Стили для модального окна врача */
+.employee-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 10000;
+}
+
+.employee-modal-content {
+    background: white;
+    border-radius: 12px;
+    width: 90%;
+    max-width: 500px;
+    max-height: 80vh;
+    overflow-y: auto;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+    animation: modalSlideIn 0.3s ease-out;
+}
+
+.employee-modal-header {
+    padding: 20px 24px 16px;
+    border-bottom: 1px solid #e1e5e9;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.employee-modal-header h3 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+    color: #2c3e50;
+}
+
+.close-employee-modal {
+    background: none;
+    border: none;
+    font-size: 24px;
+    color: #95a5a6;
+    cursor: pointer;
+    padding: 0;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: all 0.2s ease;
+}
+
+.close-employee-modal:hover {
+    background: #f8f9fa;
+    color: #e74c3c;
+}
+
+.employee-modal-body {
+    padding: 24px;
+}
+
+.employee-modal-body .form-group {
+    margin-bottom: 20px;
+}
+
+.employee-modal-body label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 600;
+    color: #2c3e50;
+    font-size: 14px;
+}
+
+.employee-select {
+    width: 100%;
+    padding: 12px 16px;
+    border: 2px solid #e1e5e9;
+    border-radius: 8px;
+    background: #fff;
+    font-size: 14px;
+    color: #2c3e50;
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+.employee-select:focus {
+    outline: none;
+    border-color: #3498db;
+    box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+}
+
+.employee-select:hover {
+    border-color: #bdc3c7;
+}
+
+.modal-instruction {
+    font-size: 13px;
+    color: #7f8c8d;
+    margin-top: 12px;
+    line-height: 1.4;
+}
+
+.employee-modal-footer {
+    padding: 16px 24px 24px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    border-top: 1px solid #e1e5e9;
+}
+
+/* Стили для мультиселектора сотрудников */
+.multiselect-container {
+    position: relative;
+    width: 100%;
+}
+
+.multiselect-input {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    background: white;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: all 0.2s ease;
+}
+
+.multiselect-input:hover {
+    border-color: #adb5bd;
+}
+
+.multiselect-input.active {
+    border-color: #007bff;
+    box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.1);
+}
+
+.placeholder {
+    color: #6c757d;
+    font-size: 14px;
+}
+
+.dropdown-arrow {
+    color: #6c757d;
+    font-size: 12px;
+    transition: transform 0.2s ease;
+}
+
+.multiselect-input.active .dropdown-arrow {
+    transform: rotate(180deg);
+}
+
+.multiselect-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: white;
+    border: 1px solid #dee2e6;
+    border-top: none;
+    border-radius: 0 0 8px 8px;
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.15);
+    z-index: 1000;
+    max-height: 250px;
+    overflow: hidden;
+    margin-top: -1px;
+    opacity: 0;
+    transform: translateY(-10px);
+    transition: all 0.3s ease;
+    pointer-events: none;
+}
+
+.multiselect-dropdown.show {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+}
+
+.multiselect-search {
+    padding: 12px 16px;
+    border-bottom: 1px solid #e9ecef;
+    background: #f8f9fa;
+    border-radius: 8px 8px 0 0;
+}
+
+.multiselect-search input {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    font-size: 14px;
+    background: white;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    outline: none;
+    transition: all 0.2s ease;
+}
+
+.multiselect-search input:focus {
+    border-color: #007bff;
+    box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+    transform: translateY(-1px);
+}
+
+.multiselect-options {
+    max-height: 200px;
+    overflow: hidden;
+    overflow-y: auto;
+    padding: 4px 0;
+}
+
+/* Кастомный скроллбар для мультиселектора */
+.multiselect-options::-webkit-scrollbar {
+    width: 6px;
+}
+
+.multiselect-options::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 3px;
+}
+
+.multiselect-options::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 3px;
+}
+
+.multiselect-options::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
+}
+
+.multiselect-option {
+    padding: 10px 16px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    transition: all 0.2s ease;
+    border-bottom: 1px solid #f1f3f4;
+    position: relative;
+}
+
+.multiselect-option:last-child {
+    border-bottom: none;
+}
+
+.multiselect-option:hover {
+    background: #f8f9fa;
+    transform: translateX(2px);
+}
+
+.multiselect-option.selected {
+    background: #e3f2fd;
+    color: #1976d2;
+    font-weight: 500;
+}
+
+.multiselect-option.selected:hover {
+    background: #bbdefb;
+}
+
+.multiselect-option input[type="checkbox"] {
+    margin: 0;
+    width: 16px;
+    height: 16px;
+    accent-color: #1976d2;
+    cursor: pointer;
+}
+
+.multiselect-option label {
+    cursor: pointer;
+    flex: 1;
+    font-size: 14px;
+    line-height: 1.4;
+}
+
+.selected-employees {
+    margin-top: 12px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    min-height: 32px;
+}
+
+.selected-employee {
+    background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+    color: #1976d2;
+    padding: 6px 12px;
+    border-radius: 16px;
+    font-size: 13px;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    border: 1px solid #90caf9;
+    box-shadow: 0 2px 4px rgba(25, 118, 210, 0.2);
+    transition: all 0.2s ease;
+}
+
+.selected-employee:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(25, 118, 210, 0.3);
+}
+
+.remove-employee {
+    background: none;
+    border: none;
+    color: #1976d2;
+    cursor: pointer;
+    font-size: 16px;
+    font-weight: bold;
+    padding: 0;
+    width: 18px;
+    height: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: all 0.2s ease;
+    line-height: 1;
+}
+
+.remove-employee:hover {
+    background: rgba(25, 118, 210, 0.2);
+    color: #0d47a1;
+    transform: scale(1.1);
+}
+
+/* Стили для часового пояса - делаем менее явным */
+.timezone-select {
+    background: #f8f9fa;
+    color: #6c757d;
+    border: 1px solid #dee2e6;
+}
+
+.timezone-select:focus {
+    background: white;
+    color: #495057;
+    border-color: #adb5bd;
 }
 
 .close-btn {
@@ -654,7 +1180,793 @@ input:checked + .toggle-slider:before {
     background: #a8a8a8;
 }
 
-/* Адаптивность */
+/* Адаптивность для больших экранов (1440px - 1920px) */
+@media (max-width: 1920px) and (min-width: 1441px) {
+    .calendar-grid {
+        margin: 20px;
+    }
+    
+    .calendar-day {
+        min-height: 110px;
+        padding: 8px;
+    }
+    
+    .calendar-event {
+        font-size: 11px;
+        padding: 3px 6px;
+    }
+}
+
+/* Адаптивность для ноутбуков (1200px - 1440px) */
+@media (max-width: 1440px) and (min-width: 1201px) {
+    .calendar-header {
+        padding: 12px 20px;
+    }
+    
+    .header-right {
+        gap: 15px;
+    }
+    
+    .search-input {
+        width: 250px;
+    }
+    
+    .calendar-grid {
+        margin: 15px;
+    }
+    
+    .calendar-day {
+        min-height: 100px;
+        padding: 6px;
+    }
+    
+    .day-number {
+        font-size: 13px;
+    }
+    
+    .calendar-event {
+        font-size: 10px;
+        padding: 2px 5px;
+        margin: 1px 0;
+    }
+    
+    .event-title {
+        font-size: 10px;
+    }
+    
+    .event-time {
+        font-size: 9px;
+    }
+    
+    .event-icons {
+        gap: 2px;
+    }
+    
+    .event-icon {
+        font-size: 10px;
+    }
+}
+
+/* Адаптивность для больших экранов (1440px - 1920px) */
+@media (max-width: 1920px) and (min-width: 1441px) {
+    /* Легкие изменения для больших экранов */
+    .calendar-event {
+        padding: 3px 4px !important;
+        margin: 1px 0 !important;
+        border-radius: 4px !important;
+        font-size: 11px !important;
+        line-height: 1.3 !important;
+        height: auto !important;
+        min-height: 24px !important;
+        overflow: hidden !important;
+    }
+    
+    .calendar-event .event-content {
+        padding: 0 !important;
+        margin: 0 !important;
+        gap: 3px !important;
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        justify-content: flex-start !important;
+        flex: 1 !important;
+    }
+    
+    .calendar-event .event-title {
+        font-size: 10px !important;
+        line-height: 1.3 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        font-weight: 500 !important;
+        white-space: normal !important;
+        word-wrap: break-word !important;
+        word-break: break-word !important;
+        hyphens: auto !important;
+        overflow: hidden !important;
+        max-width: 100% !important;
+        display: -webkit-box !important;
+        -webkit-line-clamp: 1 !important;
+        -webkit-box-orient: vertical !important;
+    }
+    
+    .calendar-event .event-time {
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        width: 100% !important;
+        font-size: 9px !important;
+        line-height: 1.2 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+    
+    .calendar-event .event-time > span {
+        display: block !important;
+        width: auto !important;
+        font-size: 9px !important;
+        line-height: 1.2 !important;
+        margin-right: 4px !important;
+    }
+    
+    .calendar-event .event-icons {
+        display: flex !important;
+        gap: 3px !important;
+        align-items: center !important;
+        margin-left: 4px !important;
+    }
+    
+    .calendar-event .event-icon {
+        font-size: 9px !important;
+        opacity: 0.3 !important;
+        padding: 0 !important;
+        margin: 0 !important;
+    }
+    
+    /* Стили для активных иконок */
+    .calendar-event .event-icon.active {
+        opacity: 1 !important;
+        filter: brightness(1.2) !important;
+        transform: scale(1.1) !important;
+    }
+    
+    /* Стили для неактивных иконок */
+    .calendar-event .event-icon.inactive {
+        opacity: 0.4 !important;
+        filter: grayscale(0.8) !important;
+        transform: scale(0.9) !important;
+    }
+    
+    /* Специфичные цвета для иконок подтверждения */
+    .calendar-event .event-icon.confirmation-icon.active {
+        filter: brightness(1.3) saturate(1.2) !important;
+        text-shadow: 0 0 2px rgba(76, 175, 80, 0.5) !important;
+    }
+    
+    .calendar-event .event-icon.confirmation-icon.inactive {
+        filter: grayscale(0.9) brightness(0.7) !important;
+    }
+    
+    /* Специфичные цвета для иконок визита */
+    .calendar-event .event-icon.visit-icon.active {
+        filter: brightness(1.3) saturate(1.2) !important;
+        text-shadow: 0 0 2px rgba(33, 150, 243, 0.5) !important;
+    }
+    
+    .calendar-event .event-icon.visit-icon.inactive {
+        filter: grayscale(0.9) brightness(0.7) !important;
+    }
+    
+    .calendar-event .event-arrow {
+        display: block !important;
+        font-size: 9px !important;
+        padding: 3px 4px !important;
+        margin-left: 4px !important;
+        background: rgba(255,255,255,0.2) !important;
+        border-radius: 3px !important;
+        cursor: pointer !important;
+    }
+    
+    .calendar-event * {
+        margin: 0 !important;
+        padding: 0 !important;
+        line-height: 1.3 !important;
+    }
+    
+    .calendar-event:hover {
+        transform: none !important;
+        box-shadow: none !important;
+    }
+}
+
+/* Адаптивность для средних экранов (1200px - 1440px) */
+@media (max-width: 1440px) and (min-width: 1201px) {
+    /* Умеренные изменения для средних экранов */
+    .calendar-event {
+        padding: 2px 3px !important;
+        margin: 1px 0 !important;
+        border-radius: 3px !important;
+        font-size: 10px !important;
+        line-height: 1.2 !important;
+        height: auto !important;
+        min-height: 22px !important;
+        overflow: hidden !important;
+    }
+    
+    .calendar-event .event-content {
+        padding: 0 !important;
+        margin: 0 !important;
+        gap: 2px !important;
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        justify-content: flex-start !important;
+        flex: 1 !important;
+    }
+    
+    .calendar-event .event-title {
+        font-size: 9px !important;
+        line-height: 1.2 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        font-weight: 500 !important;
+        white-space: normal !important;
+        word-wrap: break-word !important;
+        word-break: break-word !important;
+        hyphens: auto !important;
+        overflow: hidden !important;
+        max-width: 100% !important;
+        display: -webkit-box !important;
+        -webkit-line-clamp: 1 !important;
+        -webkit-box-orient: vertical !important;
+    }
+    
+    .calendar-event .event-time {
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        width: 100% !important;
+        font-size: 8px !important;
+        line-height: 1.1 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+    
+    .calendar-event .event-time > span {
+        display: block !important;
+        width: auto !important;
+        font-size: 8px !important;
+        line-height: 1.1 !important;
+        margin-right: 3px !important;
+    }
+    
+    .calendar-event .event-icons {
+        display: flex !important;
+        gap: 2px !important;
+        align-items: center !important;
+        margin-left: 3px !important;
+    }
+    
+    .calendar-event .event-icon {
+        font-size: 8px !important;
+        opacity: 0.3 !important;
+        padding: 0 !important;
+        margin: 0 !important;
+    }
+    
+    /* Стили для активных иконок */
+    .calendar-event .event-icon.active {
+        opacity: 1 !important;
+        filter: brightness(1.2) !important;
+        transform: scale(1.1) !important;
+    }
+    
+    /* Стили для неактивных иконок */
+    .calendar-event .event-icon.inactive {
+        opacity: 0.4 !important;
+        filter: grayscale(0.8) !important;
+        transform: scale(0.9) !important;
+    }
+    
+    /* Специфичные цвета для иконок подтверждения */
+    .calendar-event .event-icon.confirmation-icon.active {
+        filter: brightness(1.3) saturate(1.2) !important;
+        text-shadow: 0 0 2px rgba(76, 175, 80, 0.5) !important;
+    }
+    
+    .calendar-event .event-icon.confirmation-icon.inactive {
+        filter: grayscale(0.9) brightness(0.7) !important;
+    }
+    
+    /* Специфичные цвета для иконок визита */
+    .calendar-event .event-icon.visit-icon.active {
+        filter: brightness(1.3) saturate(1.2) !important;
+        text-shadow: 0 0 2px rgba(33, 150, 243, 0.5) !important;
+    }
+    
+    .calendar-event .event-icon.visit-icon.inactive {
+        filter: grayscale(0.9) brightness(0.7) !important;
+    }
+    
+    .calendar-event .event-arrow {
+        display: block !important;
+        font-size: 8px !important;
+        padding: 2px 3px !important;
+        margin-left: 3px !important;
+        background: rgba(255,255,255,0.2) !important;
+        border-radius: 2px !important;
+        cursor: pointer !important;
+    }
+    
+    .calendar-event * {
+        margin: 0 !important;
+        padding: 0 !important;
+        line-height: 1.2 !important;
+    }
+    
+    .calendar-event:hover {
+        transform: none !important;
+        box-shadow: none !important;
+    }
+}
+
+/* Адаптивность для ноутбуков с ограниченным пространством (до 1200px) */
+@media (max-width: 1200px) {
+    .calendar-header {
+        padding: 8px 12px;
+    }
+    
+    .header-right {
+        gap: 8px;
+    }
+    
+    .search-input {
+        width: 150px;
+        font-size: 11px;
+    }
+    
+    .calendar-grid {
+        margin: 8px;
+    }
+    
+    .calendar-day {
+        min-height: 70px;
+        padding: 2px;
+    }
+    
+    .day-number {
+        font-size: 10px;
+        margin-bottom: 1px;
+    }
+    
+    /* Переопределяем базовые стили для событий */
+    .calendar-event {
+        padding: 1px 2px !important;
+        margin: 0.5px 0 !important;
+        border-radius: 2px !important;
+        font-size: 8px !important;
+        line-height: 1 !important;
+        height: auto !important;
+        min-height: 18px !important;
+        overflow: hidden !important;
+    }
+    
+    /* Переопределяем содержимое события */
+    .calendar-event .event-content {
+        padding: 0 !important;
+        margin: 0 !important;
+        gap: 1px !important;
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        justify-content: flex-start !important;
+        flex: 1 !important;
+    }
+    
+    /* Создаем контейнер для времени и иконок */
+    .calendar-event .event-time {
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        width: 100% !important;
+    }
+    
+    .calendar-event .event-time > span {
+        display: block !important;
+        width: auto !important;
+        font-size: 6px !important;
+        line-height: 1 !important;
+        margin-right: 2px !important;
+    }
+    
+    /* Переопределяем заголовок события */
+    .calendar-event .event-title {
+        font-size: 7px !important;
+        line-height: 1.1 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        font-weight: 500 !important;
+        white-space: normal !important;
+        word-wrap: break-word !important;
+        word-break: break-word !important;
+        hyphens: auto !important;
+        overflow: hidden !important;
+        max-width: 100% !important;
+        display: -webkit-box !important;
+        -webkit-line-clamp: 1 !important;
+        -webkit-box-orient: vertical !important;
+    }
+    
+
+    
+    /* Переопределяем иконки событий */
+    .calendar-event .event-icons {
+        display: flex !important;
+        gap: 1px !important;
+        align-items: center !important;
+        margin-left: 2px !important;
+    }
+    
+    .calendar-event .event-icon {
+        font-size: 6px !important;
+        opacity: 0.3 !important;
+        padding: 0 !important;
+        margin: 0 !important;
+    }
+    
+    /* Стили для активных иконок */
+    .calendar-event .event-icon.active {
+        opacity: 1 !important;
+        filter: brightness(1.2) !important;
+        transform: scale(1.1) !important;
+    }
+    
+    /* Стили для неактивных иконок */
+    .calendar-event .event-icon.inactive {
+        opacity: 0.4 !important;
+        filter: grayscale(0.8) !important;
+        transform: scale(0.9) !important;
+    }
+    
+    /* Специфичные цвета для иконок подтверждения */
+    .calendar-event .event-icon.confirmation-icon.active {
+        filter: brightness(1.3) saturate(1.2) !important;
+        text-shadow: 0 0 1px rgba(76, 175, 80, 0.5) !important;
+    }
+    
+    .calendar-event .event-icon.confirmation-icon.inactive {
+        filter: grayscale(0.9) brightness(0.7) !important;
+    }
+    
+    /* Специфичные цвета для иконок визита */
+    .calendar-event .event-icon.visit-icon.active {
+        filter: brightness(1.3) saturate(1.2) !important;
+        text-shadow: 0 0 1px rgba(33, 150, 243, 0.5) !important;
+    }
+    
+    .calendar-event .event-icon.visit-icon.inactive {
+        filter: grayscale(0.9) brightness(0.7) !important;
+    }
+    
+    /* Переопределяем стрелку событий */
+    .calendar-event .event-arrow {
+        display: block !important;
+        font-size: 6px !important;
+        padding: 1px 2px !important;
+        margin-left: 2px !important;
+        background: rgba(255,255,255,0.2) !important;
+        border-radius: 1px !important;
+        cursor: pointer !important;
+    }
+    
+    /* Убираем все отступы у всех дочерних элементов */
+    .calendar-event * {
+        margin: 0 !important;
+        padding: 0 !important;
+        line-height: 1 !important;
+    }
+    
+    /* Убираем hover эффекты */
+    .calendar-event:hover {
+        transform: none !important;
+        box-shadow: none !important;
+    }
+}
+
+/* Адаптивность для экранов до 1100px */
+@media (max-width: 1100px) {
+    .calendar-day {
+        min-height: 60px;
+        padding: 1px;
+    }
+    
+    .day-number {
+        font-size: 8px;
+        margin-bottom: 0.5px;
+    }
+    
+    /* Еще более агрессивные стили для событий */
+    .calendar-event {
+        padding: 0.5px 1px !important;
+        margin: 0.25px 0 !important;
+        border-radius: 1px !important;
+        font-size: 6px !important;
+        line-height: 1 !important;
+        height: auto !important;
+        min-height: 14px !important;
+        overflow: hidden !important;
+    }
+    
+    /* Переопределяем содержимое события */
+    .calendar-event .event-content {
+        padding: 0 !important;
+        margin: 0 !important;
+        gap: 0.5px !important;
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        justify-content: flex-start !important;
+        flex: 1 !important;
+    }
+    
+    /* Создаем контейнер для времени и иконок */
+    .calendar-event .event-time {
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        width: 100% !important;
+    }
+    
+    .calendar-event .event-time > span {
+        display: block !important;
+        width: auto !important;
+        font-size: 4px !important;
+        line-height: 1 !important;
+        margin-right: 1px !important;
+    }
+    
+    /* Переопределяем заголовок события */
+    .calendar-event .event-title {
+        font-size: 5px !important;
+        line-height: 1 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        font-weight: 400 !important;
+        white-space: normal !important;
+        word-wrap: break-word !important;
+        word-break: break-word !important;
+        hyphens: auto !important;
+        overflow: hidden !important;
+        max-width: 100% !important;
+        display: -webkit-box !important;
+        -webkit-line-clamp: 1 !important;
+        -webkit-box-orient: vertical !important;
+    }
+    
+
+    
+    /* Переопределяем иконки событий */
+    .calendar-event .event-icons {
+        display: flex !important;
+        gap: 0.5px !important;
+        align-items: center !important;
+        margin-left: 1px !important;
+    }
+    
+    .calendar-event .event-icon {
+        font-size: 4px !important;
+        opacity: 0.3 !important;
+        padding: 0 !important;
+        margin: 0 !important;
+    }
+    
+    /* Стили для активных иконок */
+    .calendar-event .event-icon.active {
+        opacity: 1 !important;
+        filter: brightness(1.2) !important;
+        transform: scale(1.1) !important;
+    }
+    
+    /* Стили для неактивных иконок */
+    .calendar-event .event-icon.inactive {
+        opacity: 0.4 !important;
+        filter: grayscale(0.8) !important;
+        transform: scale(0.9) !important;
+    }
+    
+    /* Специфичные цвета для иконок подтверждения */
+    .calendar-event .event-icon.confirmation-icon.active {
+        filter: brightness(1.3) saturate(1.2) !important;
+        text-shadow: 0 0 1px rgba(76, 175, 80, 0.5) !important;
+    }
+    
+    .calendar-event .event-icon.confirmation-icon.inactive {
+        filter: grayscale(0.9) brightness(0.7) !important;
+    }
+    
+    /* Специфичные цвета для иконок визита */
+    .calendar-event .event-icon.visit-icon.active {
+        filter: brightness(1.3) saturate(1.2) !important;
+        text-shadow: 0 0 1px rgba(33, 150, 243, 0.5) !important;
+    }
+    
+    .calendar-event .event-icon.visit-icon.inactive {
+        filter: grayscale(0.9) brightness(0.7) !important;
+    }
+    
+    /* Переопределяем стрелку событий */
+    .calendar-event .event-arrow {
+        display: block !important;
+        font-size: 4px !important;
+        padding: 0.5px 1px !important;
+        margin-left: 1px !important;
+        background: rgba(255,255,255,0.2) !important;
+        border-radius: 1px !important;
+        cursor: pointer !important;
+    }
+    
+    /* Убираем все отступы у всех дочерних элементов */
+    .calendar-event * {
+        margin: 0 !important;
+        padding: 0 !important;
+        line-height: 1 !important;
+    }
+    
+    /* Убираем hover эффекты */
+    .calendar-event:hover {
+        transform: none !important;
+        box-shadow: none !important;
+    }
+}
+
+/* Адаптивность для планшетов (768px - 1000px) */
+@media (max-width: 1000px) and (min-width: 769px) {
+    .calendar-header {
+        flex-direction: column;
+        gap: 8px;
+        padding: 8px 10px;
+    }
+    
+    .header-right {
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 6px;
+    }
+    
+    .search-input {
+        width: 120px;
+        font-size: 10px;
+    }
+    
+    .calendar-navigation {
+        padding: 8px 10px;
+    }
+    
+    .nav-tabs {
+        flex-wrap: wrap;
+        gap: 4px;
+    }
+    
+    .calendar-grid {
+        margin: 6px;
+        border-radius: 4px;
+    }
+    
+    .calendar-day {
+        min-height: 60px;
+        padding: 1px;
+    }
+    
+    .day-number {
+        font-size: 8px;
+        margin-bottom: 0.5px;
+    }
+    
+    .calendar-event {
+        font-size: 4px;
+        padding: 0.125px 0.5px;
+        margin: 0.0625px 0;
+        line-height: 1;
+    }
+    
+    .event-title {
+        font-size: 4px;
+        line-height: 1;
+    }
+    
+    /* Скрываем все дополнительные элементы */
+    .calendar-event .event-time,
+    .calendar-event .event-icons,
+    .calendar-event .event-arrow {
+        display: none !important;
+    }
+    
+    /* Показываем только заголовок события */
+    .calendar-event .event-title {
+        font-size: 4px;
+        line-height: 1;
+        margin: 0;
+        padding: 0;
+    }
+    
+    /* Убираем все отступы у события */
+    .calendar-event {
+        padding: 0.125px 0.25px;
+        margin: 0.0625px 0;
+    }
+    
+    /* Уменьшаем высоту строки */
+    .calendar-event * {
+        line-height: 1;
+        margin: 0;
+        padding: 0;
+    }
+    
+    .modal-content {
+        width: 90%;
+        margin: 20px;
+        max-height: 85vh;
+    }
+    
+    .form-row {
+        grid-template-columns: 1fr;
+        gap: 12px;
+    }
+}
+
+/* Адаптивность для очень маленьких экранов (до 900px) */
+@media (max-width: 900px) {
+    .calendar-day {
+        min-height: 55px;
+        padding: 0.5px;
+    }
+    
+    .day-number {
+        font-size: 7px;
+        margin-bottom: 0.25px;
+    }
+    
+    .calendar-event {
+        font-size: 3px;
+        padding: 0.0625px 0.25px;
+        margin: 0.03125px 0;
+        line-height: 1;
+    }
+    
+    .event-title {
+        font-size: 3px;
+        line-height: 1;
+    }
+    
+    /* Скрываем все дополнительные элементы */
+    .calendar-event .event-time,
+    .calendar-event .event-icons,
+    .calendar-event .event-arrow {
+        display: none !important;
+    }
+    
+    /* Показываем только заголовок события */
+    .calendar-event .event-title {
+        font-size: 3px;
+        line-height: 1;
+        margin: 0;
+        padding: 0;
+    }
+    
+    /* Убираем все отступы у события */
+    .calendar-event {
+        padding: 0.0625px 0.125px;
+        margin: 0.03125px 0;
+    }
+    
+    /* Уменьшаем высоту строки */
+    .calendar-event * {
+        line-height: 1;
+        margin: 0;
+        padding: 0;
+    }
+}
+
+/* Адаптивность для мобильных устройств */
 @media (max-width: 768px) {
     .calendar-header {
         flex-direction: column;
@@ -898,8 +2210,46 @@ input:checked + .toggle-slider:before {
     box-shadow: 0 4px 15px rgba(39, 174, 96, 0.4);
 }
 
-/* Адаптивность для модального окна расписания */
+/* Адаптивность для модальных окон */
+/* Для ноутбуков (1200px - 1440px) */
+@media (max-width: 1440px) and (min-width: 1201px) {
+    .modal-content {
+        width: 70%;
+        max-width: 600px;
+    }
+    
+    .schedule-modal {
+        width: 70%;
+        max-width: 600px;
+    }
+}
+
+/* Для планшетов (768px - 1200px) */
+@media (max-width: 1200px) and (min-width: 769px) {
+    .modal-content {
+        width: 85%;
+        max-width: 500px;
+    }
+    
+    .schedule-modal {
+        width: 85%;
+        max-width: 500px;
+    }
+    
+    .schedule-form .form-row {
+        grid-template-columns: 1fr;
+        gap: 12px;
+    }
+}
+
+/* Для мобильных устройств */
 @media (max-width: 768px) {
+    .modal-content {
+        width: 95%;
+        margin: 20px;
+        max-height: 90vh;
+    }
+    
     .schedule-modal {
         width: 95%;
         margin: 20px;
@@ -1182,4 +2532,1718 @@ input:checked + .toggle-slider:before {
 .calendar-event.added {
     opacity: 1;
     transform: scale(1);
+}
+
+/* Боковое окно */
+.event-side-panel {
+    position: fixed;
+    width: 400px;
+    height: 80vh;
+    max-height: 80vh;
+    background: white;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+    border-radius: 16px;
+    z-index: 1001;
+    opacity: 0;
+    transform: scale(0.8) translateY(-20px);
+    transition: all 0.3s ease;
+    overflow: hidden;
+    pointer-events: none;
+}
+
+.event-side-panel.open {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+    pointer-events: auto;
+}
+
+.side-panel-content {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.side-panel-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); /* Дефолтный цвет, будет перезаписан динамически */
+    color: white;
+    padding: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+
+.side-panel-header h3 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+}
+
+.close-side-panel {
+    background: none;
+    border: none;
+    color: white;
+    font-size: 24px;
+    cursor: pointer;
+    padding: 0;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: all 0.3s ease;
+}
+
+.close-side-panel:hover {
+    background: rgba(255,255,255,0.2);
+}
+
+.side-panel-body {
+    flex: 1;
+    padding: 16px;
+    overflow-y: auto;
+    max-height: calc(80vh - 80px); /* Вычитаем высоту заголовка */
+}
+
+/* Кастомный скроллбар для бокового окна */
+.side-panel-body::-webkit-scrollbar {
+    width: 6px;
+}
+
+.side-panel-body::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 3px;
+}
+
+.side-panel-body::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 3px;
+}
+
+.side-panel-body::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
+}
+
+/* Секция клиента */
+.client-section {
+    margin-bottom: 20px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.client-section:hover {
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+    transform: translateY(-1px);
+}
+
+.add-client-btn {
+    width: 100%;
+    background: #e3f2fd;
+    color: #1976d2;
+    border: none;
+    padding: 12px 16px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    margin: 16px 0;
+    transition: all 0.2s ease;
+}
+
+.add-client-btn:hover {
+    background: #bbdefb;
+}
+
+.client-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 8px;
+
+    position: relative;
+    z-index: 1;
+    box-shadow: 0px 0px 8px 0px rgba(34, 60, 80, 0.1);
+}
+
+.client-icon {
+    font-size: 24px;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #e9ecef;
+    border-radius: 50%;
+}
+
+.client-details {
+    flex: 1;
+}
+
+.client-name {
+    font-weight: 600;
+    color: #2c3e50;
+    margin-bottom: 4px;
+}
+
+.client-placeholder {
+    font-size: 12px;
+    color: #6c757d;
+}
+
+.client-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.action-btn {
+    background: #e9ecef;
+    border: none;
+    border-radius: 6px;
+    padding: 8px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-size: 16px;
+}
+
+.action-btn:hover {
+    background: #dee2e6;
+    transform: scale(1.05);
+}
+
+.add-client-btn {
+    width: 100%;
+    background: #007bff;
+    color: white;
+    border: none;
+    padding: 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    margin-bottom: 15px;
+}
+
+.add-client-btn:hover {
+    background: #0056b3;
+    transform: translateY(-1px);
+}
+
+.add-note-section {
+    background: #fdfae1;
+    border-radius: 6px;
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
+    padding: 6px;
+
+    position: relative;
+    top: -3px;
+    z-index: 0;
+    box-shadow: 0px 0px 8px 0px rgba(34, 60, 80, 0.1);
+}
+
+.add-note-btn {
+    background: #fdfae1;
+    border: none;
+    color: #856404;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    border-radius: 12px;
+    width: 100%;
+    transition: all 0.2s ease;
+}
+
+.add-note-btn:hover {
+    text-decoration: underline;
+}
+
+.note-display {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+}
+
+.note-content {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    width: 100%;
+}
+
+.note-text {
+    flex: 1;
+    color: #856404;
+    font-size: 14px;
+    line-height: 1.4;
+    word-wrap: break-word;
+    white-space: pre-wrap;
+}
+
+.edit-note-btn {
+    background: none;
+    border: none;
+    color: #856404;
+    font-size: 14px;
+    cursor: pointer;
+    padding: 2px 4px;
+    border-radius: 3px;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+}
+
+.edit-note-btn:hover {
+    background: rgba(133, 100, 4, 0.1);
+    color: #6c5ce7;
+}
+
+/* Карточки действий */
+.action-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.action-card {
+    background: white;
+    border: 1px solid #e9ecef;
+    border-radius: 12px;
+    padding: 6px 12px;
+    position: relative;
+    transition: all 0.3s ease;
+    min-height: 50px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    box-shadow: 0px 0px 8px 0px rgba(34, 60, 80, 0.1);
+}
+
+.card-badge {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: #ffc107;
+    color: white;
+    font-size: 10px;
+    font-weight: 600;
+    padding: 2px 6px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.action-card:hover {
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    transform: translateY(-2px);
+}
+
+.card-icon {
+    font-size: 20px;
+    color: #6c757d;
+    flex-shrink: 0;
+}
+
+.card-content {
+    flex: 1;
+}
+
+.card-title {
+    font-weight: 600;
+    color: #2c3e50;
+    margin-bottom: 4px;
+    font-size: 14px;
+}
+
+.question-mark {
+    color: #6c757d;
+    font-size: 12px;
+}
+
+.card-status {
+    font-size: 12px;
+    color: #6c757d;
+    margin-bottom: 0;
+}
+.card-status{
+    color: #999999;
+    font-weight: 600;
+}
+.card-status.confirmed {
+    color: #28a745;
+}
+
+.card-action-btn {
+    background: #fff;
+    color: #6c757d;
+    border: 0;
+    box-shadow: 0 1px 2px 0 rgba(34, 60, 80, .18);
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.card-action-btn:hover {
+    background: #e9ecef;
+}
+
+.card-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.card-action-btn.add-btn {
+    background: #28a745;
+    color: white;
+    padding: 6px 10px;
+    min-width: 32px;
+    font-size: 14px;
+    font-weight: bold;
+}
+
+.card-action-btn.add-btn:hover {
+    background: #218838;
+}
+
+.card-action-btn.select-btn {
+    background: #007bff;
+    color: white;
+    padding: 6px 12px;
+}
+
+.card-action-btn.select-btn:hover {
+    background: #0056b3;
+}
+
+/* Стили для кликабельной карточки сделки */
+#deal-card {
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+#deal-card:hover {
+    background: #f8f9fa;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.card-badge {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: #ffc107;
+    color: #212529;
+    font-size: 10px;
+    font-weight: 600;
+    padding: 2px 6px;
+    border-radius: 3px;
+}
+
+/* Кнопки действий */
+.side-panel-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.full-form-btn {
+    background: white;
+    color: #6c757d;
+    border: 1px solid #e9ecef;
+    padding: 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    margin-bottom: 10px;
+}
+
+.full-form-btn:hover {
+    background: #f8f9fa;
+}
+
+.edit-event-btn {
+    background: #28a745;
+    color: white;
+    border: none;
+    padding: 12px;
+    border-radius: 10px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+.edit-event-btn:hover {
+    background: #218838;
+}
+
+.delete-event-btn {
+    background: none;
+    color: #6c757d;
+    border: none;
+    padding: 8px 0;
+    cursor: pointer;
+    font-weight: 400;
+    transition: all 0.3s ease;
+    text-decoration: underline;
+    text-decoration-style: dashed;
+    text-align: left;
+}
+
+.delete-event-btn:hover {
+    color: #dc3545;
+}
+
+/* Модальное окно для выбора клиента */
+.client-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 10002;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.3s ease;
+}
+
+.client-modal.show {
+    opacity: 1;
+    visibility: visible;
+}
+
+.client-modal-content {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+    width: 90%;
+    max-width: 400px;
+    max-height: 80vh;
+    height: -webkit-fill-available;
+    overflow: hidden;
+    transform: scale(0.8) translateY(-20px);
+    transition: all 0.3s ease;
+}
+
+.client-modal.show .client-modal-content {
+    transform: scale(1) translateY(0);
+}
+
+.client-modal-header {
+    padding: 20px;
+    border-bottom: 1px solid #e9ecef;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.client-modal-header h3 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+    color: #2c3e50;
+}
+
+.close-client-modal {
+    background: none;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+    color: #6c757d;
+    padding: 0;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: all 0.2s ease;
+}
+
+.close-client-modal:hover {
+    background: #f8f9fa;
+    color: #495057;
+}
+
+.client-modal-body {
+    padding: 20px;
+    overflow-y: scroll;
+    height: -webkit-fill-available;
+}
+
+.client-modal-footer {
+    padding: 20px;
+    border-top: 1px solid #e9ecef;
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+.client-modal-footer .btn {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 6px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-size: 14px;
+}
+
+.client-modal-footer .btn-secondary {
+    background: #6c757d;
+    color: white;
+}
+
+.client-modal-footer .btn-secondary:hover {
+    background: #5a6268;
+}
+
+.client-modal-footer .btn-primary {
+    background: #007bff;
+    color: white;
+}
+
+.client-modal-footer .btn-primary:hover {
+    background: #0056b3;
+}
+
+/* Анимация для дополнительных полей */
+.contact-details-field {
+    opacity: 0;
+    max-height: 0;
+    overflow: hidden;
+    transition: all 0.3s ease;
+}
+
+.contact-details-field.show {
+    opacity: 1;
+    max-height: 100px;
+}
+
+.client-modal-footer {
+    opacity: 0;
+    max-height: 0;
+    overflow: hidden;
+    transition: all 0.3s ease;
+}
+
+.client-modal-footer.show {
+    opacity: 1;
+    max-height: 100px;
+}
+
+.input-with-icons {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.input-with-icons input {
+    width: 100%;
+    padding: 12px 40px 12px 40px;
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    font-size: 14px;
+    transition: all 0.2s ease;
+}
+
+.input-with-icons input:focus {
+    outline: none;
+    border-color: #007bff;
+    box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+}
+
+.input-icon {
+    position: absolute;
+    color: #6c757d;
+    font-size: 16px;
+    pointer-events: none;
+}
+
+.input-icon.left {
+    left: 12px;
+}
+
+.input-icon.right {
+    right: 12px;
+}
+
+.modal-instruction {
+    font-size: 12px;
+    color: #6c757d;
+    margin-top: 16px;
+    line-height: 1.4;
+}
+
+/* Результаты поиска клиентов */
+.client-search-results {
+    margin-top: 16px;
+    max-height: 200px;
+    overflow-y: auto;
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    background: #f8f9fa;
+}
+
+.client-search-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px;
+    border-bottom: 1px solid #e9ecef;
+    transition: background-color 0.2s ease;
+}
+
+.client-search-item:last-child {
+    border-bottom: none;
+}
+
+.client-search-item:hover {
+    background: #e9ecef;
+}
+
+.client-info {
+    flex: 1;
+}
+
+.client-info .client-name {
+    font-weight: 600;
+    color: #2c3e50;
+    margin-bottom: 4px;
+}
+
+.client-details {
+    font-size: 12px;
+    color: #6c757d;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.client-phone,
+.client-email,
+.client-company {
+    display: block;
+}
+
+.select-client-btn {
+    background: #007bff;
+    color: white;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 4px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.select-client-btn:hover {
+    background: #0056b3;
+}
+
+.no-results {
+    padding: 20px;
+    text-align: center;
+    color: #6c757d;
+    font-style: italic;
+}
+
+/* Выпадающее меню для подтверждения */
+.confirmation-dropdown {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    background: white;
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    z-index: 1000;
+    margin-top: 4px;
+    min-width: 150px;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-10px);
+    transition: all 0.2s ease;
+}
+
+.confirmation-dropdown.show {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+    z-index: 1;
+}
+
+.confirmation-dropdown::before {
+    content: '';
+    position: absolute;
+    top: -8px;
+    right: 20px;
+    width: 0;
+    height: 0;
+    border-left: 8px solid transparent;
+    border-right: 8px solid transparent;
+    border-bottom: 8px solid white;
+    z-index: 1001;
+}
+
+.confirmation-dropdown::after {
+    content: '';
+    position: absolute;
+    top: -9px;
+    right: 20px;
+    width: 0;
+    height: 0;
+    border-left: 8px solid transparent;
+    border-right: 8px solid transparent;
+    border-bottom: 8px solid #e9ecef;
+    z-index: 1000;
+}
+
+.confirmation-dropdown-item {
+    padding: 12px 16px;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    color: #2c3e50;
+    font-size: 14px;
+    font-weight: 500;
+    text-align: center;
+}
+
+.confirmation-dropdown-item:hover {
+    background: #f8f9fa;
+}
+
+.confirmation-dropdown-item:first-child {
+    border-radius: 8px 8px 0 0;
+}
+
+.confirmation-dropdown-item:last-child {
+    border-radius: 0 0 8px 8px;
+}
+
+/* Позиционирование для кнопки подтверждения */
+.action-card {
+    position: relative;
+}
+
+/* Высокий z-index для action-card с открытым выпадающим меню */
+.action-card.dropdown-open {
+    z-index: 1001;
+}
+
+/* Стили для иконки подтверждения */
+.booking-actions-popup-item-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    color: #ffffff;
+    font-weight: bold;
+    width: 24px;
+}
+
+/* Стили для подтвержденного статуса */
+.booking-actions-popup-item-icon.--confirmed {
+}
+
+/* Стили для статусов визита */
+.card-status.came {
+    color: #4caf50;
+    font-weight: 500;
+}
+
+.card-status.did-not-come {
+    color: #f44336;
+    font-weight: 500;
+}
+
+/* Стили для иконок событий в календаре */
+.event-icon.active {
+    opacity: 1;
+    filter: brightness(1.2);
+    transform: scale(1.1);
+}
+
+.event-icon.inactive {
+    opacity: 0.5;
+    filter: grayscale(0.8);
+}
+
+/* Специфичные стили для иконок подтверждения и визита */
+.event-icon.confirmation-icon.active {
+    color: #4caf50;
+    text-shadow: 0 0 3px rgba(76, 175, 80, 0.5);
+}
+
+.event-icon.confirmation-icon.inactive {
+    color: #f44336;
+    text-shadow: 0 0 3px rgba(244, 67, 54, 0.5);
+}
+
+.event-icon.visit-icon.active {
+    color: #4caf50;
+    text-shadow: 0 0 3px rgba(76, 175, 80, 0.5);
+}
+
+.event-icon.visit-icon.inactive {
+    color: #f44336;
+    text-shadow: 0 0 3px rgba(244, 67, 54, 0.5);
+}
+
+/* Выпадающее меню визита */
+.visit-dropdown {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    background: #ffffff;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    z-index: 1000;
+    min-width: 200px;
+    display: none;
+    overflow: hidden;
+}
+
+.visit-dropdown.show {
+    display: block;
+}
+
+.visit-dropdown::before {
+    content: '';
+    position: absolute;
+    top: -8px;
+    right: 20px;
+    width: 0;
+    height: 0;
+    border-left: 8px solid transparent;
+    border-right: 8px solid transparent;
+    border-bottom: 8px solid #ffffff;
+}
+
+.visit-dropdown::after {
+    content: '';
+    position: absolute;
+    top: -9px;
+    right: 20px;
+    width: 0;
+    height: 0;
+    border-left: 8px solid transparent;
+    border-right: 8px solid transparent;
+    border-bottom: 8px solid #e0e0e0;
+}
+
+.visit-dropdown-item {
+    padding: 12px 16px;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    border-bottom: 1px solid #f5f5f5;
+}
+
+.visit-dropdown-item:hover {
+    background-color: #f8f9fa;
+}
+
+.visit-dropdown-item:last-child {
+    border-bottom: none;
+    border-radius: 0 0 8px 8px;
+}
+
+/* Прелоадер для боковой панели */
+.side-panel-preloader {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(255, 255, 255, 0.95);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    backdrop-filter: blur(2px);
+    border-radius: 8px;
+}
+
+.preloader-spinner {
+    width: 40px;
+    height: 40px;
+    border: 4px solid #f3f3f3;
+    border-top: 4px solid #007bff;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin-bottom: 16px;
+}
+
+.preloader-text {
+    color: #666;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Скрытие прелоадера */
+.side-panel-preloader.hidden {
+    display: none;
+}
+
+/* Адаптивность для бокового окна */
+/* Для ноутбуков (1200px - 1440px) */
+@media (max-width: 1440px) and (min-width: 1201px) {
+    .event-side-panel {
+        width: 380px;
+    }
+    
+    .action-card {
+        padding: 12px;
+    }
+    
+    .card-title {
+        font-size: 14px;
+    }
+    
+    .card-status {
+        font-size: 12px;
+    }
+}
+
+/* Для планшетов (768px - 1200px) */
+@media (max-width: 1200px) and (min-width: 769px) {
+    .event-side-panel {
+        width: 350px;
+    }
+    
+    .action-card {
+        padding: 10px;
+    }
+    
+    .card-title {
+        font-size: 13px;
+    }
+    
+    .card-status {
+        font-size: 11px;
+    }
+    
+    .card-action-btn {
+        font-size: 11px;
+        padding: 6px 10px;
+    }
+    
+    .confirmation-dropdown,
+    .visit-dropdown {
+        min-width: 180px;
+    }
+    
+    .confirmation-dropdown-item,
+    .visit-dropdown-item {
+        padding: 10px 12px;
+        font-size: 12px;
+    }
+}
+
+/* Для мобильных устройств */
+@media (max-width: 768px) {
+    .event-side-panel {
+        width: 100%;
+        height: 100vh;
+        top: 0 !important;
+        left: 0 !important;
+        border-radius: 0;
+    }
+    
+    .action-card {
+        padding: 8px;
+    }
+    
+    .card-title {
+        font-size: 12px;
+    }
+    
+    .card-status {
+        font-size: 10px;
+    }
+    
+    .card-action-btn {
+        font-size: 10px;
+        padding: 4px 8px;
+    }
+    
+    .confirmation-dropdown,
+    .visit-dropdown {
+        min-width: 160px;
+    }
+    
+    .confirmation-dropdown-item,
+    .visit-dropdown-item {
+        padding: 8px 10px;
+        font-size: 11px;
+    }
+}
+.booking-actions-popup-item-icon {
+    display: flex;
+    height: -webkit-max-content;
+    height: max-content;
+    padding: 3px;
+    border: 1px dashed #dfe0e3;
+    border-radius: 50%;
+}
+.booking-actions-popup-item-icon {
+    background-color: #f2f2f2;
+    border-color: transparent;
+}
+.booking-actions-popup-item-icon.--confirmed{
+    background-color: #8dbb00;
+}
+.booking-actions-popup-item-icon .ui-icon-set {
+    --ui-icon-set__icon-size: 20px;
+    --ui-icon-set__icon-color: #dfe0e3;
+}
+.client-modal-form-wrapper{
+    margin: 15px 0;
+    padding: 10px;
+    border-radius: 8px;
+    border: 1px solid #edeef0;
+}
+
+/* Выпадающее окошко с результатами поиска */
+.search-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: white;
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    z-index: 1000;
+    margin-top: 4px;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+/* Стилизация скроллбара для выпадающего списка поиска */
+.search-dropdown::-webkit-scrollbar {
+    width: 6px;
+}
+
+.search-dropdown::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 3px;
+}
+
+.search-dropdown::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 3px;
+}
+
+.search-dropdown::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
+}
+
+.search-suggestion {
+    padding: 12px 16px;
+    background: #e3f2fd;
+    border-bottom: 1px solid #e9ecef;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.search-suggestion:hover {
+    background: #bbdefb;
+}
+
+.search-text {
+    color: #1976d2;
+    font-weight: 500;
+}
+
+.create-contact-section {
+    margin-top: 8px;
+}
+
+.create-new-contact-btn {
+    width: 100%;
+    background: #e3f2fd;
+    border: none;
+    padding: 12px 16px;
+    color: #1976d2;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-radius: 4px;
+}
+
+.create-new-contact-btn:hover {
+    background: #bbdefb;
+}
+
+.plus-icon {
+    font-size: 16px;
+    font-weight: bold;
+}
+
+/* Форма создания контакта */
+.create-contact-form {
+    margin-top: 20px;
+    padding: 20px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    border: 1px solid #e9ecef;
+}
+
+.create-contact-form .form-group {
+    margin-bottom: 15px;
+}
+
+.create-contact-form .form-group label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: 500;
+    color: #495057;
+}
+
+.create-contact-form .form-group input {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    font-size: 14px;
+    transition: border-color 0.2s ease;
+}
+
+.create-contact-form .form-group input:focus {
+    outline: none;
+    border-color: #007bff;
+    box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+}
+
+.create-contact-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    margin-top: 20px;
+    padding-top: 15px;
+    border-top: 1px solid #e9ecef;
+}
+
+.create-contact-actions .btn {
+    padding: 12px 24px;
+    border: none;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    min-width: 120px;
+}
+
+.create-contact-actions .btn-primary {
+    background: #007bff;
+    color: white;
+    box-shadow: 0 2px 4px rgba(0, 123, 255, 0.3);
+}
+
+.create-contact-actions .btn-primary:hover {
+    background: #0056b3;
+    box-shadow: 0 4px 8px rgba(0, 123, 255, 0.4);
+    transform: translateY(-1px);
+}
+
+.create-contact-actions .btn-secondary {
+    background: #6c757d;
+    color: white;
+    box-shadow: 0 2px 4px rgba(108, 117, 125, 0.3);
+}
+
+.create-contact-actions .btn-secondary:hover {
+    background: #545b62;
+    box-shadow: 0 4px 8px rgba(108, 117, 125, 0.4);
+    transform: translateY(-1px);
+}
+
+/* Кнопка "Назад" */
+.back-to-search {
+    margin-bottom: 20px;
+}
+
+.back-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    color: #495057;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.back-btn:hover {
+    background: #e9ecef;
+    border-color: #adb5bd;
+    transform: translateX(-2px);
+}
+
+.back-icon {
+    font-size: 16px;
+    font-weight: bold;
+}
+
+/* Позиционирование для выпадающего окошка */
+.form-group {
+    position: relative;
+}
+
+/* Стили для результатов поиска контактов */
+.search-contact-item {
+    padding: 12px 16px;
+    border-bottom: 1px solid #e9ecef;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.search-contact-item:hover {
+    background: #f8f9fa;
+}
+
+.search-contact-item:last-of-type {
+    border-bottom: none;
+}
+
+.contact-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.contact-name {
+    font-weight: 600;
+    color: #2c3e50;
+    font-size: 14px;
+}
+
+.contact-details {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.contact-phone,
+.contact-email,
+.contact-company {
+    font-size: 12px;
+    color: #6c757d;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+/* Индикатор загрузки */
+.search-loading {
+    padding: 20px;
+    text-align: center;
+    color: #6c757d;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.loading-spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid #e9ecef;
+    border-top: 2px solid #007bff;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Сообщения об ошибках и отсутствии результатов */
+.search-no-results,
+.search-error {
+    padding: 20px;
+    text-align: center;
+    color: #6c757d;
+    font-style: italic;
+}
+
+.search-error {
+    color: #dc3545;
+}
+
+/* Модальное окно для выбора сделки */
+.deal-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 10003;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.3s ease;
+}
+
+.deal-modal.show {
+    opacity: 1;
+    visibility: visible;
+}
+
+.deal-modal-content {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+    width: 90%;
+    max-width: 500px;
+    max-height: 85vh;
+    height: -webkit-fill-available;
+    overflow: hidden;
+    transform: scale(0.8) translateY(-20px);
+    transition: all 0.3s ease;
+    display: flex;
+    flex-direction: column;
+}
+
+.deal-modal.show .deal-modal-content {
+    transform: scale(1) translateY(0);
+}
+
+.deal-modal-header {
+    padding: 20px;
+    border-bottom: 1px solid #e9ecef;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.deal-modal-header h3 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+    color: #2c3e50;
+}
+
+.close-deal-modal {
+    background: none;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+    color: #6c757d;
+    padding: 0;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: all 0.2s ease;
+}
+
+.close-deal-modal:hover {
+    background: #f8f9fa;
+    color: #495057;
+}
+
+.deal-modal-body {
+    padding: 20px;
+    flex: 1;
+    overflow-y: auto;
+    max-height: calc(85vh - 120px); /* Вычитаем высоту header и footer */
+}
+
+/* Стилизация скроллбара для модального окна сделок */
+.deal-modal-body::-webkit-scrollbar {
+    width: 6px;
+}
+
+.deal-modal-body::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 3px;
+}
+
+.deal-modal-body::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 3px;
+}
+
+.deal-modal-body::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
+}
+
+.deal-modal-footer {
+    padding: 20px;
+    border-top: 1px solid #e9ecef;
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+.deal-modal-footer .btn {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 6px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-size: 14px;
+}
+
+.deal-modal-footer .btn-secondary {
+    background: #6c757d;
+    color: white;
+}
+
+.deal-modal-footer .btn-secondary:hover {
+    background: #5a6268;
+}
+
+.deal-modal-footer .btn-primary {
+    background: #007bff;
+    color: white;
+}
+
+.deal-modal-footer .btn-primary:hover {
+    background: #0056b3;
+}
+
+/* Модальное окно для добавления заметки */
+.note-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(5px);
+        z-index: 2000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.3s ease;
+}
+
+.note-modal.show {
+    opacity: 1;
+    visibility: visible;
+}
+
+.note-modal-content {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+    width: 90%;
+    max-width: 500px;
+    transform: scale(0.9) translateY(-20px);
+    transition: transform 0.3s ease;
+}
+
+.note-modal.show .note-modal-content {
+    transform: scale(1) translateY(0);
+}
+
+.note-modal-header {
+    padding: 20px;
+    border-bottom: 1px solid #e9ecef;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #f8f9fa;
+    border-radius: 12px 12px 0 0;
+}
+
+.note-modal-header h3 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+    color: #2c3e50;
+}
+
+.close-note-modal {
+    background: none;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+    color: #6c757d;
+    padding: 0;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: all 0.2s ease;
+}
+
+.close-note-modal:hover {
+    background: #e9ecef;
+    color: #495057;
+}
+
+.note-modal-body {
+    padding: 24px;
+}
+
+.note-modal-body .form-group {
+    margin-bottom: 20px;
+}
+
+.note-modal-body textarea {
+    width: 100%;
+    padding: 12px 16px;
+    border: 2px solid #e9ecef;
+    border-radius: 8px;
+    font-size: 14px;
+    font-family: inherit;
+    resize: vertical;
+    min-height: 120px;
+    transition: border-color 0.2s ease;
+    box-sizing: border-box;
+}
+
+.note-modal-body textarea:focus {
+    outline: none;
+    border-color: #007bff;
+    box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+}
+
+.note-modal-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+}
+
+.note-modal-actions .btn {
+    padding: 12px 24px;
+    border-radius: 6px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    min-width: 120px;
+    transition: all 0.2s ease;
+    border: none;
+    cursor: pointer;
+}
+
+.note-modal-actions .btn-primary {
+    background: #007bff;
+    color: white;
+    box-shadow: 0 2px 4px rgba(0, 123, 255, 0.3);
+}
+
+.note-modal-actions .btn-primary:hover {
+    background: #0056b3;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0, 123, 255, 0.4);
+}
+
+.note-modal-actions .btn-secondary {
+    background: #6c757d;
+    color: white;
+    box-shadow: 0 2px 4px rgba(108, 117, 125, 0.3);
+}
+
+.note-modal-actions .btn-secondary:hover {
+    background: #545b62;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(108, 117, 125, 0.4);
+}
+
+/* Стили для результатов поиска сделок */
+.search-deal-item {
+    padding: 12px 16px;
+    border-bottom: 1px solid #e9ecef;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.search-deal-item:hover {
+    background: #f8f9fa;
+}
+
+.search-deal-item:last-of-type {
+    border-bottom: none;
+}
+
+.deal-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.deal-title {
+    font-weight: 600;
+    color: #2c3e50;
+    font-size: 14px;
+}
+
+.deal-details {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.deal-amount,
+.deal-stage,
+.deal-company {
+    font-size: 12px;
+    color: #6c757d;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.create-new-deal-btn {
+    width: 100%;
+    background: #e3f2fd;
+    border: none;
+    padding: 12px 16px;
+    color: #1976d2;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-radius: 0 0 8px 8px;
+}
+
+.create-new-deal-btn:hover {
+    background: #bbdefb;
 }
