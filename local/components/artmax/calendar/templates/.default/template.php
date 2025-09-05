@@ -649,7 +649,7 @@ $totalDays = 42; // 6 недель * 7 дней
             
             <div class="side-panel-body">
                 <!-- Информация о клиенте -->
-                <div class="client-section">
+                <div class="client-section" onclick="openContactDetails()">
                     <div class="client-info">
                         <div class="client-icon">👤</div>
                         <div class="client-details">
@@ -657,7 +657,7 @@ $totalDays = 42; // 6 недель * 7 дней
                             <div class="client-placeholder">Добавьте информацию о клиенте</div>
                         </div>
                         <div class="client-actions">
-                            <button class="action-btn add-contact-btn" title="Добавить">➕</button>
+                            <button class="action-btn add-contact-btn" title="Добавить" onclick="event.stopPropagation(); openClientModal();">➕</button>
                         </div>
                     </div>
                     <div class="add-note-section">
@@ -667,6 +667,7 @@ $totalDays = 42; // 6 недель * 7 дней
 
                 <!-- Карточки действий -->
                 <div class="action-cards">
+
                     <div class="action-card" id="deal-card" onclick="openDealDetails()">
                         <div class="card-icon">🤝</div>
                         <div class="card-content">
@@ -734,22 +735,65 @@ $totalDays = 42; // 6 недель * 7 дней
                     <!-- Скрытое поле для ID контакта -->
                     <input type="hidden" id="contact-id" value="">
                     
-                    <div class="form-group">
+                    <div class="form-group" id="contact-search-group">
                         <label for="contact-input">Контакт</label>
                         <div class="input-with-icons">
                             <div class="input-icon left">👤</div>
                             <input type="text" id="contact-input" placeholder="Имя, email или номер телефона">
                             <div class="input-icon right">🔍</div>
                         </div>
+                        <!-- Кнопка создания нового контакта -->
+                        <div class="create-contact-section">
+                            <button class="create-new-contact-btn" onclick="showCreateContactForm()">
+                                <span class="plus-icon">+</span>
+                                Создать новый контакт
+                            </button>
+                        </div>
                         <!-- Выпадающее окошко с результатами поиска -->
                         <div id="contact-search-dropdown" class="search-dropdown" style="display: none;">
                             <div class="search-suggestion">
                                 <span class="search-text">«Поиск»</span>
                             </div>
-                            <button class="create-new-contact-btn">
+                            <button class="create-new-contact-btn" onclick="showCreateContactForm()">
                                 <span class="plus-icon">+</span>
                                 создать новый контакт
                             </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Кнопка "Назад" для возврата к поиску -->
+                    <div id="back-to-search" class="back-to-search" style="display: none;">
+                        <button class="back-btn" onclick="hideCreateContactForm()">
+                            <span class="back-icon">←</span>
+                            Назад к поиску
+                        </button>
+                    </div>
+                    
+                    <!-- Форма создания нового контакта -->
+                    <div id="create-contact-form" class="create-contact-form" style="display: none;">
+                        <div class="form-group">
+                            <label for="new-contact-name">Имя *</label>
+                            <input type="text" id="new-contact-name" placeholder="Введите имя" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="new-contact-lastname">Фамилия</label>
+                            <input type="text" id="new-contact-lastname" placeholder="Введите фамилию">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="new-contact-phone">Телефон</label>
+                            <input type="tel" id="new-contact-phone" placeholder="Введите номер телефона">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="new-contact-email">E-mail</label>
+                            <input type="email" id="new-contact-email" placeholder="Введите email">
+                        </div>
+                        
+                        <div class="create-contact-actions">
+                            <button type="button" class="btn btn-primary" onclick="createContact()">Создать контакт</button>
+                            <button type="button" class="btn btn-secondary" onclick="hideCreateContactForm()">Отмена</button>
                         </div>
                     </div>
                     
@@ -779,7 +823,7 @@ $totalDays = 42; // 6 недель * 7 дней
                     </div>-->
                 </div>
                 <div class="modal-instruction">
-                    Чтобы выбрать клиента из CRM, начните вводить имя, телефон, e-mail или название компании
+                    Чтобы выбрать клиента из CRM, начните вводить имя, телефон или e-mail
                 </div>
             </div>
             <div class="client-modal-footer" style="display: none;">

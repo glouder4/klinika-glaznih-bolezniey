@@ -480,22 +480,6 @@ class Calendar
     }
 
     /**
-     * Обновить контакт для события
-     */
-    public function updateEventContact($eventId, $contactId)
-    {
-        $sql = "UPDATE artmax_calendar_events SET CONTACT_ENTITY_ID = " . (int)$contactId . " WHERE ID = " . (int)$eventId;
-        
-        try {
-            $this->connection->query($sql);
-            return true;
-        } catch (\Exception $e) {
-            error_log('Ошибка обновления контакта события: ' . $e->getMessage());
-            return false;
-        }
-    }
-
-    /**
      * Обновить сделку для события
      */
     public function updateEventDeal($eventId, $dealId)
@@ -522,6 +506,39 @@ class Calendar
             // Логируем ошибку
             file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
                 "Error updating deal for event {$eventId}: " . $e->getMessage() . "\n", 
+                FILE_APPEND | LOCK_EX);
+            
+            return false;
+        }
+    }
+    
+    /**
+     * Обновить контакт для события
+     */
+    public function updateEventContact($eventId, $contactId)
+    {
+        $sql = "UPDATE artmax_calendar_events SET CONTACT_ENTITY_ID = " . (int)$contactId . " WHERE ID = " . (int)$eventId;
+        
+        // Логируем SQL запрос
+        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+            "SQL Query updateEventContact: {$sql}\n", 
+            FILE_APPEND | LOCK_EX);
+        
+        try {
+            $this->connection->query($sql);
+            
+            // Логируем успешное выполнение
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "Successfully updated contact for event {$eventId} with contact ID {$contactId}\n", 
+                FILE_APPEND | LOCK_EX);
+            
+            return true;
+        } catch (\Exception $e) {
+            error_log('Ошибка обновления контакта события: ' . $e->getMessage());
+            
+            // Логируем ошибку
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "Error updating contact for event {$eventId}: " . $e->getMessage() . "\n", 
                 FILE_APPEND | LOCK_EX);
             
             return false;

@@ -2211,6 +2211,13 @@ input:checked + .toggle-slider:before {
 /* Секция клиента */
 .client-section {
     margin-bottom: 20px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.client-section:hover {
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+    transform: translateY(-1px);
 }
 
 .add-client-btn {
@@ -2568,6 +2575,7 @@ input:checked + .toggle-slider:before {
     width: 90%;
     max-width: 400px;
     max-height: 80vh;
+    height: -webkit-fill-available;
     overflow: hidden;
     transform: scale(0.8) translateY(-20px);
     transition: all 0.3s ease;
@@ -2615,6 +2623,8 @@ input:checked + .toggle-slider:before {
 
 .client-modal-body {
     padding: 20px;
+    overflow-y: scroll;
+    height: -webkit-fill-available;
 }
 
 .client-modal-footer {
@@ -3209,6 +3219,10 @@ input:checked + .toggle-slider:before {
     font-weight: 500;
 }
 
+.create-contact-section {
+    margin-top: 8px;
+}
+
 .create-new-contact-btn {
     width: 100%;
     background: #e3f2fd;
@@ -3221,7 +3235,7 @@ input:checked + .toggle-slider:before {
     display: flex;
     align-items: center;
     gap: 8px;
-    border-radius: 0 0 8px 8px;
+    border-radius: 4px;
 }
 
 .create-new-contact-btn:hover {
@@ -3229,6 +3243,118 @@ input:checked + .toggle-slider:before {
 }
 
 .plus-icon {
+    font-size: 16px;
+    font-weight: bold;
+}
+
+/* Форма создания контакта */
+.create-contact-form {
+    margin-top: 20px;
+    padding: 20px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    border: 1px solid #e9ecef;
+}
+
+.create-contact-form .form-group {
+    margin-bottom: 15px;
+}
+
+.create-contact-form .form-group label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: 500;
+    color: #495057;
+}
+
+.create-contact-form .form-group input {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    font-size: 14px;
+    transition: border-color 0.2s ease;
+}
+
+.create-contact-form .form-group input:focus {
+    outline: none;
+    border-color: #007bff;
+    box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+}
+
+.create-contact-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    margin-top: 20px;
+    padding-top: 15px;
+    border-top: 1px solid #e9ecef;
+}
+
+.create-contact-actions .btn {
+    padding: 12px 24px;
+    border: none;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    min-width: 120px;
+}
+
+.create-contact-actions .btn-primary {
+    background: #007bff;
+    color: white;
+    box-shadow: 0 2px 4px rgba(0, 123, 255, 0.3);
+}
+
+.create-contact-actions .btn-primary:hover {
+    background: #0056b3;
+    box-shadow: 0 4px 8px rgba(0, 123, 255, 0.4);
+    transform: translateY(-1px);
+}
+
+.create-contact-actions .btn-secondary {
+    background: #6c757d;
+    color: white;
+    box-shadow: 0 2px 4px rgba(108, 117, 125, 0.3);
+}
+
+.create-contact-actions .btn-secondary:hover {
+    background: #545b62;
+    box-shadow: 0 4px 8px rgba(108, 117, 125, 0.4);
+    transform: translateY(-1px);
+}
+
+/* Кнопка "Назад" */
+.back-to-search {
+    margin-bottom: 20px;
+}
+
+.back-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    color: #495057;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.back-btn:hover {
+    background: #e9ecef;
+    border-color: #adb5bd;
+    transform: translateX(-2px);
+}
+
+.back-icon {
     font-size: 16px;
     font-weight: bold;
 }

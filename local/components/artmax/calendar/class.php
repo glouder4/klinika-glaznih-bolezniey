@@ -790,53 +790,6 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
         return $contacts;
     }
     
-    /**
-     * Сохранение связи события с контактом
-     */
-    public function saveEventContactAction($eventId, $contactData)
-    {
-        if (!$GLOBALS['USER'] || !$GLOBALS['USER']->IsAuthorized()) {
-            return ['success' => false, 'error' => 'Необходима авторизация'];
-        }
-
-        try {
-            // Подключаем модуль
-            if (!CModule::IncludeModule('artmax.calendar')) {
-                return ['success' => false, 'error' => 'Модуль artmax.calendar не установлен'];
-            }
-
-            // Проверяем, что событие существует
-            $calendar = new \Artmax\Calendar\Calendar();
-            $event = $calendar->getEvent($eventId);
-            
-            if (!$event) {
-                return ['success' => false, 'error' => 'Событие не найдено'];
-            }
-
-            // Проверяем права на редактирование события
-            if ($event['USER_ID'] != $GLOBALS['USER']->GetID()) {
-                return ['success' => false, 'error' => 'Нет прав на редактирование события'];
-            }
-
-            // Декодируем JSON данные контакта
-            $contactDataArray = json_decode($contactData, true);
-            if (!$contactDataArray || !isset($contactDataArray['id'])) {
-                return ['success' => false, 'error' => 'Неверные данные контакта'];
-            }
-            
-            // Обновляем событие, добавляя ID контакта
-            $result = $calendar->updateEventContact($eventId, $contactDataArray['id']);
-
-            if ($result) {
-                return ['success' => true, 'message' => 'Контакт сохранен'];
-            } else {
-                return ['success' => false, 'error' => 'Ошибка сохранения контакта'];
-            }
-
-        } catch (\Exception $e) {
-            return ['success' => false, 'error' => $e->getMessage()];
-        }
-    }
     
     /**
      * Сохранение сделки для события
@@ -1029,9 +982,157 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
     }
     
     /**
+     * Создание нового контакта в CRM
+     */
+    public function createContactAction($contactData)
+    {
+        if (!$GLOBALS['USER'] || !$GLOBALS['USER']->IsAuthorized()) {
+            return ['success' => false, 'error' => 'Необходима авторизация'];
+        }
+
+        try {
+            if (!CModule::IncludeModule('crm')) {
+                return ['success' => false, 'error' => 'Модуль CRM не установлен'];
+            }
+
+            // Создаем новый контакт
+            $contactEntity = new \CCrmContact(true);
+            
+            $userId = \CCrmSecurityHelper::GetCurrentUserID();
+            $name = $contactData['name'];
+            $lastname = $contactData['lastname'] ?? '';
+            $phone = $contactData['phone'] ?? '';
+            $email = $contactData['email'] ?? '';
+            
+            // Формируем поля контакта
+            $contactFields = [
+                'NAME' => $name,
+                'LAST_NAME' => $lastname,
+                'OPENED' => 'Y',
+                'ASSIGNED_BY_ID' => $userId,
+            ];
+            
+            // Добавляем мультиполя для телефона
+            if (!empty($phone)) {
+                $contactFields['FM'] = [
+                    'PHONE' => [
+                        'n0' => [
+                            'VALUE' => $phone,
+                            'VALUE_TYPE' => 'WORK',
+                        ],
+                    ],
+                ];
+            }
+            
+            // Добавляем мультиполя для email
+            if (!empty($email)) {
+                if (isset($contactFields['FM'])) {
+                    $contactFields['FM']['EMAIL'] = [
+                        'n0' => [
+                            'VALUE' => $email,
+                            'VALUE_TYPE' => 'WORK',
+                        ],
+                    ];
+                } else {
+                    $contactFields['FM'] = [
+                        'EMAIL' => [
+                            'n0' => [
+                                'VALUE' => $email,
+                                'VALUE_TYPE' => 'WORK',
+                            ],
+                        ],
+                    ];
+                }
+            }
+            
+            $contactId = $contactEntity->Add($contactFields);
+            
+            if ($contactId) {
+                // Получаем данные созданного контакта
+                $createdContact = $this->getContactFromCRM($contactId);
+                
+                return [
+                    'success' => true, 
+                    'contactId' => $contactId,
+                    'contact' => $createdContact,
+                    'message' => 'Контакт успешно создан'
+                ];
+            } else {
+                return ['success' => false, 'error' => 'Ошибка создания контакта: ' . $contactEntity->LAST_ERROR];
+            }
+        } catch (\Exception $e) {
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+    
+
+    /**
+     * Сохранение контакта к событию
+     */
+    public function saveEventContactAction($eventId, $contactId, $contactData)
+    {
+        if (!$GLOBALS['USER'] || !$GLOBALS['USER']->IsAuthorized()) {
+            return ['success' => false, 'error' => 'Необходима авторизация'];
+        }
+
+        try {
+            if (!CModule::IncludeModule('artmax.calendar')) {
+                return ['success' => false, 'error' => 'Модуль календаря не установлен'];
+            }
+
+            $calendar = new \Artmax\Calendar\Calendar();
+            
+            // Обновляем событие с ID контакта
+            $result = $calendar->updateEventContact($eventId, $contactId);
+            
+            if ($result) {
+                return [
+                    'success' => true, 
+                    'message' => 'Контакт успешно привязан к событию',
+                    'contact' => $contactData
+                ];
+            } else {
+                return ['success' => false, 'error' => 'Ошибка привязки контакта к событию'];
+            }
+        } catch (\Exception $e) {
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+
+    /**
+     * Получение данных события
+     */
+    public function getEventDataAction($eventId)
+    {
+        if (!$GLOBALS['USER'] || !$GLOBALS['USER']->IsAuthorized()) {
+            return ['success' => false, 'error' => 'Необходима авторизация'];
+        }
+
+        try {
+            if (!CModule::IncludeModule('artmax.calendar')) {
+                return ['success' => false, 'error' => 'Модуль календаря не установлен'];
+            }
+
+            $calendar = new \Artmax\Calendar\Calendar();
+            $event = $calendar->getEvent($eventId);
+            
+            if ($event) {
+                return [
+                    'success' => true,
+                    'event' => $event
+                ];
+            } else {
+                return ['success' => false, 'error' => 'Событие не найдено'];
+            }
+        } catch (\Exception $e) {
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+
+    /**
      * Получение контакта из CRM по ID
      */
-    private function getContactFromCRM($contactId)
+    public function getContactFromCRM($contactId)
     {
         if (!CModule::IncludeModule('crm')) {
             return null;

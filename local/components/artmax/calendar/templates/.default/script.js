@@ -2136,14 +2136,30 @@
         return data.dialog.items.map(item => {
             console.log('Обрабатываем контакт:', item);
             
+            // Извлекаем телефоны и email из multiFields
+            let phones = [];
+            let emails = [];
+            
+            if (item.customData && item.customData.entityInfo && item.customData.entityInfo.advancedInfo && item.customData.entityInfo.advancedInfo.multiFields) {
+                const multiFields = item.customData.entityInfo.advancedInfo.multiFields;
+                
+                multiFields.forEach(field => {
+                    if (field.TYPE_ID === 'PHONE' && field.VALUE) {
+                        phones.push(field.VALUE);
+                    } else if (field.TYPE_ID === 'EMAIL' && field.VALUE) {
+                        emails.push(field.VALUE);
+                    }
+                });
+            }
+            
             const processedContact = {
                 id: item.id,
                 name: item.title || 'Контакт #' + item.id,
                 firstName: '',
                 lastName: '',
                 secondName: '',
-                phone: '',
-                email: '',
+                phone: phones.join(', '),
+                email: emails.join(', '),
                 company: item.subtitle || '',
                 post: '',
                 address: ''
@@ -2295,7 +2311,7 @@
                 <div class="search-no-results">
                     <span>Контакты не найдены</span>
                 </div>
-                <button class="create-new-contact-btn">
+                <button class="create-new-contact-btn" onclick="showCreateContactForm()">
                     <span class="plus-icon">+</span>
                     создать новый контакт
                 </button>
@@ -2319,7 +2335,7 @@
             });
             
             dropdown.innerHTML = resultsHtml + `
-                <button class="create-new-contact-btn">
+                <button class="create-new-contact-btn" onclick="showCreateContactForm()">
                     <span class="plus-icon">+</span>
                     создать новый контакт
                 </button>
@@ -3126,6 +3142,315 @@
 
     // Делаем функцию глобальной
     window.openDealDetails = openDealDetails;
+
+    // Функция показа формы создания контакта
+    function showCreateContactForm() {
+        const createForm = document.getElementById('create-contact-form');
+        const searchGroup = document.getElementById('contact-search-group');
+        const backToSearch = document.getElementById('back-to-search');
+        const searchDropdown = document.getElementById('contact-search-dropdown');
+        
+        // Скрываем группу поиска
+        if (searchGroup) {
+            searchGroup.style.display = 'none';
+        }
+        
+        // Показываем кнопку "Назад"
+        if (backToSearch) {
+            backToSearch.style.display = 'block';
+        }
+        
+        // Показываем форму создания
+        if (createForm) {
+            createForm.style.display = 'block';
+        }
+        
+        // Скрываем выпадающий список
+        if (searchDropdown) {
+            searchDropdown.style.display = 'none';
+        }
+        
+        // Очищаем поля формы
+        clearCreateContactForm();
+    }
+    
+    // Функция скрытия формы создания контакта
+    function hideCreateContactForm() {
+        const createForm = document.getElementById('create-contact-form');
+        const searchGroup = document.getElementById('contact-search-group');
+        const backToSearch = document.getElementById('back-to-search');
+        
+        // Скрываем форму создания
+        if (createForm) {
+            createForm.style.display = 'none';
+        }
+        
+        // Показываем группу поиска
+        if (searchGroup) {
+            searchGroup.style.display = 'block';
+        }
+        
+        // Скрываем кнопку "Назад"
+        if (backToSearch) {
+            backToSearch.style.display = 'none';
+        }
+    }
+    
+    // Функция очистки формы создания контакта
+    function clearCreateContactForm() {
+        const fields = [
+            'new-contact-name',
+            'new-contact-lastname', 
+            'new-contact-phone',
+            'new-contact-email'
+        ];
+        
+        fields.forEach(fieldId => {
+            const field = document.getElementById(fieldId);
+            if (field) {
+                field.value = '';
+            }
+        });
+    }
+
+    // Функция выбора контакта по ID (для автоматического выбора после создания)
+    function selectContactById(contactId) {
+        // Получаем данные контакта и заполняем форму
+        fetch('/local/components/artmax/calendar/ajax.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: new URLSearchParams({
+                action: 'getContactData',
+                contactId: contactId,
+                sessid: getCSRFToken()
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.contact) {
+                // Заполняем форму данными контакта
+                document.getElementById('contact-id').value = data.contact.id;
+                document.getElementById('contact-input').value = data.contact.name;
+                document.getElementById('phone-input').value = data.contact.phone;
+                document.getElementById('email-input').value = data.contact.email;
+                
+                // Показываем поля деталей контакта
+                const contactDetailsFields = document.querySelectorAll('.contact-details-field');
+                contactDetailsFields.forEach(field => {
+                    field.style.display = 'block';
+                });
+                
+                // Скрываем выпадающий список
+                const dropdown = document.getElementById('contact-search-dropdown');
+                if (dropdown) {
+                    dropdown.style.display = 'none';
+                }
+            }
+        })
+        .catch(error => {
+            console.error('Ошибка получения данных контакта:', error);
+        });
+    }
+
+    // Функция создания контакта
+    function createContact() {
+        const name = document.getElementById('new-contact-name').value.trim();
+        const lastname = document.getElementById('new-contact-lastname').value.trim();
+        const phone = document.getElementById('new-contact-phone').value.trim();
+        const email = document.getElementById('new-contact-email').value.trim();
+        
+        // Проверяем обязательные поля
+        if (!name) {
+            showNotification('Поле "Имя" обязательно для заполнения', 'error');
+            return;
+        }
+        
+        // Формируем данные контакта
+        const contactData = {
+            name: name,
+            lastname: lastname,
+            phone: phone,
+            email: email
+        };
+        
+        // Отправляем запрос на создание контакта
+        fetch('/local/components/artmax/calendar/ajax.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: new URLSearchParams({
+                action: 'createContact',
+                contactData: JSON.stringify(contactData),
+                sessid: getCSRFToken()
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showNotification('Контакт успешно создан', 'success');
+                
+                // Получаем ID текущего события
+                const eventId = getCurrentEventId();
+                if (eventId) {
+                    // Сохраняем контакт к событию
+                    saveContactToEvent(eventId, data.contactId, data.contact);
+                }
+                
+                // Закрываем модальное окно
+                closeClientModal();
+            } else {
+                showNotification('Ошибка создания контакта: ' + (data.error || 'Неизвестная ошибка'), 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Ошибка при создании контакта:', error);
+            showNotification('Ошибка соединения с сервером', 'error');
+        });
+    }
+
+    // Функция сохранения контакта к событию
+    function saveContactToEvent(eventId, contactId, contactData) {
+        const csrfToken = getCSRFToken();
+        fetch('/local/components/artmax/calendar/ajax.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-Bitrix-Csrf-Token': csrfToken
+            },
+            body: new URLSearchParams({
+                action: 'saveEventContact',
+                eventId: eventId,
+                contactId: contactId,
+                contactData: JSON.stringify(contactData),
+                sessid: csrfToken
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Обновляем иконку контакта в календаре
+                updateEventContactIcon(eventId, contactId);
+                // Обновляем информацию о контакте в боковой панели
+                updateContactInfoInSidePanel(contactData);
+            } else {
+                console.error('Ошибка сохранения контакта:', data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Ошибка при сохранении контакта:', error);
+        });
+    }
+
+    // Функция обновления иконки контакта в календаре
+    function updateEventContactIcon(eventId, contactId) {
+        const eventElement = document.querySelector(`[data-event-id="${eventId}"]`);
+        if (eventElement) {
+            const contactIcon = eventElement.querySelector('.contact-icon');
+            if (contactIcon) {
+                contactIcon.classList.remove('inactive');
+                contactIcon.classList.add('active');
+            }
+        }
+    }
+
+    // Функция обновления информации о контакте в боковой панели
+    function updateContactInfoInSidePanel(contactData) {
+        // Обновляем client-section используя существующую функцию
+        updateClientInfoInSidePanel(contactData);
+    }
+
+    // Функция открытия деталей контакта
+    function openContactDetails() {
+        const eventId = getCurrentEventId();
+        console.log('openContactDetails: EventId =', eventId);
+        
+        if (!eventId) {
+            showNotification('Ошибка: не удалось определить событие', 'error');
+            return;
+        }
+        
+        // Проверяем наличие контакта по содержимому client-name
+        const clientNameElement = document.querySelector('.client-name');
+        console.log('openContactDetails: Client name =', clientNameElement ? clientNameElement.textContent : 'not found');
+        
+        if (!clientNameElement) {
+            showNotification('Ошибка: не удалось найти информацию о клиенте', 'error');
+            return;
+        }
+        
+        if (clientNameElement.textContent === 'Нет клиента') {
+            showNotification('Сначала нужно добавить контакт к событию', 'warning');
+            return;
+        }
+        
+        // Закрываем боковое окно события
+        closeEventSidePanel();
+        
+        // Получаем ID контакта из данных события
+        getContactIdFromEvent(eventId);
+    }
+    
+    // Функция получения ID контакта из события
+    function getContactIdFromEvent(eventId) {
+        console.log('getContactIdFromEvent: Запрашиваем данные события', eventId);
+        
+        fetch('/local/components/artmax/calendar/ajax.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: new URLSearchParams({
+                action: 'getEventData',
+                eventId: eventId,
+                sessid: getCSRFToken()
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            console.log('getContactIdFromEvent: Получены данные события:', data);
+            
+            if (data.success && data.event && data.event.CONTACT_ENTITY_ID) {
+                console.log('getContactIdFromEvent: Найден контакт с ID:', data.event.CONTACT_ENTITY_ID);
+                openContactInSidePanel(data.event.CONTACT_ENTITY_ID);
+            } else {
+                console.log('getContactIdFromEvent: Контакт не найден в данных события');
+                showNotification('Контакт не найден', 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Ошибка получения данных события:', error);
+            showNotification('Ошибка соединения с сервером', 'error');
+        });
+    }
+    
+    // Функция открытия контакта в боковой панели Bitrix
+    function openContactInSidePanel(contactId) {
+        const contactUrl = `/crm/contact/details/${contactId}/?IFRAME=Y&IFRAME_TYPE=SIDE_SLIDER`;
+        
+        if (typeof BX !== 'undefined' && BX.SidePanel) {
+            BX.SidePanel.Instance.open(contactUrl, {
+                title: 'Детали контакта',
+                width: 800,
+                allowChangeHistory: false
+            });
+        } else {
+            // Fallback для случаев, когда BX.SidePanel недоступен
+            window.open(contactUrl, '_blank', 'width=800,height=600,scrollbars=yes,resizable=yes');
+        }
+    }
+
+    // Делаем функции глобальными
+    window.showCreateContactForm = showCreateContactForm;
+    window.hideCreateContactForm = hideCreateContactForm;
+    window.createContact = createContact;
+    window.openContactDetails = openContactDetails;
 
     // Функция обновления иконки сделки в календаре
     function updateEventDealIcon(eventId, dealId) {
