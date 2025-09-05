@@ -959,6 +959,76 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
     }
     
     /**
+     * Создание сделки для события календаря
+     */
+    public function createDealForEventAction($eventId, $contactId)
+    {
+        if (!$GLOBALS['USER'] || !$GLOBALS['USER']->IsAuthorized()) {
+            return ['success' => false, 'error' => 'Необходима авторизация'];
+        }
+
+        try {
+            // Подключаем модули
+            if (!CModule::IncludeModule('artmax.calendar') || !CModule::IncludeModule('crm')) {
+                return ['success' => false, 'error' => 'Необходимые модули не установлены'];
+            }
+
+            // Получаем данные события
+            $calendar = new \Artmax\Calendar\Calendar();
+            $event = $calendar->getEvent($eventId);
+            
+            if (!$event) {
+                return ['success' => false, 'error' => 'Событие не найдено'];
+            }
+
+            // Получаем данные контакта для формирования названия сделки
+            $contact = $this->getContactFromCRM($contactId);
+            if (!$contact) {
+                return ['success' => false, 'error' => 'Контакт не найден'];
+            }
+
+            // Формируем название сделки: Имя + Фамилия + Номер телефона
+            $dealTitle = trim($contact['name']);
+            if (!empty($contact['phone'])) {
+                $dealTitle .= ' - ' . $contact['phone'];
+            }
+            if (empty($dealTitle)) {
+                $dealTitle = 'Сделка для события #' . $eventId;
+            }
+
+            // Создаем сделку
+            $deal = new \CCrmDeal(true);
+            $dealFields = [
+                'TITLE' => $dealTitle,
+                'CONTACT_IDS' => [$contactId],
+                'ASSIGNED_BY_ID' => \CCrmSecurityHelper::GetCurrentUserID(),
+                'STAGE_ID' => 'NEW',
+                'OPPORTUNITY' => 0,
+                'CURRENCY_ID' => 'RUB',
+                'OPENED' => 'Y'
+            ];
+
+            $dealId = $deal->Add($dealFields);
+            
+            if ($dealId) {
+                // Привязываем сделку к событию
+                $calendar->updateEventDeal($eventId, $dealId);
+                
+                return [
+                    'success' => true, 
+                    'dealId' => $dealId,
+                    'message' => 'Сделка успешно создана и привязана к событию'
+                ];
+            } else {
+                return ['success' => false, 'error' => 'Ошибка создания сделки: ' . $deal->LAST_ERROR];
+            }
+
+        } catch (\Exception $e) {
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+    
+    /**
      * Получение контакта из CRM по ID
      */
     private function getContactFromCRM($contactId)
@@ -968,13 +1038,61 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
         }
 
         try {
-            $contact = \CCrmContact::GetByID($contactId);
+            // Получаем контакт с дополнительными полями
+            $arSelect = [
+                'ID', 'NAME', 'LAST_NAME', 'SECOND_NAME', 
+                'EMAIL', 'PHONE', 'COMPANY_TITLE', 'POST', 'ADDRESS'
+            ];
+            
+            $contact = \CCrmContact::GetByID($contactId, $arSelect);
             if ($contact) {
+                // Получаем телефоны из мультиполей
+                $phones = [];
+                $arPhoneFilter = [
+                    'ENTITY_ID'  => 'CONTACT',
+                    'ELEMENT_ID' => $contactId,
+                    'TYPE_ID'    => 'PHONE',
+                ];
+                $dbPhones = \CCrmFieldMulti::GetListEx([], $arPhoneFilter, false, ['nTopCount' => 10], ['VALUE']);
+                while ($arPhone = $dbPhones->fetch()) {
+                    if (!empty($arPhone['VALUE'])) {
+                        $phones[] = $arPhone['VALUE'];
+                    }
+                }
+                
+                // Получаем email из мультиполей
+                $emails = [];
+                $arEmailFilter = [
+                    'ENTITY_ID'  => 'CONTACT',
+                    'ELEMENT_ID' => $contactId,
+                    'TYPE_ID'    => 'EMAIL',
+                ];
+                $dbEmails = \CCrmFieldMulti::GetListEx([], $arEmailFilter, false, ['nTopCount' => 10], ['VALUE']);
+                while ($arEmail = $dbEmails->fetch()) {
+                    if (!empty($arEmail['VALUE'])) {
+                        $emails[] = $arEmail['VALUE'];
+                    }
+                }
+                
+                // Если в мультиполях ничего не найдено, берем из основных полей
+                if (empty($phones) && !empty($contact['PHONE'])) {
+                    $phones[] = $contact['PHONE'];
+                }
+                if (empty($emails) && !empty($contact['EMAIL'])) {
+                    $emails[] = $contact['EMAIL'];
+                }
+                
+                // Формируем полное имя
+                $fullName = trim($contact['NAME'] . ' ' . $contact['LAST_NAME'] . ' ' . $contact['SECOND_NAME']);
+                if (empty($fullName)) {
+                    $fullName = 'Контакт #' . $contact['ID'];
+                }
+                
                 return [
                     'id' => $contact['ID'],
-                    'name' => trim($contact['NAME'] . ' ' . $contact['LAST_NAME']),
-                    'phone' => $contact['PHONE'] ?? '',
-                    'email' => $contact['EMAIL'] ?? '',
+                    'name' => $fullName,
+                    'phone' => implode(', ', $phones),
+                    'email' => implode(', ', $emails),
                     'company' => $contact['COMPANY_TITLE'] ?? ''
                 ];
             }

@@ -753,6 +753,8 @@
 
         if (type === 'error') {
             notification.style.background = 'linear-gradient(135deg, #ff6b6b, #ee5a24)';
+        } else if (type === 'warning') {
+            notification.style.background = 'linear-gradient(135deg, #f39c12, #e67e22)';
         } else {
             notification.style.background = 'linear-gradient(135deg, #00b894, #00a085)';
         }
@@ -2954,23 +2956,187 @@
             return;
         }
         
+        // Проверяем, есть ли привязанный контакт
+        checkEventContactAndCreateDeal(eventId);
+    }
+
+    // Функция проверки контакта и создания сделки
+    function checkEventContactAndCreateDeal(eventId) {
+        const csrfToken = getCSRFToken();
+        
+        // Получаем данные события для проверки контакта
+        fetch('/local/components/artmax/calendar/ajax.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-Bitrix-Csrf-Token': csrfToken
+            },
+            body: new URLSearchParams({
+                action: 'getEvent',
+                eventId: eventId,
+                sessid: csrfToken
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.event) {
+                const event = data.event;
+                
+                if (!event.CONTACT_ENTITY_ID) {
+                    showNotification('Сначала нужно привязать контакт к событию, а затем можно будет создать сделку', 'warning');
+                    return;
+                }
+                
+                // Показываем подтверждение создания сделки
+                showDealCreationConfirmation(eventId, event.CONTACT_ENTITY_ID);
+            } else {
+                showNotification('Ошибка при получении данных события', 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Ошибка при проверке контакта:', error);
+            showNotification('Ошибка соединения с сервером', 'error');
+        });
+    }
+
+    // Функция показа подтверждения создания сделки
+    function showDealCreationConfirmation(eventId, contactId) {
+        if (confirm('Вы действительно хотите создать новую сделку для события?')) {
+            createDealForEvent(eventId, contactId);
+        }
+    }
+
+    // Функция создания сделки для события
+    function createDealForEvent(eventId, contactId) {
+        const csrfToken = getCSRFToken();
+        
+        fetch('/local/components/artmax/calendar/ajax.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-Bitrix-Csrf-Token': csrfToken
+            },
+            body: new URLSearchParams({
+                action: 'createDealForEvent',
+                eventId: eventId,
+                contactId: contactId,
+                sessid: csrfToken
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showNotification('Сделка успешно создана и привязана к событию', 'success');
+                
+                // Обновляем отображение в календаре
+                updateEventDealIcon(eventId, data.dealId);
+                
+                // Обновляем информацию о сделке в боковом окне
+                updateDealInfoInSidePanel({
+                    id: data.dealId,
+                    title: 'Сделка создана'
+                });
+            } else {
+                showNotification('Ошибка создания сделки: ' + (data.error || 'Неизвестная ошибка'), 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Ошибка при создании сделки:', error);
+            showNotification('Ошибка соединения с сервером', 'error');
+        });
+    }
+
+    // Делаем функцию глобальной
+    window.createNewDeal = createNewDeal;
+
+    // Функция открытия деталей сделки
+    function openDealDetails() {
+        const eventId = getCurrentEventId();
+        if (!eventId) {
+            showNotification('Ошибка: не удалось определить событие', 'error');
+            return;
+        }
+
+        // Получаем ID сделки из статуса
+        const dealStatusElement = document.getElementById('deal-status');
+        if (!dealStatusElement) {
+            showNotification('Ошибка: не удалось найти информацию о сделке', 'error');
+            return;
+        }
+
+        // Проверяем, есть ли сделка
+        if (dealStatusElement.textContent === 'Не добавлена' || dealStatusElement.textContent === 'Нет сделки') {
+            showNotification('Сначала нужно добавить сделку к событию', 'warning');
+            return;
+        }
+
         // Закрываем боковое окно события
         closeEventSidePanel();
+
+        // Получаем ID сделки из данных события
+        getDealIdFromEvent(eventId);
+    }
+
+    // Функция получения ID сделки из события
+    function getDealIdFromEvent(eventId) {
+        const csrfToken = getCSRFToken();
         
-        // Формируем URL для создания новой сделки
-        const dealUrl = `/crm/deal/details/0/?bookingId=${eventId}&IFRAME=Y&IFRAME_TYPE=SIDE_SLIDER`;
+        fetch('/local/components/artmax/calendar/ajax.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-Bitrix-Csrf-Token': csrfToken
+            },
+            body: new URLSearchParams({
+                action: 'getEvent',
+                eventId: eventId,
+                sessid: csrfToken
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.event && data.event.DEAL_ENTITY_ID) {
+                const dealId = data.event.DEAL_ENTITY_ID;
+                openDealInSidePanel(dealId);
+            } else {
+                showNotification('Сделка не найдена', 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Ошибка при получении данных сделки:', error);
+            showNotification('Ошибка соединения с сервером', 'error');
+        });
+    }
+
+    // Функция открытия сделки в боковом окне
+    function openDealInSidePanel(dealId) {
+        const dealUrl = `/crm/deal/details/${dealId}/?IFRAME=Y&IFRAME_TYPE=SIDE_SLIDER`;
         
         // Открываем штатное Bitrix окно в боковом слайдере
         if (typeof BX !== 'undefined' && BX.SidePanel) {
             BX.SidePanel.Instance.open(dealUrl);
         } else {
             // Fallback для случаев, когда BX.SidePanel недоступен
-            window.location.href = dealUrl;
+            window.open(dealUrl, '_blank', 'width=800,height=600,scrollbars=yes,resizable=yes');
         }
     }
 
     // Делаем функцию глобальной
-    window.createNewDeal = createNewDeal;
+    window.openDealDetails = openDealDetails;
+
+    // Функция обновления иконки сделки в календаре
+    function updateEventDealIcon(eventId, dealId) {
+        const eventElement = document.querySelector(`[data-event-id="${eventId}"]`);
+        if (eventElement) {
+            const dealIcon = eventElement.querySelector('.deal-icon');
+            if (dealIcon) {
+                dealIcon.classList.add('active');
+            }
+        }
+    }
 
     // Функции для работы с модальным окном сделок
     function openDealModal() {

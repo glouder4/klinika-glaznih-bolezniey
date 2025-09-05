@@ -2460,6 +2460,18 @@ input:checked + .toggle-slider:before {
     background: #0056b3;
 }
 
+/* Стили для кликабельной карточки сделки */
+#deal-card {
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+#deal-card:hover {
+    background: #f8f9fa;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
 .card-badge {
     position: absolute;
     top: 8px;

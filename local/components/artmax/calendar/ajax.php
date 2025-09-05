@@ -556,6 +556,27 @@ switch ($action) {
         }
         break;
 
+    case 'createDealForEvent':
+        $eventId = $_POST['eventId'] ?? 0;
+        $contactId = $_POST['contactId'] ?? 0;
+
+        if (empty($eventId) || empty($contactId)) {
+            die(json_encode(['success' => false, 'error' => 'ID события или контакта не указан']));
+        }
+
+        try {
+            $component = new ArtmaxCalendarComponent();
+            $result = $component->createDealForEventAction($eventId, $contactId);
+
+            die(json_encode($result));
+        } catch (Exception $e) {
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
+                "Create deal error: " . $e->getMessage() . "\n",
+                FILE_APPEND | LOCK_EX);
+            die(json_encode(['success' => false, 'error' => 'Ошибка создания сделки: ' . $e->getMessage()]));
+        }
+        break;
+
     case 'saveEventDeal':
         $eventId = $_POST['eventId'] ?? 0;
         $dealData = $_POST['dealData'] ?? array();

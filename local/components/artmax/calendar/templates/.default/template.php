@@ -667,13 +667,13 @@ $totalDays = 42; // 6 недель * 7 дней
 
                 <!-- Карточки действий -->
                 <div class="action-cards">
-                    <div class="action-card">
+                    <div class="action-card" id="deal-card" onclick="openDealDetails()">
                         <div class="card-icon">🤝</div>
                         <div class="card-content">
                             <div class="card-title">Сделка</div>
                             <div class="card-status" id="deal-status">Не добавлена</div>
                         </div>
-                        <div class="card-actions">
+                        <div class="card-actions" onclick="event.stopPropagation()">
                             <button class="card-action-btn add-btn" onclick="createNewDeal()" title="Создать новую сделку">+</button>
                             <button class="card-action-btn select-btn" onclick="openDealModal()">Выбрать</button>
                         </div>
