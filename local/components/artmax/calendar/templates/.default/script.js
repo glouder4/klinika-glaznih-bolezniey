@@ -922,17 +922,32 @@
                     sidePanelHeader.style.background = `linear-gradient(135deg, ${eventColor}, ${eventColor}dd)`;
                 }
                 
+                // Подсчитываем количество запросов, которые будут выполнены
+                let loadingCount = 2; // Подтверждение и визит всегда загружаются
+                
                 // Загружаем данные контакта, если есть CONTACT_ENTITY_ID
                 if (event.CONTACT_ENTITY_ID) {
+                    loadingCount++; // Увеличиваем счетчик только если будет запрос
                     loadEventContact(event.CONTACT_ENTITY_ID);
                 } else {
                     // Сбрасываем информацию о клиенте, если контакта нет
                     resetClientInfoInSidePanel();
                 }
                 
+                // Загружаем данные сделки, если есть DEAL_ENTITY_ID
+                if (event.DEAL_ENTITY_ID) {
+                    loadingCount++; // Увеличиваем счетчик только если будет запрос
+                    loadEventDeal(event.DEAL_ENTITY_ID);
+                } else {
+                    // Сбрасываем информацию о сделке, если сделки нет
+                    resetDealInfoInSidePanel();
+                }
+                
                 // Инициализируем счетчик загрузки
-                window.sidePanelLoadingCount = 2; // 2 дополнительных запроса
+                window.sidePanelLoadingCount = loadingCount;
                 window.sidePanelLoadingComplete = 0;
+                
+                console.log('showEventSidePanel: Ожидается загрузка', loadingCount, 'компонентов');
                 
                 // Загружаем и отображаем статус подтверждения
                 loadEventConfirmationStatus(eventId);
@@ -1802,6 +1817,13 @@
                 closeClientModal();
             }
         }
+        
+        const dealModal = document.getElementById('dealModal');
+        if (dealModal && dealModal.classList.contains('show')) {
+            if (e.target === dealModal) {
+                closeDealModal();
+            }
+        }
     });
 
     // Обработчик нажатия Escape для закрытия модального окна
@@ -1810,6 +1832,11 @@
             const clientModal = document.getElementById('clientModal');
             if (clientModal && clientModal.classList.contains('show')) {
                 closeClientModal();
+            }
+            
+            const dealModal = document.getElementById('dealModal');
+            if (dealModal && dealModal.classList.contains('show')) {
+                closeDealModal();
             }
         }
     });
@@ -1963,36 +1990,66 @@
         searchContactsViaStandardService(query);
     }
     
-
+    // Функция поиска сделок в Bitrix 24
+    function searchDealsInBitrix24(query) {
+        console.log('Поиск сделок в Bitrix 24:', query);
+        
+        // Показываем индикатор загрузки
+        showDealSearchLoading();
+        
+        // Используем только стандартный сервис поиска
+        searchDealsViaStandardService(query);
+    }
     
 
     
-    // Поиск через стандартный сервис Bitrix
+
+    
+    // Поиск контактов через штатный Bitrix UI Entity Selector
     function searchContactsViaStandardService(query) {
-        console.log('Используем стандартный сервис crm.api.entity.search для поиска контактов');
+        console.log('Используем штатный Bitrix UI Entity Selector для поиска контактов');
         
         // Получаем CSRF токен
         const csrfToken = getCSRFToken();
         
-        // Используем стандартный сервис поиска Bitrix
-        fetch('/bitrix/services/main/ajax.php?action=crm.api.entity.search', {
+        // Используем штатный Bitrix UI Entity Selector
+        fetch('/bitrix/services/main/ajax.php?context=BOOKING&action=ui.entityselector.doSearch', {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
+                'Content-Type': 'application/json',
                 'X-Requested-With': 'XMLHttpRequest',
                 'X-Bitrix-Csrf-Token': csrfToken
             },
-            body: new URLSearchParams({
-                searchQuery: query,
-                'options[types][0]': 'CONTACT',
-                'options[scope]': 'index',
-                'sessid': csrfToken
+            body: JSON.stringify({
+                dialog: {
+                    id: "ui-selector-contact-search",
+                    context: "BOOKING",
+                    entities: [
+                        {
+                            id: "contact",
+                            options: {},
+                            searchable: true,
+                            dynamicLoad: true,
+                            dynamicSearch: true,
+                            filters: [],
+                            substituteEntityId: null
+                        }
+                    ],
+                    preselectedItems: [],
+                    recentItemsLimit: null,
+                    clearUnavailableItems: false
+                },
+                searchQuery: {
+                    queryWords: [query],
+                    query: query,
+                    dynamicSearchEntities: []
+                }
             })
         })
         .then(response => response.json())
         .then(data => {
             if (data && data.status === 'success' && data.data) {
-                const processedContacts = processStandardServiceContacts(data.data);
+                const processedContacts = processBitrixEntitySelectorContacts(data.data);
                 updateSearchResults(processedContacts);
             } else if (data && data.status === 'error') {
                 console.error('Ошибка поиска контактов:', data.message);
@@ -2007,7 +2064,95 @@
         });
     }
     
-    // Обработка результатов стандартного сервиса crm.api.entity.search
+    // Поиск сделок через штатный Bitrix UI Entity Selector
+    function searchDealsViaStandardService(query) {
+        console.log('Используем штатный Bitrix UI Entity Selector для поиска сделок');
+        
+        // Получаем CSRF токен
+        const csrfToken = getCSRFToken();
+        
+        // Используем штатный Bitrix UI Entity Selector
+        fetch('/bitrix/services/main/ajax.php?context=BOOKING&action=ui.entityselector.doSearch', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-Bitrix-Csrf-Token': csrfToken
+            },
+            body: JSON.stringify({
+                dialog: {
+                    id: "ui-selector-deal-search",
+                    context: "BOOKING",
+                    entities: [
+                        {
+                            id: "deal",
+                            options: {},
+                            searchable: true,
+                            dynamicLoad: true,
+                            dynamicSearch: true,
+                            filters: [],
+                            substituteEntityId: null
+                        }
+                    ],
+                    preselectedItems: [],
+                    recentItemsLimit: null,
+                    clearUnavailableItems: false
+                },
+                searchQuery: {
+                    queryWords: [query],
+                    query: query,
+                    dynamicSearchEntities: []
+                }
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data && data.status === 'success' && data.data) {
+                const processedDeals = processBitrixEntitySelectorDeals(data.data);
+                updateDealSearchResults(processedDeals);
+            } else if (data && data.status === 'error') {
+                console.error('Ошибка поиска сделок:', data.message);
+                showDealSearchError(data.message || 'Ошибка поиска');
+            } else {
+                updateDealSearchResults([]);
+            }
+        })
+        .catch(error => {
+            console.error('Ошибка AJAX запроса:', error);
+            showDealSearchError('Ошибка соединения с сервером');
+        });
+    }
+    
+    // Обработка результатов поиска контактов от Bitrix UI Entity Selector
+    function processBitrixEntitySelectorContacts(data) {
+        console.log('Обрабатываем данные контактов от Bitrix UI Entity Selector:', data);
+        
+        if (!data || !data.dialog || !data.dialog.items || !Array.isArray(data.dialog.items)) {
+            return [];
+        }
+        
+        return data.dialog.items.map(item => {
+            console.log('Обрабатываем контакт:', item);
+            
+            const processedContact = {
+                id: item.id,
+                name: item.title || 'Контакт #' + item.id,
+                firstName: '',
+                lastName: '',
+                secondName: '',
+                phone: '',
+                email: '',
+                company: item.subtitle || '',
+                post: '',
+                address: ''
+            };
+            
+            console.log('Обработанный контакт:', processedContact);
+            return processedContact;
+        });
+    }
+    
+    // Обработка результатов стандартного сервиса crm.api.entity.search (fallback)
     function processStandardServiceContacts(data) {
         console.log('Обрабатываем данные от стандартного сервиса:', data);
         
@@ -2054,6 +2199,57 @@
             
             console.log('Обработанный контакт:', processedContact);
             return processedContact;
+        });
+    }
+    
+    // Обработка результатов поиска сделок от Bitrix UI Entity Selector
+    function processBitrixEntitySelectorDeals(data) {
+        console.log('Обрабатываем данные сделок от Bitrix UI Entity Selector:', data);
+        
+        if (!data || !data.dialog || !data.dialog.items || !Array.isArray(data.dialog.items)) {
+            return [];
+        }
+        
+        return data.dialog.items.map(item => {
+            console.log('Обрабатываем сделку:', item);
+            
+            const processedDeal = {
+                id: item.id,
+                title: item.title || 'Сделка #' + item.id,
+                subtitle: item.subtitle || '',
+                amount: '', // В UI Entity Selector нет поля amount
+                stage: '', // В UI Entity Selector нет поля stage
+                company: item.subtitle || '', // Используем subtitle как компанию
+                currency: 'RUB'
+            };
+            
+            console.log('Обработанная сделка:', processedDeal);
+            return processedDeal;
+        });
+    }
+    
+    // Обработка результатов поиска сделок (fallback)
+    function processStandardServiceDeals(data) {
+        console.log('Обрабатываем данные сделок:', data);
+        
+        if (!data || !Array.isArray(data)) {
+            return [];
+        }
+        
+        return data.map(item => {
+            console.log('Обрабатываем сделку:', item);
+            
+            const processedDeal = {
+                id: item.id,
+                title: item.title || 'Сделка #' + item.id,
+                amount: item.amount || '',
+                stage: item.stage || '',
+                company: item.company || '',
+                currency: item.currency || 'RUB'
+            };
+            
+            console.log('Обработанная сделка:', processedDeal);
+            return processedDeal;
         });
     }
     
@@ -2149,6 +2345,153 @@
                     hideContactDropdown();
                 });
             }
+        }
+    }
+    
+    // Функции для работы с результатами поиска сделок
+    function showDealSearchLoading() {
+        const dropdown = document.getElementById('deal-search-dropdown');
+        if (dropdown) {
+            dropdown.innerHTML = `
+                <div class="search-loading">
+                    <div class="loading-spinner"></div>
+                    <span>Поиск сделок...</span>
+                </div>
+                <button class="create-new-deal-btn">
+                    <span class="plus-icon">+</span>
+                    создать новую сделку
+                </button>
+            `;
+            
+            // Добавляем обработчик для кнопки создания
+            const createBtn = dropdown.querySelector('.create-new-deal-btn');
+            if (createBtn) {
+                createBtn.addEventListener('click', function() {
+                    const dealInput = document.getElementById('deal-input');
+                    const query = dealInput.value.trim();
+                    console.log('Создание новой сделки:', query);
+                    hideDealDropdown();
+                });
+            }
+        }
+    }
+    
+    // Функция обновления результатов поиска сделок
+    function updateDealSearchResults(deals) {
+        const dropdown = document.getElementById('deal-search-dropdown');
+        if (!dropdown) return;
+        
+        if (deals.length === 0) {
+            dropdown.innerHTML = `
+                <div class="search-no-results">
+                    <span>Сделки не найдены</span>
+                </div>
+                <button class="create-new-deal-btn">
+                    <span class="plus-icon">+</span>
+                    создать новую сделку
+                </button>
+            `;
+        } else {
+            let resultsHtml = '';
+            
+            deals.forEach(deal => {
+                resultsHtml += `
+                    <div class="search-deal-item" data-deal-id="${deal.id}">
+                        <div class="deal-info">
+                            <div class="deal-title">${deal.title}</div>
+                            <div class="deal-details">
+                                ${deal.subtitle ? `<div class="deal-company">🏢 ${deal.subtitle}</div>` : ''}
+                                ${deal.amount ? `<div class="deal-amount">💰 ${deal.amount} ${deal.currency}</div>` : ''}
+                                ${deal.stage ? `<div class="deal-stage">📊 ${deal.stage}</div>` : ''}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            dropdown.innerHTML = resultsHtml + `
+                <button class="create-new-deal-btn">
+                    <span class="plus-icon">+</span>
+                    создать новую сделку
+                </button>
+            `;
+            
+            // Добавляем обработчики клика для сделок
+            const dealItems = dropdown.querySelectorAll('.search-deal-item');
+            dealItems.forEach(item => {
+                item.addEventListener('click', function() {
+                    const dealId = this.getAttribute('data-deal-id');
+                    const deal = deals.find(d => d.id == dealId);
+                    if (deal) {
+                        selectDeal(deal);
+                    }
+                });
+            });
+            
+            // Добавляем обработчик для кнопки создания
+            const createBtn = dropdown.querySelector('.create-new-deal-btn');
+            if (createBtn) {
+                createBtn.addEventListener('click', function() {
+                    const dealInput = document.getElementById('deal-input');
+                    const query = dealInput.value.trim();
+                    console.log('Создание новой сделки:', query);
+                    hideDealDropdown();
+                });
+            }
+        }
+    }
+    
+    // Функция выбора сделки и заполнения полей
+    function selectDeal(deal) {
+        console.log('Выбрана сделка:', deal);
+        
+        // Сохраняем ID сделки в скрытом поле
+        const dealIdInput = document.getElementById('deal-id');
+        if (dealIdInput) {
+            dealIdInput.value = deal.id;
+        }
+        
+        // Заполняем поле сделки
+        const dealInput = document.getElementById('deal-input');
+        if (dealInput) {
+            dealInput.value = deal.title;
+        }
+        
+        // Скрываем выпадающее меню
+        hideDealDropdown();
+        
+        // Показываем кнопки действий
+        const modalFooter = document.querySelector('.deal-modal-footer');
+        if (modalFooter) {
+            modalFooter.style.display = 'block';
+        }
+    }
+    
+    // Функция показа выпадающего окошка для сделок
+    function showDealDropdown() {
+        const dropdown = document.getElementById('deal-search-dropdown');
+        if (dropdown) {
+            dropdown.style.display = 'block';
+        }
+    }
+    
+    // Функция скрытия выпадающего окошка для сделок
+    function hideDealDropdown() {
+        const dropdown = document.getElementById('deal-search-dropdown');
+        if (dropdown) {
+            dropdown.style.display = 'none';
+        }
+    }
+    
+    // Функция показа ошибки поиска сделок
+    function showDealSearchError(errorMessage) {
+        const dropdown = document.getElementById('deal-search-dropdown');
+        if (dropdown) {
+            dropdown.innerHTML = `
+                <div class="search-error">
+                    <span>❌ ${errorMessage}</span>
+                </div>
+            `;
         }
     }
     
@@ -2553,12 +2896,231 @@
         }
     }
 
+    function loadEventDeal(dealId) {
+        console.log('loadEventDeal: Загружаем сделку с ID:', dealId);
+        
+        const csrfToken = getCSRFToken();
+        fetch('/local/components/artmax/calendar/ajax.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-Bitrix-Csrf-Token': csrfToken
+            },
+            body: new URLSearchParams({
+                action: 'getEventDeals',
+                eventId: window.currentEventId,
+                sessid: csrfToken
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.deal) {
+                console.log('loadEventDeal: Получены данные сделки:', data.deal);
+                updateDealInfoInSidePanel(data.deal);
+            } else {
+                console.log('loadEventDeal: Сделка не найдена или ошибка:', data.error);
+                resetDealInfoInSidePanel();
+            }
+            
+            // Увеличиваем счетчик завершенных загрузок
+            window.sidePanelLoadingComplete++;
+            checkSidePanelLoadingComplete();
+        })
+        .catch(error => {
+            console.error('loadEventDeal: Ошибка при загрузке сделки:', error);
+            resetDealInfoInSidePanel();
+            
+            // Увеличиваем счетчик завершенных загрузок даже при ошибке
+            window.sidePanelLoadingComplete++;
+            checkSidePanelLoadingComplete();
+        });
+    }
+
+    function resetDealInfoInSidePanel() {
+        const dealStatusElement = document.getElementById('deal-status');
+        
+        if (dealStatusElement) {
+            dealStatusElement.textContent = 'Нет сделки';
+            dealStatusElement.style.color = '#6c757d';
+        }
+    }
+
+    // Функция создания новой сделки
+    function createNewDeal() {
+        const eventId = getCurrentEventId();
+        if (!eventId) {
+            showNotification('Ошибка: не удалось определить событие', 'error');
+            return;
+        }
+        
+        // Закрываем боковое окно события
+        closeEventSidePanel();
+        
+        // Формируем URL для создания новой сделки
+        const dealUrl = `/crm/deal/details/0/?bookingId=${eventId}&IFRAME=Y&IFRAME_TYPE=SIDE_SLIDER`;
+        
+        // Открываем штатное Bitrix окно в боковом слайдере
+        if (typeof BX !== 'undefined' && BX.SidePanel) {
+            BX.SidePanel.Instance.open(dealUrl);
+        } else {
+            // Fallback для случаев, когда BX.SidePanel недоступен
+            window.location.href = dealUrl;
+        }
+    }
+
+    // Делаем функцию глобальной
+    window.createNewDeal = createNewDeal;
+
+    // Функции для работы с модальным окном сделок
+    function openDealModal() {
+        const modal = document.getElementById('dealModal');
+        if (modal) {
+            modal.style.display = 'flex';
+            setTimeout(() => {
+                modal.classList.add('show');
+            }, 10);
+            document.body.style.overflow = 'hidden';
+            
+            // Инициализируем обработчики для модального окна сделок
+            initDealModal();
+        }
+    }
+
+    window.closeDealModal = function() {
+        const modal = document.getElementById('dealModal');
+        if (modal) {
+            modal.classList.remove('show');
+            setTimeout(() => {
+                modal.style.display = 'none';
+            }, 300);
+            document.body.style.overflow = 'auto';
+        }
+    }
+
+    // Инициализация обработчиков для модального окна сделок
+    function initDealModal() {
+        const dealInput = document.getElementById('deal-input');
+        const dealDropdown = document.getElementById('deal-search-dropdown');
+        
+        if (dealInput) {
+            let searchTimeout;
+            
+            dealInput.addEventListener('input', function() {
+                const query = this.value.trim();
+                
+                // Очищаем предыдущий таймер
+                clearTimeout(searchTimeout);
+                
+                if (query.length > 0) {
+                    updateDealSearchText(query);
+                    showDealDropdown();
+                    
+                    // Запускаем поиск с задержкой 300мс
+                    if (query.length >= 2) {
+                        searchTimeout = setTimeout(() => {
+                            searchDealsInBitrix24(query);
+                        }, 300);
+                    }
+                } else {
+                    hideDealDropdown();
+                }
+            });
+            
+            // Обработчик фокуса
+            dealInput.addEventListener('focus', function() {
+                const query = this.value.trim();
+                if (query.length > 0) {
+                    showDealDropdown();
+                }
+            });
+        }
+    }
+
+    // Функция обновления текста поиска сделок
+    function updateDealSearchText(query) {
+        const searchTextElement = document.querySelector('#deal-search-dropdown .search-text');
+        if (searchTextElement) {
+            searchTextElement.textContent = `«${query}»`;
+        }
+    }
+
+    // Функция сохранения данных сделки
+    window.saveDealData = function() {
+        const dealInput = document.getElementById('deal-input');
+        const dealIdInput = document.getElementById('deal-id');
+        
+        if (!dealInput || !dealInput.value.trim()) {
+            showNotification('Введите название сделки', 'error');
+            return;
+        }
+        
+        const dealData = {
+            id: dealIdInput.value || null,
+            title: dealInput.value.trim()
+        };
+        
+        // Получаем ID текущего события из бокового окна
+        const eventId = getCurrentEventId();
+        if (!eventId) {
+            showNotification('Ошибка: не удалось определить событие', 'error');
+            return;
+        }
+        
+        // Отправляем данные на сервер
+        fetch('/local/components/artmax/calendar/ajax.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: new URLSearchParams({
+                action: 'saveEventDeal',
+                eventId: eventId,
+                dealData: JSON.stringify(dealData)
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showNotification('Сделка успешно сохранена', 'success');
+                closeDealModal();
+                
+                // Обновляем информацию о сделке в боковом окне
+                updateDealInfoInSidePanel(dealData);
+            } else {
+                showNotification('Ошибка сохранения: ' + (data.error || 'Неизвестная ошибка'), 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Ошибка при сохранении сделки:', error);
+            showNotification('Ошибка соединения с сервером', 'error');
+        });
+    }
+
+    // Функция обновления информации о сделке в боковом окне
+    function updateDealInfoInSidePanel(deal) {
+        const dealStatus = document.getElementById('deal-status');
+        if (dealStatus) {
+            dealStatus.textContent = deal.title;
+            dealStatus.style.color = '#28a745';
+        }
+        
+        // Обновляем иконку сделки в событии
+        const eventIcons = document.querySelectorAll('.event-icon.deal-icon');
+        eventIcons.forEach(icon => {
+            icon.classList.add('active');
+        });
+    }
+
     // Делаем функции доступными глобально для использования в HTML
     window.closeEditEventModal = closeEditEventModal;
     window.closeEventForm = closeEventForm;
     window.openEventForm = openEventForm;
     window.openClientModal = openClientModal;
     window.closeClientModal = closeClientModal;
+    window.openDealModal = openDealModal;
+    window.closeDealModal = closeDealModal;
     window.openEditEventModal = openEditEventModal;
     window.openScheduleModal = openScheduleModal;
     window.closeScheduleModal = closeScheduleModal;
@@ -2720,6 +3282,8 @@
                 // Устанавливаем статус по умолчанию
                 updateConfirmationStatusDisplay('pending');
             }
+            // Увеличиваем счетчик завершенных загрузок
+            window.sidePanelLoadingComplete++;
             // Проверяем завершение загрузки
             checkSidePanelLoadingComplete();
         })
@@ -2727,6 +3291,8 @@
             console.error('Ошибка AJAX запроса при загрузке статуса подтверждения:', error);
             // Устанавливаем статус по умолчанию
             updateConfirmationStatusDisplay('pending');
+            // Увеличиваем счетчик завершенных загрузок даже при ошибке
+            window.sidePanelLoadingComplete++;
             // Проверяем завершение загрузки даже при ошибке
             checkSidePanelLoadingComplete();
         });
@@ -2875,12 +3441,16 @@
                 console.error('Ошибка при загрузке статуса визита:', data.message);
                 updateVisitStatusDisplay('not_specified');
             }
+            // Увеличиваем счетчик завершенных загрузок
+            window.sidePanelLoadingComplete++;
             // Проверяем завершение загрузки
             checkSidePanelLoadingComplete();
         })
         .catch(error => {
             console.error('Ошибка AJAX запроса:', error);
             updateVisitStatusDisplay('not_specified');
+            // Увеличиваем счетчик завершенных загрузок даже при ошибке
+            window.sidePanelLoadingComplete++;
             // Проверяем завершение загрузки даже при ошибке
             checkSidePanelLoadingComplete();
         });

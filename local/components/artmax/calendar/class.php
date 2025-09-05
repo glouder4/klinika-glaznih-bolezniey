@@ -645,7 +645,11 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                 }
                 
                 // Используем стандартный сервис для поиска
-                $clients = $this->searchContactsViaStandardService($query);
+                if ($type === 'deal') {
+                    $clients = $this->searchDealsViaStandardService($query);
+                } else {
+                    $clients = $this->searchContactsViaStandardService($query);
+                }
             }
             
             return ['success' => true, 'clients' => $clients];
@@ -655,84 +659,70 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
     }
     
     /**
-     * Поиск контактов через стандартный сервис crm.api.entity.search
+     * Поиск контактов через прямой запрос к CCrmContact
      */
     private function searchContactsViaStandardService($query)
     {
-        $contacts = [];
+        // Сразу используем прямой поиск через CCrmContact
+        return $this->searchContactsViaDirectQuery($query);
+    }
+    
+    /**
+     * Поиск сделок через прямой запрос к CCrmDeal
+     */
+    private function searchDealsViaStandardService($query)
+    {
+        // Сразу используем прямой поиск через CCrmDeal
+        return $this->searchDealsViaDirectQuery($query);
+    }
+    
+    /**
+     * Fallback поиск сделок через прямой запрос к CCrmDeal
+     */
+    private function searchDealsViaDirectQuery($query)
+    {
+        $deals = [];
         
         try {
-            // Используем стандартный сервис поиска Bitrix
-            $searchService = new \Bitrix\Crm\Search\SearchService();
+            // Подготавливаем фильтр
+            $arFilter = [];
+            $searchParts = preg_split('/[\s]+/', $query, 2, PREG_SPLIT_NO_EMPTY);
             
-            // Подготавливаем параметры поиска
-            $searchParams = [
-                'query' => $query,
-                'types' => ['CONTACT'],
-                'scope' => 'index',
-                'limit' => 10
+            if (count($searchParts) < 2) {
+                $arFilter['LOGIC'] = 'OR';
+                $arFilter['%TITLE'] = $query;
+                $arFilter['%COMPANY_TITLE'] = $query;
+            } else {
+                $arFilter['LOGIC'] = 'OR';
+                $arFilter["__INNER_FILTER_TITLE_1"] = ['%TITLE' => $searchParts[0], '%TITLE' => $searchParts[1]];
+                $arFilter["__INNER_FILTER_COMPANY_1"] = ['%COMPANY_TITLE' => $searchParts[0], '%COMPANY_TITLE' => $searchParts[1]];
+            }
+            
+            $arSelect = [
+                'ID', 'TITLE', 'OPPORTUNITY', 'STAGE_ID', 'COMPANY_TITLE', 'CURRENCY_ID'
             ];
             
-            // Выполняем поиск
-            $searchResult = $searchService->search($searchParams);
+            $arOrder = ['TITLE' => 'ASC'];
             
-            if ($searchResult && isset($searchResult['items'])) {
-                foreach ($searchResult['items'] as $item) {
-                    // Формируем полное имя
-                    $fullName = trim($item['NAME'] . ' ' . $item['LAST_NAME'] . ' ' . $item['SECOND_NAME']);
-                    if (empty($fullName)) {
-                        $fullName = 'Контакт #' . $item['ID'];
-                    }
-                    
-                    // Собираем телефоны и email
-                    $phones = [];
-                    $emails = [];
-                    
-                    if (!empty($item['PHONE'])) {
-                        $phones[] = $item['PHONE'];
-                    }
-                    if (!empty($item['EMAIL'])) {
-                        $emails[] = $item['EMAIL'];
-                    }
-                    
-                    // Проверяем дополнительные поля
-                    if (isset($item['ADDITIONAL_INFO'])) {
-                        $additionalInfo = $item['ADDITIONAL_INFO'];
-                        if (isset($additionalInfo['PHONE'])) {
-                            $phones = array_merge($phones, (array)$additionalInfo['PHONE']);
-                        }
-                        if (isset($additionalInfo['EMAIL'])) {
-                            $emails = array_merge($emails, (array)$additionalInfo['EMAIL']);
-                        }
-                    }
-                    
-                    // Убираем дубликаты
-                    $phones = array_unique(array_filter($phones));
-                    $emails = array_unique(array_filter($emails));
-                    
-                    $contacts[] = [
-                        'id' => $item['ID'],
-                        'name' => $fullName,
-                        'firstName' => $item['NAME'] ?? '',
-                        'lastName' => $item['LAST_NAME'] ?? '',
-                        'secondName' => $item['SECOND_NAME'] ?? '',
-                        'phone' => implode(', ', $phones),
-                        'email' => implode(', ', $emails),
-                        'company' => $item['COMPANY_TITLE'] ?? '',
-                        'post' => $item['POST'] ?? '',
-                        'address' => $item['ADDRESS'] ?? ''
-                    ];
-                }
+            // Выполняем поиск
+            $dbDeals = \CCrmDeal::GetListEx($arOrder, $arFilter, false, ['nTopCount' => 10], $arSelect);
+            
+            while ($deal = $dbDeals->Fetch()) {
+                $deals[] = [
+                    'id' => $deal['ID'],
+                    'title' => $deal['TITLE'] ?: 'Сделка #' . $deal['ID'],
+                    'amount' => $deal['OPPORTUNITY'] ?: '',
+                    'stage' => $deal['STAGE_ID'] ?: '',
+                    'company' => $deal['COMPANY_TITLE'] ?: '',
+                    'currency' => $deal['CURRENCY_ID'] ?: 'RUB'
+                ];
             }
             
         } catch (\Exception $e) {
-            error_log('Ошибка поиска контактов через стандартный сервис: ' . $e->getMessage());
-            
-            // Fallback к прямому поиску через CCrmContact
-            $contacts = $this->searchContactsViaDirectQuery($query);
+            error_log('Ошибка прямого поиска сделок: ' . $e->getMessage());
         }
         
-        return $contacts;
+        return $deals;
     }
     
     /**
@@ -849,6 +839,54 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
     }
     
     /**
+     * Сохранение сделки для события
+     */
+    public function saveEventDealAction($eventId, $dealData)
+    {
+        if (!$GLOBALS['USER'] || !$GLOBALS['USER']->IsAuthorized()) {
+            return ['success' => false, 'error' => 'Необходима авторизация'];
+        }
+
+        try {
+            // Подключаем модуль
+            if (!CModule::IncludeModule('artmax.calendar')) {
+                return ['success' => false, 'error' => 'Модуль artmax.calendar не установлен'];
+            }
+
+            // Проверяем, что событие существует
+            $calendar = new \Artmax\Calendar\Calendar();
+            $event = $calendar->getEvent($eventId);
+            
+            if (!$event) {
+                return ['success' => false, 'error' => 'Событие не найдено'];
+            }
+
+            // Проверяем права на редактирование события
+            if ($event['USER_ID'] != $GLOBALS['USER']->GetID()) {
+                return ['success' => false, 'error' => 'Нет прав на редактирование события'];
+            }
+
+            // Декодируем JSON данные сделки
+            $dealDataArray = json_decode($dealData, true);
+            if (!$dealDataArray || !isset($dealDataArray['id'])) {
+                return ['success' => false, 'error' => 'Неверные данные сделки'];
+            }
+            
+            // Обновляем событие, добавляя ID сделки
+            $result = $calendar->updateEventDeal($eventId, $dealDataArray['id']);
+
+            if ($result) {
+                return ['success' => true, 'message' => 'Сделка сохранена'];
+            } else {
+                return ['success' => false, 'error' => 'Ошибка сохранения сделки'];
+            }
+
+        } catch (\Exception $e) {
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+    
+    /**
      * Получение контакта для события
      */
     public function getEventContactsAction($eventId)
@@ -885,6 +923,42 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
     }
     
     /**
+     * Получение сделки для события
+     */
+    public function getEventDealsAction($eventId)
+    {
+        if (!$GLOBALS['USER'] || !$GLOBALS['USER']->IsAuthorized()) {
+            return ['success' => false, 'error' => 'Необходима авторизация'];
+        }
+
+        try {
+            // Подключаем модуль
+            if (!CModule::IncludeModule('artmax.calendar')) {
+                return ['success' => false, 'error' => 'Модуль artmax.calendar не установлен'];
+            }
+
+            // Получаем событие со сделкой
+            $calendar = new \Artmax\Calendar\Calendar();
+            $event = $calendar->getEvent($eventId);
+            
+            if (!$event) {
+                return ['success' => false, 'error' => 'Событие не найдено'];
+            }
+
+            $deal = null;
+            if (!empty($event['DEAL_ENTITY_ID'])) {
+                // Получаем данные сделки из CRM
+                $deal = $this->getDealFromCRM($event['DEAL_ENTITY_ID']);
+            }
+
+            return ['success' => true, 'deal' => $deal];
+
+        } catch (\Exception $e) {
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+    
+    /**
      * Получение контакта из CRM по ID
      */
     private function getContactFromCRM($contactId)
@@ -906,6 +980,34 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
             }
         } catch (\Exception $e) {
             error_log('Ошибка получения контакта из CRM: ' . $e->getMessage());
+        }
+
+        return null;
+    }
+    
+    /**
+     * Получение сделки из CRM по ID
+     */
+    private function getDealFromCRM($dealId)
+    {
+        if (!CModule::IncludeModule('crm')) {
+            return null;
+        }
+
+        try {
+            $deal = \CCrmDeal::GetByID($dealId);
+            if ($deal) {
+                return [
+                    'id' => $deal['ID'],
+                    'title' => $deal['TITLE'] ?? 'Сделка #' . $deal['ID'],
+                    'amount' => $deal['OPPORTUNITY'] ?? '',
+                    'currency' => $deal['CURRENCY_ID'] ?? 'RUB',
+                    'stage' => $deal['STAGE_ID'] ?? '',
+                    'company' => $deal['COMPANY_TITLE'] ?? ''
+                ];
+            }
+        } catch (\Exception $e) {
+            error_log('Ошибка получения сделки из CRM: ' . $e->getMessage());
         }
 
         return null;

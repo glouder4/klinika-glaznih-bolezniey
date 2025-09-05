@@ -536,6 +536,62 @@ switch ($action) {
         }
         break;
 
+    case 'getEventDeals':
+        $eventId = $_POST['eventId'] ?? 0;
+
+        if (empty($eventId)) {
+            die(json_encode(['success' => false, 'error' => 'ID события не указан']));
+        }
+
+        try {
+            $component = new ArtmaxCalendarComponent();
+            $result = $component->getEventDealsAction($eventId);
+
+            die(json_encode($result));
+        } catch (Exception $e) {
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
+                "Get deals error: " . $e->getMessage() . "\n",
+                FILE_APPEND | LOCK_EX);
+            die(json_encode(['success' => false, 'error' => 'Ошибка получения сделок: ' . $e->getMessage()]));
+        }
+        break;
+
+    case 'saveEventDeal':
+        $eventId = $_POST['eventId'] ?? 0;
+        $dealData = $_POST['dealData'] ?? array();
+
+        // Логируем запрос
+        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
+            "=== AJAX SAVE_EVENT_DEAL ===\n",
+            FILE_APPEND | LOCK_EX);
+        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
+            "EventId: {$eventId}, DealData: " . json_encode($dealData) . "\n",
+            FILE_APPEND | LOCK_EX);
+
+        if (empty($eventId) || empty($dealData)) {
+            die(json_encode(['success' => false, 'error' => 'Недостаточно данных для сохранения']));
+        }
+
+        try {
+            $component = new ArtmaxCalendarComponent();
+            $result = $component->saveEventDealAction($eventId, $dealData);
+
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
+                "Save result: " . json_encode($result) . "\n",
+                FILE_APPEND | LOCK_EX);
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
+                "=== END AJAX SAVE_EVENT_DEAL ===\n",
+                FILE_APPEND | LOCK_EX);
+
+            die(json_encode($result));
+        } catch (Exception $e) {
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
+                "Save error: " . $e->getMessage() . "\n",
+                FILE_APPEND | LOCK_EX);
+            die(json_encode(['success' => false, 'error' => 'Ошибка сохранения: ' . $e->getMessage()]));
+        }
+        break;
+
     case 'get_confirmation_status':
         $eventId = (int)($_POST['event_id'] ?? 0);
 

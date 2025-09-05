@@ -2431,6 +2431,35 @@ input:checked + .toggle-slider:before {
     background: #e9ecef;
 }
 
+.card-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.card-action-btn.add-btn {
+    background: #28a745;
+    color: white;
+    padding: 6px 10px;
+    min-width: 32px;
+    font-size: 14px;
+    font-weight: bold;
+}
+
+.card-action-btn.add-btn:hover {
+    background: #218838;
+}
+
+.card-action-btn.select-btn {
+    background: #007bff;
+    color: white;
+    padding: 6px 12px;
+}
+
+.card-action-btn.select-btn:hover {
+    background: #0056b3;
+}
+
 .card-badge {
     position: absolute;
     top: 8px;
@@ -3128,6 +3157,27 @@ input:checked + .toggle-slider:before {
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
     z-index: 1000;
     margin-top: 4px;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+/* Стилизация скроллбара для выпадающего списка поиска */
+.search-dropdown::-webkit-scrollbar {
+    width: 6px;
+}
+
+.search-dropdown::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 3px;
+}
+
+.search-dropdown::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 3px;
+}
+
+.search-dropdown::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
 }
 
 .search-suggestion {
@@ -3256,4 +3306,206 @@ input:checked + .toggle-slider:before {
 
 .search-error {
     color: #dc3545;
+}
+
+/* Модальное окно для выбора сделки */
+.deal-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 10003;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.3s ease;
+}
+
+.deal-modal.show {
+    opacity: 1;
+    visibility: visible;
+}
+
+.deal-modal-content {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+    width: 90%;
+    max-width: 500px;
+    max-height: 85vh;
+    height: -webkit-fill-available;
+    overflow: hidden;
+    transform: scale(0.8) translateY(-20px);
+    transition: all 0.3s ease;
+    display: flex;
+    flex-direction: column;
+}
+
+.deal-modal.show .deal-modal-content {
+    transform: scale(1) translateY(0);
+}
+
+.deal-modal-header {
+    padding: 20px;
+    border-bottom: 1px solid #e9ecef;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.deal-modal-header h3 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+    color: #2c3e50;
+}
+
+.close-deal-modal {
+    background: none;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+    color: #6c757d;
+    padding: 0;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: all 0.2s ease;
+}
+
+.close-deal-modal:hover {
+    background: #f8f9fa;
+    color: #495057;
+}
+
+.deal-modal-body {
+    padding: 20px;
+    flex: 1;
+    overflow-y: auto;
+    max-height: calc(85vh - 120px); /* Вычитаем высоту header и footer */
+}
+
+/* Стилизация скроллбара для модального окна сделок */
+.deal-modal-body::-webkit-scrollbar {
+    width: 6px;
+}
+
+.deal-modal-body::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 3px;
+}
+
+.deal-modal-body::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 3px;
+}
+
+.deal-modal-body::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
+}
+
+.deal-modal-footer {
+    padding: 20px;
+    border-top: 1px solid #e9ecef;
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+.deal-modal-footer .btn {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 6px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-size: 14px;
+}
+
+.deal-modal-footer .btn-secondary {
+    background: #6c757d;
+    color: white;
+}
+
+.deal-modal-footer .btn-secondary:hover {
+    background: #5a6268;
+}
+
+.deal-modal-footer .btn-primary {
+    background: #007bff;
+    color: white;
+}
+
+.deal-modal-footer .btn-primary:hover {
+    background: #0056b3;
+}
+
+/* Стили для результатов поиска сделок */
+.search-deal-item {
+    padding: 12px 16px;
+    border-bottom: 1px solid #e9ecef;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.search-deal-item:hover {
+    background: #f8f9fa;
+}
+
+.search-deal-item:last-of-type {
+    border-bottom: none;
+}
+
+.deal-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.deal-title {
+    font-weight: 600;
+    color: #2c3e50;
+    font-size: 14px;
+}
+
+.deal-details {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.deal-amount,
+.deal-stage,
+.deal-company {
+    font-size: 12px;
+    color: #6c757d;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.create-new-deal-btn {
+    width: 100%;
+    background: #e3f2fd;
+    border: none;
+    padding: 12px 16px;
+    color: #1976d2;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-radius: 0 0 8px 8px;
+}
+
+.create-new-deal-btn:hover {
+    background: #bbdefb;
 }

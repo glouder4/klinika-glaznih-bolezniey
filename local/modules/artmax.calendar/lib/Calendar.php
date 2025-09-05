@@ -187,6 +187,7 @@ class Calendar
                 BRANCH_ID,
                 EVENT_COLOR,
                 CONTACT_ENTITY_ID,
+                DEAL_ENTITY_ID,
                 CONFIRMATION_STATUS,
                 VISIT_STATUS,
                 CREATED_AT,
@@ -337,6 +338,7 @@ class Calendar
             BRANCH_ID,
             EVENT_COLOR,
             CONTACT_ENTITY_ID,
+            DEAL_ENTITY_ID,
             CONFIRMATION_STATUS,
             VISIT_STATUS,
             DATE_FORMAT(CREATED_AT, '%d.%m.%Y %H:%i:%s') AS CREATED_AT,
@@ -489,6 +491,39 @@ class Calendar
             return true;
         } catch (\Exception $e) {
             error_log('Ошибка обновления контакта события: ' . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Обновить сделку для события
+     */
+    public function updateEventDeal($eventId, $dealId)
+    {
+        $sql = "UPDATE artmax_calendar_events SET DEAL_ENTITY_ID = " . (int)$dealId . " WHERE ID = " . (int)$eventId;
+        
+        // Логируем SQL запрос
+        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+            "SQL Query updateEventDeal: {$sql}\n", 
+            FILE_APPEND | LOCK_EX);
+        
+        try {
+            $this->connection->query($sql);
+            
+            // Логируем успешное выполнение
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "Successfully updated deal for event {$eventId} with deal ID {$dealId}\n", 
+                FILE_APPEND | LOCK_EX);
+            
+            return true;
+        } catch (\Exception $e) {
+            error_log('Ошибка обновления сделки события: ' . $e->getMessage());
+            
+            // Логируем ошибку
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "Error updating deal for event {$eventId}: " . $e->getMessage() . "\n", 
+                FILE_APPEND | LOCK_EX);
+            
             return false;
         }
     }
