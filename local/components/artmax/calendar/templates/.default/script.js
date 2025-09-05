@@ -4622,9 +4622,15 @@
                     
                     // Обновляем title страницы
                     document.title = 'Календарь - ' + branchNameInput.value;
+                    
+                    // Принудительно обновляем страницу для обновления переключателя филиалов
+                    showNotification('Название филиала обновлено. Страница будет перезагружена...', 'info');
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1500);
+                } else {
+                    closeTimezoneModal();
                 }
-                
-                closeTimezoneModal();
             } else {
                 showNotification('Ошибка сохранения: ' + (data.error || 'Неизвестная ошибка'), 'error');
             }

@@ -1488,6 +1488,9 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                 // Обновляем страницы раздела для отображения нового названия
                 try {
                     \Artmax\Calendar\EventHandlers::updateSectionPages();
+                    
+                    // Дополнительно обновляем конкретную страницу филиала в настраиваемом разделе
+                    \Artmax\Calendar\EventHandlers::updateBranchPageTitle($branchId, $branchName);
                 } catch (\Exception $e) {
                     error_log('Ошибка обновления страниц раздела: ' . $e->getMessage());
                 }

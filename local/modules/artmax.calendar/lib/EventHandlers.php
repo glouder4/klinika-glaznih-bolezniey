@@ -497,6 +497,92 @@ class EventHandlers
     }
 
     /**
+     * Обновляет название страницы филиала в настраиваемом разделе
+     */
+    public static function updateBranchPageTitle($branchId, $newName)
+    {
+        try {
+            $customSectionId = \Bitrix\Main\Config\Option::get('artmax.calendar', 'custom_section_id', '');
+            if (!$customSectionId) {
+                return false;
+            }
+
+            // Находим страницу филиала
+            $page = \Bitrix\Intranet\CustomSection\Entity\CustomSectionPageTable::getList([
+                'filter' => [
+                    'CUSTOM_SECTION_ID' => $customSectionId,
+                    'CODE' => 'calendar_branch_' . $branchId
+                ]
+            ])->fetch();
+
+            if ($page) {
+                // Обновляем название страницы
+                $updateResult = \Bitrix\Intranet\CustomSection\Entity\CustomSectionPageTable::update($page['ID'], [
+                    'TITLE' => 'Календарь - ' . $newName,
+                    'SETTINGS' => $branchId . '~' . $newName
+                ]);
+
+                if ($updateResult->isSuccess()) {
+                    // Очищаем кеш настраиваемых разделов
+                    try {
+                        // Очищаем кеш через стандартные функции Bitrix
+                        if (function_exists('BXClearCache')) {
+                            BXClearCache(true, '/intranet/');
+                        }
+                        
+                        // Очищаем кеш меню
+                        if (function_exists('BXClearCache')) {
+                            BXClearCache(true, '/menu/');
+                        }
+                        
+                        // Очищаем кеш компонентов
+                        if (function_exists('BXClearCache')) {
+                            BXClearCache(true, '/bitrix/components/');
+                        }
+                        
+                        // Принудительно обновляем кеш настраиваемых разделов
+                        if (class_exists('\Bitrix\Intranet\CustomSection\Entity\CustomSectionTable')) {
+                            // Просто обращаемся к таблице для обновления кеша
+                            \Bitrix\Intranet\CustomSection\Entity\CustomSectionTable::getList([
+                                'filter' => ['ID' => $customSectionId],
+                                'select' => ['ID', 'TITLE']
+                            ])->fetch();
+                        }
+                    } catch (\Exception $e) {
+                        // Игнорируем ошибки очистки кеша
+                        error_log('Ошибка очистки кеша настраиваемых разделов: ' . $e->getMessage());
+                    }
+                    
+                    \CEventLog::Add([
+                        'SEVERITY' => 'INFO',
+                        'AUDIT_TYPE_ID' => 'ARTMAX_CALENDAR_PAGE_UPDATE',
+                        'MODULE_ID' => 'artmax.calendar',
+                        'DESCRIPTION' => 'Обновлено название страницы филиала: ' . $newName . ' (ID: ' . $branchId . ')'
+                    ]);
+                    return true;
+                } else {
+                    \CEventLog::Add([
+                        'SEVERITY' => 'ERROR',
+                        'AUDIT_TYPE_ID' => 'ARTMAX_CALENDAR_PAGE_UPDATE_ERROR',
+                        'MODULE_ID' => 'artmax.calendar',
+                        'DESCRIPTION' => 'Ошибка обновления страницы филиала: ' . implode(', ', $updateResult->getErrorMessages())
+                    ]);
+                }
+            }
+
+            return false;
+        } catch (\Exception $e) {
+            \CEventLog::Add([
+                'SEVERITY' => 'ERROR',
+                'AUDIT_TYPE_ID' => 'ARTMAX_CALENDAR_PAGE_UPDATE_ERROR',
+                'MODULE_ID' => 'artmax.calendar',
+                'DESCRIPTION' => 'Ошибка обновления названия страницы филиала: ' . $e->getMessage()
+            ]);
+            return false;
+        }
+    }
+
+    /**
      * Удаляет настраиваемый раздел календаря
      */
     public static function removeCustomSection()
