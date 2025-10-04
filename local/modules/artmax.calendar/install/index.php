@@ -67,6 +67,7 @@ class artmax_calendar extends CModule
             EMPLOYEE_ID int(11) DEFAULT NULL COMMENT 'ID ответственного сотрудника',
             CONFIRMATION_STATUS enum('pending','confirmed','not_confirmed') DEFAULT 'pending' COMMENT 'Статус подтверждения события',
             STATUS enum('active','moved','cancelled') DEFAULT 'active' COMMENT 'Статус события',
+            VISIT_STATUS enum('not_specified','client_came','client_did_not_come') DEFAULT 'not_specified' COMMENT 'Статус визита клиента',
             CREATED_AT datetime DEFAULT CURRENT_TIMESTAMP,
             UPDATED_AT datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             PRIMARY KEY (ID),
@@ -78,7 +79,8 @@ class artmax_calendar extends CModule
             KEY EMPLOYEE_ID (EMPLOYEE_ID),
             KEY CONFIRMATION_STATUS (CONFIRMATION_STATUS),
             KEY STATUS (STATUS),
-            KEY TIME_IS_CHANGED (TIME_IS_CHANGED)
+            KEY TIME_IS_CHANGED (TIME_IS_CHANGED),
+            KEY VISIT_STATUS (VISIT_STATUS)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
         ";
         

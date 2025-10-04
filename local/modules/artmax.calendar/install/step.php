@@ -46,14 +46,31 @@ CREATE TABLE IF NOT EXISTS artmax_calendar_events (
     DESCRIPTION TEXT,
     DATE_FROM DATETIME NOT NULL,
     DATE_TO DATETIME NOT NULL,
+    ORIGINAL_DATE_FROM DATETIME DEFAULT NULL COMMENT 'Оригинальная дата начала (заполняется только при создании)',
+    ORIGINAL_DATE_TO DATETIME DEFAULT NULL COMMENT 'Оригинальная дата окончания (заполняется только при создании)',
+    TIME_IS_CHANGED TINYINT(1) DEFAULT 0 COMMENT 'Флаг изменения времени записи',
     USER_ID INT NOT NULL,
-    BRANCH_ID INT NOT NULL,
+    BRANCH_ID INT NOT NULL DEFAULT 1,
     EVENT_COLOR VARCHAR(7) DEFAULT '#3498db',
+    CONTACT_ENTITY_ID INT DEFAULT NULL COMMENT 'ID контакта из CRM',
+    DEAL_ENTITY_ID INT DEFAULT NULL COMMENT 'ID сделки из CRM',
+    NOTE TEXT DEFAULT NULL COMMENT 'Заметка к событию',
+    EMPLOYEE_ID INT DEFAULT NULL COMMENT 'ID ответственного сотрудника',
+    CONFIRMATION_STATUS ENUM('pending','confirmed','not_confirmed') DEFAULT 'pending' COMMENT 'Статус подтверждения события',
+    STATUS ENUM('active','moved','cancelled') DEFAULT 'active' COMMENT 'Статус события',
+    VISIT_STATUS ENUM('not_specified','client_came','client_did_not_come') DEFAULT 'not_specified' COMMENT 'Статус визита клиента',
     CREATED_AT TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UPDATED_AT TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_user_date (USER_ID, DATE_FROM),
     INDEX idx_branch_date (BRANCH_ID, DATE_FROM),
-    INDEX idx_date_range (DATE_FROM, DATE_TO)
+    INDEX idx_date_range (DATE_FROM, DATE_TO),
+    INDEX idx_contact_entity (CONTACT_ENTITY_ID),
+    INDEX idx_deal_entity (DEAL_ENTITY_ID),
+    INDEX idx_employee (EMPLOYEE_ID),
+    INDEX idx_confirmation_status (CONFIRMATION_STATUS),
+    INDEX idx_status (STATUS),
+    INDEX idx_visit_status (VISIT_STATUS),
+    INDEX idx_time_changed (TIME_IS_CHANGED)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 ";
 
@@ -62,6 +79,35 @@ try {
     echo "<p style='color: green;'>✓ Таблица событий создана успешно</p>";
 } catch (Exception $e) {
     echo "<p style='color: red;'>✗ Ошибка создания таблицы событий: " . $e->getMessage() . "</p>";
+}
+
+// 2.1. Проверяем и добавляем колонку VISIT_STATUS, если она отсутствует
+$sqlCheck = "SHOW COLUMNS FROM artmax_calendar_events LIKE 'VISIT_STATUS'";
+try {
+    $result = $connection->query($sqlCheck);
+    
+    if ($result->getSelectedRowsCount() == 0) {
+        echo "<p style='color: orange;'>⚠ Колонка VISIT_STATUS не найдена. Добавляем...</p>";
+        
+        $sqlAddColumn = "
+        ALTER TABLE artmax_calendar_events 
+        ADD COLUMN VISIT_STATUS ENUM('not_specified','client_came','client_did_not_come') 
+        DEFAULT 'not_specified' COMMENT 'Статус визита клиента' 
+        AFTER STATUS
+        ";
+        
+        $connection->query($sqlAddColumn);
+        echo "<p style='color: green;'>✓ Колонка VISIT_STATUS добавлена</p>";
+        
+        // Добавляем индекс для колонки
+        $sqlAddIndex = "ALTER TABLE artmax_calendar_events ADD INDEX idx_visit_status (VISIT_STATUS)";
+        $connection->query($sqlAddIndex);
+        echo "<p style='color: green;'>✓ Индекс для колонки VISIT_STATUS добавлен</p>";
+    } else {
+        echo "<p style='color: green;'>✓ Колонка VISIT_STATUS уже существует</p>";
+    }
+} catch (Exception $e) {
+    echo "<p style='color: red;'>✗ Ошибка при проверке/добавлении колонки VISIT_STATUS: " . $e->getMessage() . "</p>";
 }
 
 // 3. Добавляем внешний ключ для BRANCH_ID
