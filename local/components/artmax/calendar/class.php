@@ -12,6 +12,9 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
 
     public function executeComponent()
     {
+        // Подключаем необходимые скрипты и стили
+        $this->includeAssets();
+        
         // Проверяем, является ли это AJAX запросом
         if ($this->isAjaxRequest()) {
             $this->handleAjaxRequest();
@@ -347,9 +350,73 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
 
     /**
      * Добавление расписания
+     * 
+     * @param array $params - Массив параметров:
+     *   - title (string) - Название события
+     *   - date (string) - Дата события (YYYY-MM-DD)
+     *   - time (string) - Время события (HH:MM)
+     *   - employee_id (int|null) - ID врача
+     *   - repeat (bool) - Повторяющееся ли событие
+     *   - frequency (string|null) - Частота повторения (daily, weekly, monthly)
+     *   - weekdays (array) - Дни недели для еженедельного повторения
+     *   - repeat_end (string) - Тип окончания повторения (never, count, date)
+     *   - repeat_count (int|null) - Количество повторений
+     *   - repeat_end_date (string|null) - Дата окончания повторений (YYYY-MM-DD)
+     *   - event_color (string) - Цвет события (hex, например #3498db)
+     *   - exclude_weekends (bool) - Исключать ли выходные дни
+     *   - exclude_holidays (bool) - Исключать ли праздничные дни
+     *   - include_end_date (bool) - Включать ли конечную дату в расписание
+     * 
+     * ПРИМЕР ПРАВИЛЬНОГО ВЫЗОВА:
+     * $component->addScheduleAction([
+     *     'title' => 'Название',
+     *     'date' => '2025-10-14',
+     *     'time' => '15:30',
+     *     'employee_id' => 1,
+     *     'repeat' => true,
+     *     'frequency' => 'daily',
+     *     'weekdays' => [],
+     *     'repeat_end' => 'date',
+     *     'repeat_count' => null,
+     *     'repeat_end_date' => '2025-10-21',
+     *     'event_color' => '#f39c12',
+     *     'exclude_weekends' => true,
+     *     'exclude_holidays' => true,
+     *     'include_end_date' => false
+     * ]);
      */
-    public function addScheduleAction($title, $date, $time, $employeeId = null, $repeat = false, $frequency = null, $weekdays = [], $repeatEnd = 'never', $repeatCount = null, $repeatEndDate = null, $eventColor = '#3498db')
+    public function addScheduleAction($params)
     {
+        // Извлекаем параметры из массива с значениями по умолчанию
+        $title = $params['title'] ?? '';
+        $date = $params['date'] ?? '';
+        $time = $params['time'] ?? '';
+        $employeeId = $params['employee_id'] ?? null;
+        $repeat = $params['repeat'] ?? false;
+        $frequency = $params['frequency'] ?? null;
+        $weekdays = $params['weekdays'] ?? [];
+        $repeatEnd = $params['repeat_end'] ?? 'never';
+        $repeatCount = $params['repeat_count'] ?? null;
+        $repeatEndDate = $params['repeat_end_date'] ?? null;
+        $eventColor = $params['event_color'] ?? '#3498db';
+        $excludeWeekends = $params['exclude_weekends'] ?? true;
+        $excludeHolidays = $params['exclude_holidays'] ?? true;
+        $includeEndDate = $params['include_end_date'] ?? true;
+
+        // Логируем входящие параметры для отладки
+        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+            "addScheduleAction: eventColor = " . var_export($eventColor, true) . " (type: " . gettype($eventColor) . ")\n", 
+            FILE_APPEND | LOCK_EX);
+        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+            "addScheduleAction: eventColor raw value = '" . $eventColor . "'\n", 
+            FILE_APPEND | LOCK_EX);
+        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+            "addScheduleAction: excludeWeekends = " . var_export($excludeWeekends, true) . " (type: " . gettype($excludeWeekends) . ")\n", 
+            FILE_APPEND | LOCK_EX);
+        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+            "addScheduleAction: excludeHolidays = " . var_export($excludeHolidays, true) . " (type: " . gettype($excludeHolidays) . ")\n", 
+            FILE_APPEND | LOCK_EX);
+        
         if (!$GLOBALS['USER'] || !$GLOBALS['USER']->IsAuthorized()) {
             return ['success' => false, 'error' => 'Необходима авторизация'];
         }
@@ -372,13 +439,40 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
             $createdEvents = [];
             
             // Если событие повторяемое, создаем все события (включая первое)
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "addScheduleAction: Проверяем условия - repeat = " . ($repeat ? 'true' : 'false') . ", frequency = '$frequency', includeEndDate = " . ($includeEndDate ? 'true' : 'false') . "\n", 
+                FILE_APPEND | LOCK_EX);
             if ($repeat && $frequency) {
                 // Логируем параметры для отладки
-                error_log("addScheduleAction: date = $date, time = $time, dateFrom = " . $dateFrom->format('Y-m-d H:i:s'));
+                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                    "addScheduleAction: date = $date, time = $time, dateFrom = " . $dateFrom->format('Y-m-d H:i:s') . "\n", 
+                    FILE_APPEND | LOCK_EX);
                 
-                error_log("addScheduleAction: Calling createRecurringEvents with frequency = $frequency, weekdays = " . implode(',', $weekdays));
-                $recurringResult = $this->createRecurringEvents(null, $frequency, $weekdays, $repeatEnd, $repeatCount, $repeatEndDate, $eventColor, $employeeId, $dateFrom->format('Y-m-d H:i:s'), $title, $dateFrom->format('Y-m-d H:i:s'), $dateTo->format('Y-m-d H:i:s'), $userId);
-                error_log("addScheduleAction: createRecurringEvents returned: " . json_encode($recurringResult));
+                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                    "addScheduleAction: Calling createRecurringEvents with frequency = $frequency, weekdays = " . implode(',', $weekdays) . "\n", 
+                    FILE_APPEND | LOCK_EX);
+                // Вызываем createRecurringEvents с массивом параметров
+                $recurringResult = $this->createRecurringEvents([
+                    'original_event_id' => null,
+                    'frequency' => $frequency,
+                    'weekdays' => $weekdays,
+                    'repeat_end' => $repeatEnd,
+                    'repeat_count' => $repeatCount,
+                    'repeat_end_date' => $repeatEndDate,
+                    'event_color' => $eventColor,
+                    'employee_id' => $employeeId,
+                    'schedule_start_date' => $dateFrom->format('Y-m-d H:i:s'),
+                    'title' => $title,
+                    'date_from' => $dateFrom->format('Y-m-d H:i:s'),
+                    'date_to' => $dateTo->format('Y-m-d H:i:s'),
+                    'user_id' => $userId,
+                    'exclude_weekends' => $excludeWeekends,
+                    'exclude_holidays' => $excludeHolidays,
+                    'include_end_date' => $includeEndDate
+                ]);
+                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                    "addScheduleAction: createRecurringEvents returned: " . json_encode($recurringResult) . "\n", 
+                    FILE_APPEND | LOCK_EX);
                 if ($recurringResult && $recurringResult['count'] > 0) {
                     $eventsCreated = $recurringResult['count'];
                     
@@ -386,7 +480,7 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                     foreach ($recurringResult['ids'] as $eventId) {
                         $event = $calendarObj->getEvent($eventId);
                         if ($event) {
-                            $event['EVENT_COLOR'] = $eventColor;
+                            $event['EVENT_COLOR'] = (is_string($eventColor)) ? $eventColor : '#3498db';
                             // Конвертируем даты в стандартный формат
                             $event['DATE_FROM'] = $this->convertRussianDateToStandard($event['DATE_FROM']);
                             $event['DATE_TO'] = $this->convertRussianDateToStandard($event['DATE_TO']);
@@ -402,7 +496,7 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                         $eventsCreated = 1;
                         $event = $calendarObj->getEvent($eventId);
                         if ($event) {
-                            $event['EVENT_COLOR'] = $eventColor;
+                            $event['EVENT_COLOR'] = (is_string($eventColor)) ? $eventColor : '#3498db';
                             // Конвертируем даты в стандартный формат
                             $event['DATE_FROM'] = $this->convertRussianDateToStandard($event['DATE_FROM']);
                             $event['DATE_TO'] = $this->convertRussianDateToStandard($event['DATE_TO']);
@@ -413,12 +507,18 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
             }
 
             // Логируем результат
-            error_log("addScheduleAction: eventsCreated = $eventsCreated, createdEvents count = " . count($createdEvents));
-            error_log("addScheduleAction: result = " . json_encode($result));
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "addScheduleAction: eventsCreated = $eventsCreated, createdEvents count = " . count($createdEvents) . "\n", 
+                FILE_APPEND | LOCK_EX);
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "addScheduleAction: result = " . json_encode($result) . "\n", 
+                FILE_APPEND | LOCK_EX);
             
             // Возвращаем результат
             if ($eventsCreated > 0) {
-                error_log("addScheduleAction: Returning success with $eventsCreated events");
+                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                    "addScheduleAction: Returning success with $eventsCreated events\n", 
+                    FILE_APPEND | LOCK_EX);
                 return [
                     'success' => true, 
                     'eventId' => $mainEventId, 
@@ -426,25 +526,67 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                     'events' => $createdEvents
                 ];
             } else {
-                error_log("addScheduleAction: Returning error - no events created");
+                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                    "addScheduleAction: Returning error - no events created\n", 
+                    FILE_APPEND | LOCK_EX);
                 return [
                     'success' => false, 
                     'error' => 'Все выбранные времена заняты, расписание не создано'
                 ];
             }
         } catch (\Exception $e) {
-            error_log("addScheduleAction error: " . $e->getMessage());
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "addScheduleAction error: " . $e->getMessage() . "\n", 
+                FILE_APPEND | LOCK_EX);
             return ['success' => false, 'error' => 'Ошибка создания расписания: ' . $e->getMessage()];
         }
     }
 
     /**
      * Создание повторяющихся событий
+     * 
+     * @param array $params - Массив параметров:
+     *   - original_event_id (int|null) - ID оригинального события
+     *   - frequency (string) - Частота повторения (daily, weekly, monthly)
+     *   - weekdays (array) - Дни недели для еженедельного повторения
+     *   - repeat_end (string) - Тип окончания повторения (never, count, date)
+     *   - repeat_count (int|null) - Количество повторений
+     *   - repeat_end_date (string|null) - Дата окончания повторений (YYYY-MM-DD)
+     *   - event_color (string) - Цвет события (hex, например #3498db)
+     *   - employee_id (int|null) - ID врача
+     *   - schedule_start_date (string|null) - Дата начала расписания (YYYY-MM-DD HH:MM:SS)
+     *   - title (string|null) - Название события
+     *   - date_from (string|null) - Дата начала события (YYYY-MM-DD HH:MM:SS)
+     *   - date_to (string|null) - Дата окончания события (YYYY-MM-DD HH:MM:SS)
+     *   - user_id (int|null) - ID пользователя
+     *   - exclude_weekends (bool) - Исключать ли выходные дни
+     *   - exclude_holidays (bool) - Исключать ли праздничные дни
+     *   - include_end_date (bool) - Включать ли конечную дату в расписание
      */
-    private function createRecurringEvents($originalEventId, $frequency, $weekdays = [], $repeatEnd = 'never', $repeatCount = null, $repeatEndDate = null, $eventColor = '#3498db', $employeeId = null, $scheduleStartDate = null, $title = null, $dateFrom = null, $dateTo = null, $userId = null)
+    private function createRecurringEvents($params)
     {
+        // Извлекаем параметры из массива с значениями по умолчанию
+        $originalEventId = $params['original_event_id'] ?? null;
+        $frequency = $params['frequency'] ?? 'daily';
+        $weekdays = $params['weekdays'] ?? [];
+        $repeatEnd = $params['repeat_end'] ?? 'never';
+        $repeatCount = $params['repeat_count'] ?? null;
+        $repeatEndDate = $params['repeat_end_date'] ?? null;
+        $eventColor = $params['event_color'] ?? '#3498db';
+        $employeeId = $params['employee_id'] ?? null;
+        $scheduleStartDate = $params['schedule_start_date'] ?? null;
+        $title = $params['title'] ?? '';
+        $dateFrom = $params['date_from'] ?? null;
+        $dateTo = $params['date_to'] ?? null;
+        $userId = $params['user_id'] ?? null;
+        $excludeWeekends = $params['exclude_weekends'] ?? true;
+        $excludeHolidays = $params['exclude_holidays'] ?? true;
+        $includeEndDate = $params['include_end_date'] ?? true;
+
         try {
-            error_log("createRecurringEvents: Starting with frequency = $frequency, weekdays = " . implode(',', $weekdays));
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "createRecurringEvents: Starting with frequency = $frequency, weekdays = " . implode(',', $weekdays) . "\n", 
+                FILE_APPEND | LOCK_EX);
             if (!CModule::IncludeModule('artmax.calendar')) {
                 return ['count' => 0, 'ids' => []];
             }
@@ -486,7 +628,35 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                     $maxEvents = 100 * count($weekdays); // Максимум 100 событий для бесконечного повторения
                 }
             } else {
-                if ($repeatCount && $repeatCount > 0) {
+                if ($repeatEnd === 'date' && $repeatEndDate) {
+                    // Если указана конечная дата, рассчитываем количество событий по датам
+                    $startDate = $scheduleStartDate ? new \DateTime($scheduleStartDate) : $eventDateFrom;
+                    $endDate = new \DateTime($repeatEndDate);
+                    $daysDiff = $startDate->diff($endDate)->days;
+                    
+                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                        "createRecurringEvents: Расчет maxEvents - startDate = " . $startDate->format('Y-m-d') . ", endDate = " . $endDate->format('Y-m-d') . ", daysDiff = $daysDiff, includeEndDate = " . ($includeEndDate ? 'true' : 'false') . "\n", 
+                        FILE_APPEND | LOCK_EX);
+                    
+                    // Рассчитываем максимальное количество событий в зависимости от частоты
+                    switch ($frequency) {
+                        case 'daily':
+                            $maxEvents = $daysDiff + ($includeEndDate ? 1 : 0); // +1 если включаем конечную дату
+                            break;
+                        case 'weekly':
+                            $maxEvents = ceil($daysDiff / 7) + ($includeEndDate ? 1 : 0);
+                            break;
+                        case 'monthly':
+                            $maxEvents = $startDate->diff($endDate)->m + ($includeEndDate ? 1 : 0);
+                            break;
+                        default:
+                            $maxEvents = $daysDiff + ($includeEndDate ? 1 : 0);
+                    }
+                    
+                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                        "createRecurringEvents: Рассчитанный maxEvents = $maxEvents для frequency = $frequency\n", 
+                        FILE_APPEND | LOCK_EX);
+                } elseif ($repeatCount && $repeatCount > 0) {
                     // Если указано количество повторений, используем его
                     $maxEvents = $repeatCount;
                 } else {
@@ -498,7 +668,9 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
             $endDate = ($repeatEnd === 'date' && $repeatEndDate) ? new \DateTime($repeatEndDate) : null;
             
             // Логируем параметры для отладки
-            error_log("createRecurringEvents: repeatEnd = $repeatEnd, repeatCount = $repeatCount, maxEvents = $maxEvents");
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "createRecurringEvents: repeatEnd = $repeatEnd, repeatCount = $repeatCount, maxEvents = $maxEvents\n", 
+                FILE_APPEND | LOCK_EX);
 
             if ($frequency === 'weekly' && !empty($weekdays)) {
                 // Специальная обработка для еженедельного повторения с выбранными днями недели
@@ -507,16 +679,24 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                 $weekNumber = 0;
                 
                 // Логируем параметры для отладки
-                error_log("createRecurringEvents: maxWeeks = $maxWeeks, maxEvents = $maxEvents, weekdays = " . implode(',', $weekdays));
-                error_log("createRecurringEvents: startDate = " . $startDate->format('Y-m-d H:i:s'));
-                error_log("createRecurringEvents: eventDateFrom = " . $eventDateFrom->format('Y-m-d H:i:s'));
+                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                    "createRecurringEvents: maxWeeks = $maxWeeks, maxEvents = $maxEvents, weekdays = " . implode(',', $weekdays) . "\n", 
+                    FILE_APPEND | LOCK_EX);
+                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                    "createRecurringEvents: startDate = " . $startDate->format('Y-m-d H:i:s') . "\n", 
+                    FILE_APPEND | LOCK_EX);
+                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                    "createRecurringEvents: eventDateFrom = " . $eventDateFrom->format('Y-m-d H:i:s') . "\n", 
+                    FILE_APPEND | LOCK_EX);
                 
                 // Используем количество недель из параметров
                 $weekNumber = 0; // Начинаем с недели 0 (первая неделя - та, на которую приходится дата начала)
 
                 while ($weekNumber < $maxWeeks) {
                     // Логируем текущую неделю
-                    error_log("createRecurringEvents: weekNumber = $weekNumber, eventsCreated = $eventsCreated, currentDate = " . $currentDate->format('Y-m-d'));
+                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                        "createRecurringEvents: weekNumber = $weekNumber, eventsCreated = $eventsCreated, currentDate = " . $currentDate->format('Y-m-d') . "\n", 
+                        FILE_APPEND | LOCK_EX);
                     
                     // Находим понедельник недели, в которой находится currentDate
                     $dayOfWeek = $currentDate->format('N'); // 1 = понедельник, 7 = воскресенье
@@ -525,7 +705,9 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                     $weekStart->sub(new \DateInterval('P' . $mondayOffset . 'D'));
                     
                     // Логируем начало недели
-                    error_log("createRecurringEvents: weekStart = " . $weekStart->format('Y-m-d') . " (Monday of week containing " . $currentDate->format('Y-m-d') . ")");
+                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                        "createRecurringEvents: weekStart = " . $weekStart->format('Y-m-d') . " (Monday of week containing " . $currentDate->format('Y-m-d') . ")\n", 
+                        FILE_APPEND | LOCK_EX);
                     
                     // Создаем события для каждого выбранного дня недели в текущей неделе
                     foreach ($weekdays as $weekday) {
@@ -533,14 +715,28 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                         $eventDate->add(new \DateInterval('P' . ($weekday - 1) . 'D'));
                         
                         // Логируем проверяемую дату
-                        error_log("createRecurringEvents: Checking weekday $weekday, eventDate = " . $eventDate->format('Y-m-d') . ", startDate = " . $startDate->format('Y-m-d'));
+                        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                            "createRecurringEvents: Checking weekday $weekday, eventDate = " . $eventDate->format('Y-m-d') . ", startDate = " . $startDate->format('Y-m-d') . "\n", 
+                            FILE_APPEND | LOCK_EX);
                         
                         // Проверяем, что дата события не раньше даты начала расписания
                         if ($eventDate >= $startDate) {
-                            error_log("createRecurringEvents: Date " . $eventDate->format('Y-m-d') . " >= startDate " . $startDate->format('Y-m-d') . " - proceeding with event creation");
+                            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                                "createRecurringEvents: Date " . $eventDate->format('Y-m-d') . " >= startDate " . $startDate->format('Y-m-d') . " - proceeding with event creation\n", 
+                                FILE_APPEND | LOCK_EX);
                             // Проверяем ограничение по дате
-                            if ($endDate && $eventDate > $endDate) {
-                                break 2; // Выходим из обоих циклов
+                            if ($endDate) {
+                                if ($includeEndDate) {
+                                    // Если включаем конечную дату, проверяем что не превышаем её
+                                    if ($eventDate->format('Y-m-d') > $endDate->format('Y-m-d')) {
+                                        break 2; // Выходим из обоих циклов
+                                    }
+                                } else {
+                                    // Если не включаем конечную дату, проверяем что строго меньше её
+                                    if ($eventDate->format('Y-m-d') >= $endDate->format('Y-m-d')) {
+                                        break 2; // Выходим из обоих циклов
+                                    }
+                                }
                             }
                             
                             // Дополнительная проверка по количеству событий (защита от переполнения)
@@ -551,11 +747,21 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                             $eventDateTo = clone $eventDate;
                             $eventDateTo->add($duration);
                             
+                            // Проверяем исключения выходных и праздников
+                            if ($excludeWeekends && $this->isWeekend($eventDate)) {
+                                continue; // Пропускаем выходные
+                            }
+                            
+                            if ($excludeHolidays && $this->isHoliday($eventDate)) {
+                                continue; // Пропускаем праздники
+                            }
                             
                             // Проверяем доступность времени для события
                             if ($calendarObj->isTimeAvailableForDoctor($eventDate->format('Y-m-d H:i:s'), $eventDateTo->format('Y-m-d H:i:s'), $employeeId)) {
                                 // Создаем событие
-                                error_log("createRecurringEvents: Creating event for date " . $eventDate->format('Y-m-d H:i:s'));
+                                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                                    "createRecurringEvents: Creating event for date " . $eventDate->format('Y-m-d H:i:s') . "\n", 
+                                    FILE_APPEND | LOCK_EX);
                                 $recurringEventId = $calendarObj->addEvent(
                                     $title,
                                     '', // Описание пустое для расписания
@@ -570,14 +776,20 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                                 if ($recurringEventId) {
                                     $eventsCreated++;
                                     $createdEventIds[] = $recurringEventId;
-                                    error_log("createRecurringEvents: Event created with ID $recurringEventId, total events: $eventsCreated");
+                                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                                        "createRecurringEvents: Event created with ID $recurringEventId, total events: $eventsCreated\n", 
+                                        FILE_APPEND | LOCK_EX);
                                 }
                             } else {
-                                error_log("createRecurringEvents: Time not available for " . $eventDate->format('Y-m-d H:i:s'));
+                                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                                    "createRecurringEvents: Time not available for " . $eventDate->format('Y-m-d H:i:s') . "\n", 
+                                    FILE_APPEND | LOCK_EX);
                             }
                             // Если время занято, просто пропускаем этот день
                         } else {
-                            error_log("createRecurringEvents: Date " . $eventDate->format('Y-m-d') . " < startDate " . $startDate->format('Y-m-d') . " - skipping this date");
+                            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                                "createRecurringEvents: Date " . $eventDate->format('Y-m-d') . " < startDate " . $startDate->format('Y-m-d') . " - skipping this date\n", 
+                                FILE_APPEND | LOCK_EX);
                         }
                     }
                     
@@ -592,7 +804,12 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                 }
             } else {
                 // Обычная обработка для других типов повторений
-                for ($i = 0; $i < $maxEvents; $i++) {
+                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                    "createRecurringEvents: Начинаем цикл создания событий, maxEvents = $maxEvents, frequency = $frequency\n", 
+                    FILE_APPEND | LOCK_EX);
+                $i = 0;
+                $eventsCreated = 0;
+                while ($eventsCreated < $maxEvents) {
                     $newDateFrom = clone $eventDateFrom;
                     $newDateTo = clone $eventDateTo;
 
@@ -614,11 +831,45 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                             break;
                     }
 
+                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                        "createRecurringEvents: Итерация $i, дата события: " . $newDateFrom->format('Y-m-d') . "\n", 
+                        FILE_APPEND | LOCK_EX);
+
                     // Проверяем ограничение по дате
-                    if ($endDate && $newDateFrom > $endDate) {
-                        break;
+                    if ($endDate) {
+                        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                            "createRecurringEvents: Проверяем ограничение по дате, endDate = " . $endDate->format('Y-m-d') . ", includeEndDate = " . ($includeEndDate ? 'true' : 'false') . "\n", 
+                            FILE_APPEND | LOCK_EX);
+                        if ($includeEndDate) {
+                            // Если включаем конечную дату, проверяем что не превышаем её
+                            if ($newDateFrom->format('Y-m-d') > $endDate->format('Y-m-d')) {
+                                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                                    "createRecurringEvents: Дата события " . $newDateFrom->format('Y-m-d') . " превышает конечную дату " . $endDate->format('Y-m-d') . " - прерываем цикл\n", 
+                                    FILE_APPEND | LOCK_EX);
+                                break;
+                            }
+                        } else {
+                            // Если не включаем конечную дату, проверяем что строго меньше её
+                            if ($newDateFrom->format('Y-m-d') >= $endDate->format('Y-m-d')) {
+                                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                                    "createRecurringEvents: Дата события " . $newDateFrom->format('Y-m-d') . " больше или равна конечной дате " . $endDate->format('Y-m-d') . " - прерываем цикл\n", 
+                                    FILE_APPEND | LOCK_EX);
+                                break;
+                            }
+                        }
                     }
 
+                    
+                    // Проверяем исключения выходных и праздников
+                    if ($excludeWeekends && $this->isWeekend($newDateFrom)) {
+                        $i++;
+                        continue; // Пропускаем выходные
+                    }
+                    
+                    if ($excludeHolidays && $this->isHoliday($newDateFrom)) {
+                        $i++;
+                        continue; // Пропускаем праздники
+                    }
                     
                     // Проверяем доступность времени для повторяющегося события
                     if ($calendarObj->isTimeAvailableForDoctor($newDateFrom->format('Y-m-d H:i:s'), $newDateTo->format('Y-m-d H:i:s'), $employeeId)) {
@@ -629,9 +880,9 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                             $newDateFrom->format('Y-m-d H:i:s'),
                             $newDateTo->format('Y-m-d H:i:s'),
                             $userId,
-                            1,
-                            $eventColor,
-                            $employeeId
+                            1, // branchId
+                            $eventColor, // eventColor
+                            $employeeId // employeeId
                         );
 
                         if ($recurringEventId) {
@@ -640,6 +891,7 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                         }
                     }
                     // Если время занято, просто пропускаем этот день
+                    $i++;
                 }
             }
 
@@ -1914,6 +2166,35 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
         
         return $ufFields;
     }
+    
+    /**
+     * Проверка, является ли дата выходным днем
+     */
+    private function isWeekend($date) {
+        $dayOfWeek = $date->format('N'); // 1 = понедельник, 7 = воскресенье
+        return $dayOfWeek == 6 || $dayOfWeek == 7; // Суббота или воскресенье
+    }
+    
+    /**
+     * Проверка, является ли дата праздничным днем
+     * Пока возвращает false, можно расширить логику для конкретных праздников
+     */
+    private function isHoliday($date) {
+        // Список праздничных дней (можно расширить)
+        $holidays = [
+            '01-01', // Новый год
+            '01-07', // Рождество
+            '02-23', // День защитника отечества
+            '03-08', // Международный женский день
+            '05-01', // Праздник весны и труда
+            '05-09', // День Победы
+            '06-12', // День России
+            '11-04', // День народного единства
+        ];
+        
+        $dateString = $date->format('m-d');
+        return in_array($dateString, $holidays);
+    }
 
     /**
      * Конвертирует дату из российского формата (день.месяц.год) в стандартный (год-месяц-день)
@@ -1952,5 +2233,19 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
 
         // Если ничего не получилось, возвращаем исходную строку
         return $dateString;
+    }
+
+    /**
+     * Подключает необходимые скрипты и стили
+     */
+    private function includeAssets()
+    {
+        global $APPLICATION;
+        
+        // Подключаем основной скрипт календаря с версионированием для обхода кэша
+        $APPLICATION->AddHeadScript($this->getPath() . '/templates/.default/script.js?v=' . time());
+        
+        // Подключаем стили с версионированием для обхода кэша
+        $APPLICATION->SetAdditionalCSS($this->getPath() . '/templates/.default/style.css?v=' . time());
     }
 }

@@ -622,22 +622,35 @@ switch ($action) {
         file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
             "eventColor from POST: " . ($_POST['eventColor'] ?? 'NOT SET') . "\n",
             FILE_APPEND | LOCK_EX);
+        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
+            "excludeWeekends from POST: " . ($_POST['excludeWeekends'] ?? 'NOT SET') . "\n",
+            FILE_APPEND | LOCK_EX);
+        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
+            "excludeHolidays from POST: " . ($_POST['excludeHolidays'] ?? 'NOT SET') . "\n",
+            FILE_APPEND | LOCK_EX);
 
         // Создаем экземпляр компонента для вызова метода
         $component = new ArtmaxCalendarComponent();
-        $result = $component->addScheduleAction(
-            $_POST['title'] ?? '',
-            $_POST['date'] ?? '',
-            $_POST['time'] ?? '',
-            $_POST['employee_id'] ?? null,
-            $_POST['repeat'] === 'on' || $_POST['repeat'] === 'true',
-            $_POST['frequency'] ?? null,
-            $weekdays,
-            $_POST['repeatEnd'] ?? 'never',
-            !empty($_POST['repeatCount']) ? (int)$_POST['repeatCount'] : null,
-            !empty($_POST['repeatEndDate']) ? $_POST['repeatEndDate'] : null,
-            $_POST['eventColor'] ?? '#3498db'
-        );
+        
+        // Подготавливаем параметры в виде массива
+        $params = [
+            'title' => $_POST['title'] ?? '',
+            'date' => $_POST['date'] ?? '',
+            'time' => $_POST['time'] ?? '',
+            'employee_id' => $_POST['employee_id'] ?? null,
+            'repeat' => $_POST['repeat'] === 'on' || $_POST['repeat'] === 'true',
+            'frequency' => $_POST['frequency'] ?? null,
+            'weekdays' => $weekdays,
+            'repeat_end' => $_POST['repeatEnd'] ?? 'never',
+            'repeat_count' => !empty($_POST['repeatCount']) ? (int)$_POST['repeatCount'] : null,
+            'repeat_end_date' => !empty($_POST['repeatEndDate']) ? $_POST['repeatEndDate'] : null,
+            'event_color' => $_POST['eventColor'] ?? '#3498db',
+            'exclude_weekends' => $_POST['excludeWeekends'] === 'on' || $_POST['excludeWeekends'] === 'true',
+            'exclude_holidays' => $_POST['excludeHolidays'] === 'on' || $_POST['excludeHolidays'] === 'true',
+            'include_end_date' => $_POST['includeEndDate'] === 'on' || $_POST['includeEndDate'] === 'true'
+        ];
+        
+        $result = $component->addScheduleAction($params);
 
         file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
             "Result: " . json_encode($result) . "\n",

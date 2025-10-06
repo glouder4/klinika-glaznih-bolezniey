@@ -657,6 +657,23 @@ $totalDays = 42; // 6 недель * 7 дней
                     </label>
                 </div>
                 
+                <!-- Галочки для исключения выходных и праздников -->
+                <div class="form-group checkbox-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="exclude-weekends" name="exclude_weekends" checked>
+                        <span class="checkmark"></span>
+                        Исключить выходные
+                    </label>
+                </div>
+                
+                <div class="form-group checkbox-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="exclude-holidays" name="exclude_holidays" checked>
+                        <span class="checkmark"></span>
+                        Исключить праздничные дни
+                    </label>
+                </div>
+                
                 <div id="repeat-fields" class="repeat-fields" style="display: none;">
                     <div class="form-group">
                         <label for="schedule-frequency">Повторяемость</label>
@@ -707,15 +724,22 @@ $totalDays = 42; // 6 недель * 7 дней
                         <label>Окончание</label>
                         <div class="radio-group">
                             <label class="radio-label">
-                                <input type="radio" name="repeat-end" value="after" checked onchange="toggleEndFields()">
+                                <input type="radio" name="repeat-end" value="after" checked onclick="toggleEndFields()">
                                 После <input type="number" name="repeat-count" min="1" value="1" class="repeat-count-input"> повторений
                             </label>
                             <label class="radio-label">
-                                <input type="radio" name="repeat-end" value="date" onchange="toggleEndFields()">
+                                <input type="radio" name="repeat-end" value="date" onclick="toggleEndFields()">
                                 Дата <input type="date" name="repeat-end-date" class="repeat-end-date-input">
                             </label>
+                            <div id="include-end-date-container" class="checkbox-inline" style="display: none;">
+                                <label class="checkbox-label-small">
+                                    <input type="checkbox" id="include-end-date" name="include-end-date" checked>
+                                    <span class="checkmark-small"></span>
+                                    Включая дату окончания
+                                </label>
+                            </div>
                             <label class="radio-label">
-                                <input type="radio" name="repeat-end" value="never" onchange="toggleEndFields()">
+                                <input type="radio" name="repeat-end" value="never" onclick="toggleEndFields()">
                                 Никогда
                             </label>
                         </div>
@@ -727,20 +751,20 @@ $totalDays = 42; // 6 недель * 7 дней
                     <label for="event-color">Цвет события</label>
                     <div class="color-picker-container">
                         <div class="color-presets">
-                            <button type="button" class="color-preset" data-color="#3498db" style="background-color: #3498db;" onclick="selectPresetColor('#3498db')"></button>
-                            <button type="button" class="color-preset" data-color="#e74c3c" style="background-color: #e74c3c;" onclick="selectPresetColor('#e74c3c')"></button>
-                            <button type="button" class="color-preset" data-color="#2ecc71" style="background-color: #2ecc71;" onclick="selectPresetColor('#2ecc71')"></button>
-                            <button type="button" class="color-preset" data-color="#f39c12" style="background-color: #f39c12;" onclick="selectPresetColor('#f39c12')"></button>
-                            <button type="button" class="color-preset" data-color="#9b59b6" style="background-color: #9b59b6;" onclick="selectPresetColor('#9b59b6')"></button>
-                            <button type="button" class="color-preset" data-color="#1abc9c" style="background-color: #1abc9c;" onclick="selectPresetColor('#1abc9c')"></button>
-                            <button type="button" class="color-preset" data-color="#34495e" style="background-color: #34495e;" onclick="selectPresetColor('#34495e')"></button>
-                            <button type="button" class="color-preset" data-color="#95a5a6" style="background-color: #95a5a6;" onclick="selectPresetColor('#95a5a6')"></button>
+                            <button type="button" class="color-preset" data-color="#3498db" style="background-color: #3498db;" onclick="selectSchedulePresetColor('#3498db')"></button>
+                            <button type="button" class="color-preset" data-color="#e74c3c" style="background-color: #e74c3c;" onclick="selectSchedulePresetColor('#e74c3c')"></button>
+                            <button type="button" class="color-preset" data-color="#2ecc71" style="background-color: #2ecc71;" onclick="selectSchedulePresetColor('#2ecc71')"></button>
+                            <button type="button" class="color-preset" data-color="#f39c12" style="background-color: #f39c12;" onclick="selectSchedulePresetColor('#f39c12')"></button>
+                            <button type="button" class="color-preset" data-color="#9b59b6" style="background-color: #9b59b6;" onclick="selectSchedulePresetColor('#9b59b6')"></button>
+                            <button type="button" class="color-preset" data-color="#1abc9c" style="background-color: #1abc9c;" onclick="selectSchedulePresetColor('#1abc9c')"></button>
+                            <button type="button" class="color-preset" data-color="#34495e" style="background-color: #34495e;" onclick="selectSchedulePresetColor('#34495e')"></button>
+                            <button type="button" class="color-preset" data-color="#95a5a6" style="background-color: #95a5a6;" onclick="selectSchedulePresetColor('#95a5a6')"></button>
                         </div>
                         <div class="custom-color">
                             <label for="custom-color-input">Свой цвет:</label>
-                            <input type="color" id="custom-color-input" name="custom-color" value="#3498db" onchange="selectCustomColor(this.value)">
+                            <input type="color" id="custom-color-input" name="custom-color" value="#3498db" onchange="selectScheduleCustomColor(this.value)">
                         </div>
-                        <input type="hidden" id="selected-color" name="event-color" value="#3498db">
+                        <input type="hidden" id="schedule-selected-color" name="event-color" value="#3498db">
                     </div>
                 </div>
                 
@@ -1234,23 +1258,7 @@ $totalDays = 42; // 6 недель * 7 дней
         }
     }
     
-    // Функция для переключения полей окончания повторения
-    function toggleEndFields() {
-        const repeatEnd = document.querySelector('input[name="repeat-end"]:checked').value;
-        const repeatCountInput = document.querySelector('.repeat-count-input');
-        const repeatEndDateInput = document.querySelector('.repeat-end-date-input');
-        
-        // Скрываем все поля
-        repeatCountInput.style.display = 'none';
-        repeatEndDateInput.style.display = 'none';
-        
-        // Показываем нужные поля
-        if (repeatEnd === 'after') {
-            repeatCountInput.style.display = 'inline-block';
-        } else if (repeatEnd === 'date') {
-            repeatEndDateInput.style.display = 'inline-block';
-        }
-    }
+    // Функция toggleEndFields определена в script.js
     
     // Функция для выбора предустановленного цвета
     function selectPresetColor(color) {

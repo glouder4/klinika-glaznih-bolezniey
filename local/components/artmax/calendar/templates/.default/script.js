@@ -1590,12 +1590,25 @@
             document.getElementById('schedule-repeat').checked = false;
             document.getElementById('repeat-fields').style.display = 'none';
             
+            // Устанавливаем галочки по умолчанию
+            const excludeWeekendsCheckbox = document.getElementById('exclude-weekends');
+            const excludeHolidaysCheckbox = document.getElementById('exclude-holidays');
+            const includeEndDateCheckbox = document.getElementById('include-end-date');
+            
+            if (excludeWeekendsCheckbox) excludeWeekendsCheckbox.checked = true;
+            if (excludeHolidaysCheckbox) excludeHolidaysCheckbox.checked = true;
+            if (includeEndDateCheckbox) includeEndDateCheckbox.checked = true;
+            
+            // Скрываем галочку "Включая дату окончания" по умолчанию
+            const includeEndDateContainer = document.getElementById('include-end-date-container');
+            if (includeEndDateContainer) includeEndDateContainer.style.display = 'none';
+            
             // Скрываем дополнительные поля
             const weeklyDays = document.getElementById('weekly-days');
             if (weeklyDays) weeklyDays.style.display = 'none';
             
             // Инициализируем поля окончания повторения
-            toggleEndFields();
+            window.toggleEndFields();
 
             // Загружаем сотрудников текущего филиала для селектора
             loadBranchEmployeesForSchedule();
@@ -1643,21 +1656,61 @@
     }
     
     // Функция для переключения полей окончания повторения
-    function toggleEndFields() {
-        const repeatEnd = document.querySelector('input[name="repeat-end"]:checked').value;
+    window.toggleEndFields = function() {
+        console.log('=== toggleEndFields() вызвана ===');
+        console.log('Current time:', new Date().toISOString());
+
+        const repeatEnd = document.querySelector('input[name="repeat-end"]:checked');
+        console.log('repeatEnd element:', repeatEnd);
+
+        if (!repeatEnd) {
+            console.log('ERROR: repeatEnd element not found');
+            return;
+        }
+
+        const repeatEndValue = repeatEnd.value;
+        console.log('repeatEnd value:', repeatEndValue);
+
         const repeatCountInput = document.querySelector('.repeat-count-input');
         const repeatEndDateInput = document.querySelector('.repeat-end-date-input');
-        
+        const includeEndDateContainer = document.getElementById('include-end-date-container');
+
+        console.log('repeatCountInput:', repeatCountInput);
+        console.log('repeatEndDateInput:', repeatEndDateInput);
+        console.log('includeEndDateContainer:', includeEndDateContainer);
+
         // Скрываем все поля
-        if (repeatCountInput) repeatCountInput.style.display = 'none';
-        if (repeatEndDateInput) repeatEndDateInput.style.display = 'none';
-        
-        // Показываем нужные поля
-        if (repeatEnd === 'after') {
-            if (repeatCountInput) repeatCountInput.style.display = 'inline-block';
-        } else if (repeatEnd === 'date') {
-            if (repeatEndDateInput) repeatEndDateInput.style.display = 'inline-block';
+        if (repeatCountInput) {
+            repeatCountInput.style.display = 'none';
+            console.log('Скрыли repeatCountInput');
         }
+        if (repeatEndDateInput) {
+            repeatEndDateInput.style.display = 'none';
+            console.log('Скрыли repeatEndDateInput');
+        }
+        if (includeEndDateContainer) {
+            includeEndDateContainer.style.display = 'none';
+            console.log('Скрыли includeEndDateContainer');
+        }
+
+        // Показываем нужные поля
+        if (repeatEndValue === 'after') {
+            if (repeatCountInput) {
+                repeatCountInput.style.display = 'inline-block';
+                console.log('Показали repeatCountInput');
+            }
+        } else if (repeatEndValue === 'date') {
+            if (repeatEndDateInput) {
+                repeatEndDateInput.style.display = 'inline-block';
+                console.log('Показали repeatEndDateInput');
+            }
+            if (includeEndDateContainer) {
+                includeEndDateContainer.style.display = 'block';
+                console.log('Показали includeEndDateContainer');
+            }
+        }
+
+        console.log('=== toggleEndFields() завершена ===');
     }
     
     // Функция для выбора предустановленного цвета
@@ -1756,6 +1809,9 @@
             repeatEnd: scheduleData.repeatEnd || 'never',
             repeatCount: scheduleData.repeatCount || null,
             repeatEndDate: scheduleData.repeatEndDate || null,
+            includeEndDate: scheduleData.includeEndDate || false,
+            excludeWeekends: scheduleData.excludeWeekends || false,
+            excludeHolidays: scheduleData.excludeHolidays || false,
             eventColor: scheduleData.eventColor || '#3498db'
         };
         
@@ -1868,8 +1924,8 @@
                 
                 const formData = new FormData(this);
                 // Проверяем значение скрытого поля перед отправкой
-                const selectedColorInput = document.getElementById('selected-color');
-                console.log('Значение selected-color перед отправкой:', selectedColorInput ? selectedColorInput.value : 'ЭЛЕМЕНТ НЕ НАЙДЕН');
+                const selectedColorInput = document.getElementById('schedule-selected-color');
+                console.log('Значение schedule-selected-color перед отправкой:', selectedColorInput ? selectedColorInput.value : 'ЭЛЕМЕНТ НЕ НАЙДЕН');
                 
                 // Получаем цвет напрямую из элемента, так как FormData может не работать с скрытыми полями
                 const eventColor = selectedColorInput ? selectedColorInput.value : '#3498db';
@@ -1885,6 +1941,9 @@
                     repeatEnd: formData.get('repeat-end'),
                     repeatCount: formData.get('repeat-count'),
                     repeatEndDate: formData.get('repeat-end-date'),
+                    includeEndDate: formData.get('include-end-date') === 'on',
+                    excludeWeekends: formData.get('exclude_weekends') === 'on',
+                    excludeHolidays: formData.get('exclude_holidays') === 'on',
                     eventColor: eventColor
                 };
 
@@ -1910,6 +1969,9 @@
                 closeScheduleModal();
             }
         });
+
+        // Инициализация полей окончания повторения
+        window.toggleEndFields();
     });
 
     // Экспорт функций для использования в других скриптах
@@ -1924,7 +1986,7 @@
         searchEvents: searchEvents,
         clearSearch: clearSearch,
         toggleWeeklyDays: toggleWeeklyDays,
-        toggleEndFields: toggleEndFields,
+        toggleEndFields: window.toggleEndFields,
         selectPresetColor: selectPresetColor,
         selectCustomColor: selectCustomColor,
         selectEditPresetColor: selectEditPresetColor,
@@ -5477,7 +5539,7 @@
             }
             
             if (blinkCount % 2 === 0) {
-                const color = eventData.eventColor || '#3498db';
+                const color = (typeof eventData.eventColor === 'string') ? eventData.eventColor : '#3498db';
                 // Конвертируем hex в rgba для эффекта свечения
                 const r = parseInt(color.slice(1, 3), 16);
                 const g = parseInt(color.slice(3, 5), 16);
@@ -6890,5 +6952,41 @@
     window.onMoveBranchChange = onMoveBranchChange;
     window.onMoveEmployeeChange = onMoveEmployeeChange;
     window.handleMoveEventSubmit = handleMoveEventSubmit;
+
+    // Глобальные функции для формы расписания
+    window.selectSchedulePresetColor = function(color) {
+        console.log('selectSchedulePresetColor вызвана с цветом:', color);
+        document.getElementById('schedule-selected-color').value = color;
+        document.getElementById('custom-color-input').value = color;
+        
+        // Обновляем активный класс для пресетов в форме расписания
+        const scheduleModal = document.getElementById('scheduleModal');
+        if (scheduleModal) {
+            scheduleModal.querySelectorAll('.color-preset').forEach(preset => {
+                preset.classList.remove('active');
+            });
+            event.target.classList.add('active');
+        }
+        
+        console.log('schedule-selected-color установлен в:', document.getElementById('schedule-selected-color').value);
+    };
+    
+    window.selectScheduleCustomColor = function(color) {
+        console.log('selectScheduleCustomColor вызвана с цветом:', color);
+        document.getElementById('schedule-selected-color').value = color;
+        
+        // Убираем активный класс со всех пресетов в форме расписания
+        const scheduleModal = document.getElementById('scheduleModal');
+        if (scheduleModal) {
+            scheduleModal.querySelectorAll('.color-preset').forEach(preset => {
+                preset.classList.remove('active');
+            });
+        }
+        
+        console.log('schedule-selected-color установлен в:', document.getElementById('schedule-selected-color').value);
+    };
+
+    // Делаем showNotification доступной глобально
+    window.showNotification = showNotification;
 
 })();

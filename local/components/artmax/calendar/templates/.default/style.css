@@ -552,17 +552,17 @@ input:checked + .toggle-slider:before {
 }
 .modal-content {
     background: white;
-    border-radius: 12px;
+    border-radius: 8px;
     padding: 0;
-    max-width: 500px;
+    max-width: 480px;
     width: 90%;
-    max-height: 90vh;
-    height: -webkit-fill-available;
+    max-height: 80vh;
+    height: auto;
     overflow-y: auto;
-    box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.2);
 
     margin: auto;
-    margin-top: 35px;
+    margin-top: 20px;
 
     display: flex;
     flex-direction: column;
@@ -573,8 +573,8 @@ input:checked + .toggle-slider:before {
 .modal-header {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     color: white;
-    padding: 20px;
-    border-radius: 12px 12px 0 0;
+    padding: 16px 20px;
+    border-radius: 8px 8px 0 0;
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -2059,23 +2059,32 @@ input:checked + .toggle-slider:before {
 
 /* Стили для модального окна расписания */
 .schedule-modal {
-    max-width: 500px;
+    max-width: 480px;
     width: 90%;
 }
 
+.schedule-modal .modal-content {
+    padding: 0;
+}
+
+.schedule-modal .modal-body {
+    padding: 20px;
+}
+
 .schedule-form {
-    padding: 20px 0;
+    padding: 16px 0;
 }
 
 .schedule-form .form-group {
-    margin-bottom: 20px;
+    margin-bottom: 16px;
 }
 
 .schedule-form label {
     display: block;
-    margin-bottom: 8px;
+    margin-bottom: 6px;
     font-weight: 600;
     color: #2c3e50;
+    font-size: 14px;
 }
 
 .schedule-form input[type="text"],
@@ -2083,11 +2092,11 @@ input:checked + .toggle-slider:before {
 .schedule-form input[type="time"],
 .schedule-form select {
     width: 100%;
-    padding: 12px 16px;
-    border: 2px solid #e1e8ed;
-    border-radius: 8px;
-    font-size: 16px;
-    transition: all 0.3s ease;
+    padding: 10px 12px;
+    border: 1px solid #e1e8ed;
+    border-radius: 6px;
+    font-size: 14px;
+    transition: all 0.2s ease;
     background: white;
 }
 
@@ -2097,17 +2106,17 @@ input:checked + .toggle-slider:before {
 .schedule-form select:focus {
     outline: none;
     border-color: #3498db;
-    box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+    box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.1);
 }
 
 .schedule-form .form-row {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 20px;
+    gap: 16px;
 }
 
 .schedule-form .checkbox-group {
-    margin-bottom: 20px;
+    margin-bottom: 16px;
 }
 
 .schedule-form .checkbox-label {
@@ -2149,12 +2158,62 @@ input:checked + .toggle-slider:before {
     font-weight: bold;
 }
 
+/* Стили для маленькой галочки "Включая дату окончания" */
+#include-end-date-container {
+    margin-top: 4px;
+    margin-left: 0;
+    padding-left: 16px;
+    border-left: 1px solid #e1e8ed;
+}
+
+.checkbox-label-small {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    font-size: 12px;
+    color: #6c757d;
+    font-weight: 400;
+    margin: 0;
+}
+
+.checkbox-label-small input[type="checkbox"] {
+    display: none;
+}
+
+.checkmark-small {
+    width: 14px;
+    height: 14px;
+    border: 1px solid #ced4da;
+    border-radius: 2px;
+    margin-right: 6px;
+    position: relative;
+    transition: all 0.15s ease;
+    background: #fff;
+}
+
+.checkbox-label-small input[type="checkbox"]:checked + .checkmark-small {
+    background: #28a745;
+    border-color: #28a745;
+}
+
+.checkbox-label-small input[type="checkbox"]:checked + .checkmark-small::after {
+    content: '✓';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: white;
+    font-size: 9px;
+    font-weight: bold;
+    line-height: 1;
+}
+
 .schedule-form .repeat-fields {
     background: #f8f9fa;
-    padding: 20px;
-    border-radius: 8px;
+    padding: 16px;
+    border-radius: 6px;
     border: 1px solid #e1e8ed;
-    margin-top: 15px;
+    margin-top: 12px;
     animation: slideDown 0.3s ease-out;
 }
 
@@ -2171,20 +2230,20 @@ input:checked + .toggle-slider:before {
 
 .schedule-form .form-actions {
     display: flex;
-    gap: 15px;
+    gap: 12px;
     justify-content: flex-end;
-    margin-top: 30px;
-    padding-top: 20px;
+    margin-top: 20px;
+    padding-top: 16px;
     border-top: 1px solid #e1e8ed;
 }
 
 .schedule-form .form-actions .btn {
-    padding: 12px 24px;
-    font-size: 16px;
+    padding: 10px 20px;
+    font-size: 14px;
     font-weight: 600;
-    border-radius: 8px;
+    border-radius: 6px;
     cursor: pointer;
-    transition: all 0.3s ease;
+    transition: all 0.2s ease;
     border: none;
 }
 
@@ -4383,4 +4442,105 @@ input:checked + .toggle-slider:before {
 
 .edit-event-btn:hover {
     color: #2196f3;
+}
+
+/* Компактные стили для формы расписания */
+.schedule-form {
+    padding: 8px 0 !important;
+}
+
+.schedule-form .form-group {
+    margin-bottom: 8px !important;
+}
+
+.schedule-form label {
+    margin-bottom: 3px !important;
+    font-size: 13px !important;
+}
+
+.schedule-form input[type="text"],
+.schedule-form input[type="date"],
+.schedule-form input[type="time"],
+.schedule-form select {
+    padding: 6px 8px !important;
+    font-size: 13px !important;
+    border-radius: 4px !important;
+}
+
+.schedule-form .form-row {
+    gap: 8px !important;
+}
+
+.schedule-form .checkbox-group {
+    margin-bottom: 8px !important;
+}
+
+.schedule-form .repeat-fields {
+    padding: 8px !important;
+    margin-top: 6px !important;
+}
+
+.schedule-form .form-actions {
+    margin-top: 12px !important;
+    padding-top: 8px !important;
+    gap: 8px !important;
+}
+
+.schedule-form .form-actions .btn {
+    padding: 8px 16px !important;
+    font-size: 13px !important;
+}
+
+/* Компактные радио-кнопки */
+.schedule-form .radio-group {
+    gap: 4px !important;
+}
+
+.schedule-form .radio-label {
+    padding: 4px 0 !important;
+    margin: 0 !important;
+}
+
+/* Улучшенная галочка */
+.checkbox-label-small {
+    font-size: 12px !important;
+    margin: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+}
+
+.checkmark-small {
+    width: 16px !important;
+    height: 16px !important;
+    margin-right: 6px !important;
+    border-radius: 3px !important;
+    border: 1.5px solid #ced4da !important;
+    display: block !important;
+    flex-shrink: 0 !important;
+}
+
+.checkbox-label-small input[type="checkbox"]:checked + .checkmark-small::after {
+    font-size: 10px !important;
+}
+
+#include-end-date-container {
+    margin-top: 2px !important;
+    padding-left: 12px !important;
+    border-left: 1px solid #e1e8ed !important;
+}
+
+/* Компактное модальное окно */
+.modal-content {
+    max-width: 450px !important;
+    max-height: 75vh !important;
+    margin-top: 15px !important;
+}
+
+.modal-header {
+    padding: 12px 16px !important;
+    border-radius: 6px 6px 0 0 !important;
+}
+
+.modal-header h3 {
+    font-size: 16px !important;
 }
