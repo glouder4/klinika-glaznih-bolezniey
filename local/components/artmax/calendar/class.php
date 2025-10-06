@@ -592,9 +592,9 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                 }
             } else {
                 // Обычная обработка для других типов повторений
-                for ($i = 1; $i <= $maxEvents; $i++) {
-                    $newDateFrom = clone $dateFrom;
-                    $newDateTo = clone $dateTo;
+                for ($i = 0; $i < $maxEvents; $i++) {
+                    $newDateFrom = clone $eventDateFrom;
+                    $newDateTo = clone $eventDateTo;
 
                     // Вычисляем следующую дату в зависимости от частоты
                     switch ($frequency) {
