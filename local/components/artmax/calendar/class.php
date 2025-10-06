@@ -403,19 +403,6 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
         $excludeHolidays = $params['exclude_holidays'] ?? true;
         $includeEndDate = $params['include_end_date'] ?? true;
 
-        // Логируем входящие параметры для отладки
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-            "addScheduleAction: eventColor = " . var_export($eventColor, true) . " (type: " . gettype($eventColor) . ")\n", 
-            FILE_APPEND | LOCK_EX);
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-            "addScheduleAction: eventColor raw value = '" . $eventColor . "'\n", 
-            FILE_APPEND | LOCK_EX);
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-            "addScheduleAction: excludeWeekends = " . var_export($excludeWeekends, true) . " (type: " . gettype($excludeWeekends) . ")\n", 
-            FILE_APPEND | LOCK_EX);
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-            "addScheduleAction: excludeHolidays = " . var_export($excludeHolidays, true) . " (type: " . gettype($excludeHolidays) . ")\n", 
-            FILE_APPEND | LOCK_EX);
         
         if (!$GLOBALS['USER'] || !$GLOBALS['USER']->IsAuthorized()) {
             return ['success' => false, 'error' => 'Необходима авторизация'];
@@ -439,18 +426,7 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
             $createdEvents = [];
             
             // Если событие повторяемое, создаем все события (включая первое)
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "addScheduleAction: Проверяем условия - repeat = " . ($repeat ? 'true' : 'false') . ", frequency = '$frequency', includeEndDate = " . ($includeEndDate ? 'true' : 'false') . "\n", 
-                FILE_APPEND | LOCK_EX);
             if ($repeat && $frequency) {
-                // Логируем параметры для отладки
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                    "addScheduleAction: date = $date, time = $time, dateFrom = " . $dateFrom->format('Y-m-d H:i:s') . "\n", 
-                    FILE_APPEND | LOCK_EX);
-                
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                    "addScheduleAction: Calling createRecurringEvents with frequency = $frequency, weekdays = " . implode(',', $weekdays) . "\n", 
-                    FILE_APPEND | LOCK_EX);
                 // Вызываем createRecurringEvents с массивом параметров
                 $recurringResult = $this->createRecurringEvents([
                     'original_event_id' => null,
@@ -470,9 +446,6 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                     'exclude_holidays' => $excludeHolidays,
                     'include_end_date' => $includeEndDate
                 ]);
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                    "addScheduleAction: createRecurringEvents returned: " . json_encode($recurringResult) . "\n", 
-                    FILE_APPEND | LOCK_EX);
                 if ($recurringResult && $recurringResult['count'] > 0) {
                     $eventsCreated = $recurringResult['count'];
                     
@@ -506,19 +479,9 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                 }
             }
 
-            // Логируем результат
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "addScheduleAction: eventsCreated = $eventsCreated, createdEvents count = " . count($createdEvents) . "\n", 
-                FILE_APPEND | LOCK_EX);
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "addScheduleAction: result = " . json_encode($result) . "\n", 
-                FILE_APPEND | LOCK_EX);
             
             // Возвращаем результат
             if ($eventsCreated > 0) {
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                    "addScheduleAction: Returning success with $eventsCreated events\n", 
-                    FILE_APPEND | LOCK_EX);
                 return [
                     'success' => true, 
                     'eventId' => $mainEventId, 
@@ -526,18 +489,12 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                     'events' => $createdEvents
                 ];
             } else {
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                    "addScheduleAction: Returning error - no events created\n", 
-                    FILE_APPEND | LOCK_EX);
                 return [
                     'success' => false, 
                     'error' => 'Все выбранные времена заняты, расписание не создано'
                 ];
             }
         } catch (\Exception $e) {
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "addScheduleAction error: " . $e->getMessage() . "\n", 
-                FILE_APPEND | LOCK_EX);
             return ['success' => false, 'error' => 'Ошибка создания расписания: ' . $e->getMessage()];
         }
     }
@@ -584,9 +541,6 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
         $includeEndDate = $params['include_end_date'] ?? true;
 
         try {
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "createRecurringEvents: Starting with frequency = $frequency, weekdays = " . implode(',', $weekdays) . "\n", 
-                FILE_APPEND | LOCK_EX);
             if (!CModule::IncludeModule('artmax.calendar')) {
                 return ['count' => 0, 'ids' => []];
             }
@@ -633,10 +587,6 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                     $startDate = $scheduleStartDate ? new \DateTime($scheduleStartDate) : $eventDateFrom;
                     $endDate = new \DateTime($repeatEndDate);
                     $daysDiff = $startDate->diff($endDate)->days;
-                    
-                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                        "createRecurringEvents: Расчет maxEvents - startDate = " . $startDate->format('Y-m-d') . ", endDate = " . $endDate->format('Y-m-d') . ", daysDiff = $daysDiff, includeEndDate = " . ($includeEndDate ? 'true' : 'false') . "\n", 
-                        FILE_APPEND | LOCK_EX);
                     
                     // Рассчитываем максимальное количество событий в зависимости от частоты
                     switch ($frequency) {

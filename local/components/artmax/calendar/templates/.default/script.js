@@ -1657,60 +1657,41 @@
     
     // Функция для переключения полей окончания повторения
     window.toggleEndFields = function() {
-        console.log('=== toggleEndFields() вызвана ===');
-        console.log('Current time:', new Date().toISOString());
-
         const repeatEnd = document.querySelector('input[name="repeat-end"]:checked');
-        console.log('repeatEnd element:', repeatEnd);
 
         if (!repeatEnd) {
-            console.log('ERROR: repeatEnd element not found');
             return;
         }
 
         const repeatEndValue = repeatEnd.value;
-        console.log('repeatEnd value:', repeatEndValue);
-
         const repeatCountInput = document.querySelector('.repeat-count-input');
         const repeatEndDateInput = document.querySelector('.repeat-end-date-input');
         const includeEndDateContainer = document.getElementById('include-end-date-container');
 
-        console.log('repeatCountInput:', repeatCountInput);
-        console.log('repeatEndDateInput:', repeatEndDateInput);
-        console.log('includeEndDateContainer:', includeEndDateContainer);
-
         // Скрываем все поля
         if (repeatCountInput) {
             repeatCountInput.style.display = 'none';
-            console.log('Скрыли repeatCountInput');
         }
         if (repeatEndDateInput) {
             repeatEndDateInput.style.display = 'none';
-            console.log('Скрыли repeatEndDateInput');
         }
         if (includeEndDateContainer) {
             includeEndDateContainer.style.display = 'none';
-            console.log('Скрыли includeEndDateContainer');
         }
 
         // Показываем нужные поля
         if (repeatEndValue === 'after') {
             if (repeatCountInput) {
                 repeatCountInput.style.display = 'inline-block';
-                console.log('Показали repeatCountInput');
             }
         } else if (repeatEndValue === 'date') {
             if (repeatEndDateInput) {
                 repeatEndDateInput.style.display = 'inline-block';
-                console.log('Показали repeatEndDateInput');
             }
             if (includeEndDateContainer) {
                 includeEndDateContainer.style.display = 'block';
-                console.log('Показали includeEndDateContainer');
             }
         }
-
-        console.log('=== toggleEndFields() завершена ===');
     }
     
     // Функция для выбора предустановленного цвета
@@ -1806,7 +1787,7 @@
             repeat: scheduleData.repeat,
             frequency: scheduleData.frequency || null,
             weekdays: scheduleData.weekdays || [],
-            repeatEnd: scheduleData.repeatEnd || 'never',
+            repeatEnd: scheduleData.repeatEnd || 'after',
             repeatCount: scheduleData.repeatCount || null,
             repeatEndDate: scheduleData.repeatEndDate || null,
             includeEndDate: scheduleData.includeEndDate || false,
@@ -1916,6 +1897,28 @@
                 if (!employee.value) {
                     isValid = false;
                     showFieldError('schedule-employee', 'Выберите ответственного сотрудника.');
+                }
+                
+                // Проверка выбора окончания повторения (обязательно)
+                const repeatEnd = document.querySelector('input[name="repeat-end"]:checked');
+                if (!repeatEnd) {
+                    isValid = false;
+                    showFieldError('repeat-end-group', 'Выберите способ окончания повторения.');
+                } else {
+                    // Дополнительные проверки в зависимости от выбранного типа окончания
+                    if (repeatEnd.value === 'after') {
+                        const repeatCount = document.querySelector('input[name="repeat-count"]');
+                        if (!repeatCount.value || parseInt(repeatCount.value) < 1) {
+                            isValid = false;
+                            showFieldError('repeat-count', 'Укажите количество повторений (минимум 1).');
+                        }
+                    } else if (repeatEnd.value === 'date') {
+                        const repeatEndDate = document.querySelector('input[name="repeat-end-date"]');
+                        if (!repeatEndDate.value) {
+                            isValid = false;
+                            showFieldError('repeat-end-date', 'Выберите дату окончания повторения.');
+                        }
+                    }
                 }
                 
                 if (!isValid) {

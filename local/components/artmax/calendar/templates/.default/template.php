@@ -722,14 +722,14 @@ $totalDays = 42; // 6 недель * 7 дней
                     <!-- Поля для окончания повторения -->
                     <div class="form-group">
                         <label>Окончание</label>
-                        <div class="radio-group">
+                        <div class="radio-group" id="repeat-end-group">
                             <label class="radio-label">
                                 <input type="radio" name="repeat-end" value="after" checked onclick="toggleEndFields()">
-                                После <input type="number" name="repeat-count" min="1" value="1" class="repeat-count-input"> повторений
+                                После <input type="number" name="repeat-count" id="repeat-count" min="1" value="1" class="repeat-count-input"> повторений
                             </label>
                             <label class="radio-label">
                                 <input type="radio" name="repeat-end" value="date" onclick="toggleEndFields()">
-                                Дата <input type="date" name="repeat-end-date" class="repeat-end-date-input">
+                                Дата <input type="date" name="repeat-end-date" id="repeat-end-date" class="repeat-end-date-input">
                             </label>
                             <div id="include-end-date-container" class="checkbox-inline" style="display: none;">
                                 <label class="checkbox-label-small">
@@ -738,10 +738,6 @@ $totalDays = 42; // 6 недель * 7 дней
                                     Включая дату окончания
                                 </label>
                             </div>
-                            <label class="radio-label">
-                                <input type="radio" name="repeat-end" value="never" onclick="toggleEndFields()">
-                                Никогда
-                            </label>
                         </div>
                     </div>
                 </div>
