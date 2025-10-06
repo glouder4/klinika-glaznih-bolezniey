@@ -90,6 +90,52 @@ class Calendar
         // Реализация метода
     }
 }
+
+/**
+ * Компонент календаря с рефакторингом параметров
+ */
+class ArtmaxCalendarComponent extends CBitrixComponent
+{
+    /**
+     * Добавление расписания с массивом параметров
+     * @param array $params Массив параметров:
+     *   - title (string) - Название события
+     *   - date (string) - Дата события (YYYY-MM-DD)
+     *   - time (string) - Время события (HH:MM)
+     *   - employee_id (int|null) - ID врача
+     *   - repeat (bool) - Повторяющееся ли событие
+     *   - frequency (string|null) - Частота повторения
+     *   - weekdays (array) - Дни недели для еженедельного повторения
+     *   - repeat_end (string) - Тип окончания повторения
+     *   - repeat_count (int|null) - Количество повторений
+     *   - repeat_end_date (string|null) - Дата окончания повторений
+     *   - event_color (string) - Цвет события
+     *   - exclude_weekends (bool) - Исключать ли выходные дни
+     *   - exclude_holidays (bool) - Исключать ли праздничные дни
+     *   - include_end_date (bool) - Включать ли конечную дату
+     * @return array Результат операции
+     */
+    public function addScheduleAction($params)
+    {
+        // Извлекаем параметры из массива с значениями по умолчанию
+        $title = $params['title'] ?? '';
+        $date = $params['date'] ?? '';
+        $time = $params['time'] ?? '';
+        $employeeId = $params['employee_id'] ?? null;
+        $repeat = $params['repeat'] ?? false;
+        $frequency = $params['frequency'] ?? null;
+        $weekdays = $params['weekdays'] ?? [];
+        $repeatEnd = $params['repeat_end'] ?? 'never';
+        $repeatCount = $params['repeat_count'] ?? null;
+        $repeatEndDate = $params['repeat_end_date'] ?? null;
+        $eventColor = $params['event_color'] ?? '#3498db';
+        $excludeWeekends = $params['exclude_weekends'] ?? true;
+        $excludeHolidays = $params['exclude_holidays'] ?? true;
+        $includeEndDate = $params['include_end_date'] ?? true;
+
+        // Реализация метода...
+    }
+}
 ```
 
 #### Обработка ошибок
@@ -166,6 +212,60 @@ window.ArtMaxCalendar = {
 .artmax-calendar__grid--week-view {
     grid-template-rows: repeat(1, 1fr);
 }
+```
+
+## 🔧 Рефакторинг и улучшения
+
+### Рефакторинг параметров методов
+
+#### Проблема
+Методы с большим количеством параметров (14+) создают проблемы:
+- Легко перепутать порядок параметров
+- Сложно читать и поддерживать код
+- Высокий риск ошибок при вызове
+
+#### Решение
+Использование массивов параметров с ключами:
+
+```php
+// ❌ Старый подход (14+ параметров)
+public function addScheduleAction($title, $date, $time, $employeeId, $repeat, $frequency, $weekdays, $repeatEnd, $repeatCount, $repeatEndDate, $eventColor, $excludeWeekends, $excludeHolidays, $includeEndDate)
+
+// ✅ Новый подход (массив параметров)
+public function addScheduleAction($params)
+{
+    $title = $params['title'] ?? '';
+    $date = $params['date'] ?? '';
+    $time = $params['time'] ?? '';
+    // ... остальные параметры
+}
+```
+
+#### Преимущества
+- **Безопасность**: Невозможно перепутать порядок параметров
+- **Читаемость**: Понятно, какой параметр передается
+- **Расширяемость**: Легко добавлять новые параметры
+- **Поддержка**: Код проще понимать и изменять
+
+#### Пример использования
+```php
+// Вызов метода с массивом параметров
+$result = $component->addScheduleAction([
+    'title' => 'Консультация',
+    'date' => '2024-01-15',
+    'time' => '10:00',
+    'employee_id' => 1,
+    'repeat' => true,
+    'frequency' => 'daily',
+    'weekdays' => [],
+    'repeat_end' => 'date',
+    'repeat_count' => null,
+    'repeat_end_date' => '2024-01-20',
+    'event_color' => '#3498db',
+    'exclude_weekends' => true,
+    'exclude_holidays' => true,
+    'include_end_date' => false
+]);
 ```
 
 ## 🔧 Разработка новых функций

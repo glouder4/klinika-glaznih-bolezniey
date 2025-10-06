@@ -143,14 +143,28 @@ X-Requested-With: XMLHttpRequest
 - `repeatEnd`: Окончание повторения (never/count/date)
 - `repeatCount`: Количество повторений
 - `repeatEndDate`: Дата окончания
-- `eventColor`: Цвет
+- `includeEndDate`: Включать конечную дату (on/off)
+- `excludeWeekends`: Исключать выходные (on/off)
+- `excludeHolidays`: Исключать праздники (on/off)
+- `eventColor`: Цвет события
 
 **Ответ:**
 ```json
 {
   "success": true,
   "eventsCreated": 5,
-  "events": [...]
+  "events": [
+    {
+      "ID": 123,
+      "TITLE": "Расписание",
+      "DATE_FROM": "2024-01-15 10:00:00",
+      "DATE_TO": "2024-01-15 11:00:00",
+      "EVENT_COLOR": "#3498db",
+      "EMPLOYEE_ID": 456,
+      "CONFIRMATION_STATUS": "pending",
+      "STATUS": "active"
+    }
+  ]
 }
 ```
 
