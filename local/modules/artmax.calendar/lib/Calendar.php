@@ -1091,4 +1091,31 @@ class Calendar
             return false;
         }
     }
+
+    /**
+     * Получает все события пользователя
+     * @param int $userId ID пользователя
+     * @return array|false Массив событий или false при ошибке
+     */
+    public function getEventsByUser($userId)
+    {
+        if (!$userId) {
+            return false;
+        }
+
+        try {
+            $sql = "SELECT * FROM artmax_calendar_events WHERE USER_ID = " . (int)$userId . " ORDER BY DATE_FROM ASC";
+            $result = $this->connection->query($sql);
+            
+            $events = [];
+            while ($row = $result->fetch()) {
+                $events[] = $row;
+            }
+            
+            return $events;
+        } catch (\Exception $e) {
+            error_log('Ошибка получения событий пользователя: ' . $e->getMessage());
+            return false;
+        }
+    }
 }

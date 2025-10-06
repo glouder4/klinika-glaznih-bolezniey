@@ -204,6 +204,26 @@ switch ($action) {
         }
         break;
 
+    case 'clearAllEvents':
+        // Получаем все события текущего пользователя
+        $events = $calendarObj->getEventsByUser($GLOBALS['USER']->GetID());
+        $deletedCount = 0;
+        
+        if ($events) {
+            foreach ($events as $event) {
+                if ($calendarObj->deleteEvent($event['ID'])) {
+                    $deletedCount++;
+                }
+            }
+        }
+        
+        die(json_encode([
+            'success' => true, 
+            'deletedCount' => $deletedCount,
+            'message' => "Удалено $deletedCount событий"
+        ]));
+        break;
+
     case 'updateEvent':
         $eventId = (int)($_POST['eventId'] ?? 0);
         $title = $_POST['title'] ?? '';
@@ -645,8 +665,8 @@ switch ($action) {
             'repeat_count' => !empty($_POST['repeatCount']) ? (int)$_POST['repeatCount'] : null,
             'repeat_end_date' => !empty($_POST['repeatEndDate']) ? $_POST['repeatEndDate'] : null,
             'event_color' => $_POST['eventColor'] ?? '#3498db',
-            'exclude_weekends' => $_POST['excludeWeekends'] === 'on' || $_POST['excludeWeekends'] === 'true',
-            'exclude_holidays' => $_POST['excludeHolidays'] === 'on' || $_POST['excludeHolidays'] === 'true',
+            'exclude_weekends' => $_POST['excludeWeekends'] === 'on' || $_POST['excludeWeekends'] === 'true' || false,
+            'exclude_holidays' => $_POST['excludeHolidays'] === 'on' || $_POST['excludeHolidays'] === 'true' || false,
             'include_end_date' => $_POST['includeEndDate'] === 'on' || $_POST['includeEndDate'] === 'true'
         ];
         

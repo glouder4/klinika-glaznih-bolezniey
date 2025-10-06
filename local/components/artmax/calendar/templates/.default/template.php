@@ -180,6 +180,9 @@ $totalDays = 42; // 6 недель * 7 дней
                 <button class="btn-nav" onclick="nextMonth()">▶</button>
                 <button class="btn-today" onclick="goToToday()">Сегодня</button>
                 <button class="btn-refresh" onclick="refreshCalendarEvents()" title="Обновить события">🔄</button>
+                <button class="btn btn-danger btn-clear-all" onclick="clearAllEvents()" title="Удалить все события">
+                    🗑️
+                </button>
             </div>
         </div>
 
@@ -657,18 +660,18 @@ $totalDays = 42; // 6 недель * 7 дней
                     </label>
                 </div>
                 
-                <!-- Галочки для исключения выходных и праздников -->
-                <div class="form-group checkbox-group">
+                <!-- Галочки для исключения выходных и праздников (скрыты) -->
+                <div class="form-group checkbox-group" style="display: none;">
                     <label class="checkbox-label">
-                        <input type="checkbox" id="exclude-weekends" name="exclude_weekends" checked>
+                        <input type="checkbox" id="exclude-weekends" name="exclude_weekends" value="false">
                         <span class="checkmark"></span>
                         Исключить выходные
                     </label>
                 </div>
                 
-                <div class="form-group checkbox-group">
+                <div class="form-group checkbox-group" style="display: none;">
                     <label class="checkbox-label">
-                        <input type="checkbox" id="exclude-holidays" name="exclude_holidays" checked>
+                        <input type="checkbox" id="exclude-holidays" name="exclude_holidays" value="false">
                         <span class="checkmark"></span>
                         Исключить праздничные дни
                     </label>

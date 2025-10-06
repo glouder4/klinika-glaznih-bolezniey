@@ -293,6 +293,29 @@ input:checked + .toggle-slider:before {
     background: #bdc3c7;
 }
 
+/* Кнопка очистки всех событий */
+.btn-clear-all {
+    background: #e74c3c;
+    border: none;
+    color: white;
+    padding: 8px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    margin-left: 8px;
+}
+
+.btn-clear-all:hover {
+    background: #c0392b;
+    transform: translateY(-1px);
+}
+
+.btn-clear-all:active {
+    transform: translateY(0);
+}
+
 .btn-today {
     background: #3498db;
     border: none;

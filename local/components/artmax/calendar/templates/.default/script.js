@@ -1945,8 +1945,8 @@
                     repeatCount: formData.get('repeat-count'),
                     repeatEndDate: formData.get('repeat-end-date'),
                     includeEndDate: formData.get('include-end-date') === 'on',
-                    excludeWeekends: formData.get('exclude_weekends') === 'on',
-                    excludeHolidays: formData.get('exclude_holidays') === 'on',
+                    excludeWeekends: formData.get('exclude_weekends') === 'on' || false,
+                    excludeHolidays: formData.get('exclude_holidays') === 'on' || false,
                     eventColor: eventColor
                 };
 
@@ -4895,6 +4895,7 @@
     window.goToToday = goToToday;
     window.refreshCalendarEvents = refreshCalendarEvents;
     window.deleteEventAjax = deleteEventAjax;
+    window.clearAllEvents = clearAllEvents;
     window.showEventSidePanel = showEventSidePanel;
     window.closeEventSidePanel = closeEventSidePanel;
     window.openEditEventModalFromSidePanel = openEditEventModalFromSidePanel;
@@ -6027,6 +6028,52 @@
         .catch(error => {
             console.error('Ошибка при удалении события:', error);
             showNotification('Ошибка при удалении события', 'error');
+        });
+    }
+
+    /**
+     * Очищает все события из календаря
+     */
+    function clearAllEvents() {
+        if (!confirm('⚠️ ВНИМАНИЕ! Вы уверены, что хотите удалить ВСЕ события из календаря?\n\nЭто действие нельзя отменить!')) {
+            return;
+        }
+
+        if (!confirm('Последнее предупреждение!\n\nВы действительно хотите удалить ВСЕ события?')) {
+            return;
+        }
+
+        const csrfToken = getCSRFToken();
+        fetch('/local/components/artmax/calendar/ajax.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-Bitrix-Csrf-Token': csrfToken
+            },
+            body: new URLSearchParams({
+                action: 'clearAllEvents',
+                sessid: csrfToken
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showNotification(`Успешно удалено ${data.deletedCount} событий!`, 'success');
+                // Очищаем календарь
+                document.querySelectorAll('.calendar-event').forEach(event => {
+                    event.remove();
+                });
+                // Закрываем все открытые панели
+                closeEventSidePanel();
+                closeEditEventModal();
+            } else {
+                showNotification('Ошибка: ' + (data.error || 'Неизвестная ошибка'), 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Ошибка при очистке событий:', error);
+            showNotification('Ошибка при очистке событий', 'error');
         });
     }
 

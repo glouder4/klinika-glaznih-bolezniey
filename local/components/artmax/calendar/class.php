@@ -380,8 +380,8 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
      *     'repeat_count' => null,
      *     'repeat_end_date' => '2025-10-21',
      *     'event_color' => '#f39c12',
-     *     'exclude_weekends' => true,
-     *     'exclude_holidays' => true,
+     *     'exclude_weekends' => false,
+     *     'exclude_holidays' => false,
      *     'include_end_date' => false
      * ]);
      */
@@ -399,8 +399,8 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
         $repeatCount = $params['repeat_count'] ?? null;
         $repeatEndDate = $params['repeat_end_date'] ?? null;
         $eventColor = $params['event_color'] ?? '#3498db';
-        $excludeWeekends = $params['exclude_weekends'] ?? true;
-        $excludeHolidays = $params['exclude_holidays'] ?? true;
+        $excludeWeekends = $params['exclude_weekends'] ?? false;
+        $excludeHolidays = $params['exclude_holidays'] ?? false;
         $includeEndDate = $params['include_end_date'] ?? true;
 
         
@@ -536,8 +536,8 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
         $dateFrom = $params['date_from'] ?? null;
         $dateTo = $params['date_to'] ?? null;
         $userId = $params['user_id'] ?? null;
-        $excludeWeekends = $params['exclude_weekends'] ?? true;
-        $excludeHolidays = $params['exclude_holidays'] ?? true;
+        $excludeWeekends = $params['exclude_weekends'] ?? false;
+        $excludeHolidays = $params['exclude_holidays'] ?? false;
         $includeEndDate = $params['include_end_date'] ?? true;
 
         try {
@@ -572,7 +572,37 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
             
             // Для еженедельного расписания с выбранными днями недели
             if ($frequency === 'weekly' && !empty($weekdays)) {
-                if ($repeatCount && $repeatCount > 0) {
+                // Определяем базовую дату начала
+                $startDate = $scheduleStartDate ? new \DateTime($scheduleStartDate) : $eventDateFrom;
+                $endDate = null;
+                
+                if ($repeatEnd === 'date' && $repeatEndDate) {
+                    // Если указана конечная дата, рассчитываем количество недель до неё
+                    $endDate = new \DateTime($repeatEndDate);
+                    
+                    // Находим понедельник недели, в которой находится startDate
+                    $startDayOfWeek = $startDate->format('N'); // 1 = понедельник, 7 = воскресенье
+                    $startMondayOffset = $startDayOfWeek - 1;
+                    $startMonday = clone $startDate;
+                    $startMonday->sub(new \DateInterval('P' . $startMondayOffset . 'D'));
+                    
+                    // Находим понедельник недели, в которой находится endDate
+                    $endDayOfWeek = $endDate->format('N');
+                    $endMondayOffset = $endDayOfWeek - 1;
+                    $endMonday = clone $endDate;
+                    $endMonday->sub(new \DateInterval('P' . $endMondayOffset . 'D'));
+                    
+                    // Считаем количество недель между понедельниками
+                    $weeksDiff = $startMonday->diff($endMonday)->days / 7;
+                    
+                    // Если конечная дата попадает на выбранный день недели в своей неделе,
+                    // то нужно включить эту неделю, даже если includeEndDate=false
+                    $endDateDayOfWeek = $endDate->format('N');
+                    $includeEndWeek = in_array($endDateDayOfWeek, $weekdays);
+                    
+                    $maxWeeks = $weeksDiff + ($includeEndDate || $includeEndWeek ? 1 : 0);
+                    $maxEvents = $maxWeeks * count($weekdays);
+                } elseif ($repeatCount && $repeatCount > 0) {
                     // Для еженедельного повторения используем количество недель
                     $maxWeeks = $repeatCount;
                     $maxEvents = $repeatCount * count($weekdays);
