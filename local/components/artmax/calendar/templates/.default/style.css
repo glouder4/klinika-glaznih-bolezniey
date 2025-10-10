@@ -478,6 +478,7 @@ input:checked + .toggle-slider:before {
     word-wrap: break-word;
     word-break: break-word;
     hyphens: auto;
+    color: #2c3e50;
 }
 
 .event-time {
@@ -486,6 +487,7 @@ input:checked + .toggle-slider:before {
     display: flex;
     align-items: center;
     gap: 5px;
+    color: #34495e;
 }
 .event-time>span{
     display: block;
@@ -1308,6 +1310,7 @@ input:checked + .toggle-slider:before {
         display: -webkit-box !important;
         -webkit-line-clamp: 1 !important;
         -webkit-box-orient: vertical !important;
+        color: #2c3e50 !important;
     }
     
     .calendar-event .event-time {
@@ -1439,6 +1442,7 @@ input:checked + .toggle-slider:before {
         display: -webkit-box !important;
         -webkit-line-clamp: 1 !important;
         -webkit-box-orient: vertical !important;
+        color: #2c3e50 !important;
     }
     
     .calendar-event .event-time {
@@ -1616,6 +1620,7 @@ input:checked + .toggle-slider:before {
         display: -webkit-box !important;
         -webkit-line-clamp: 1 !important;
         -webkit-box-orient: vertical !important;
+        color: #2c3e50 !important;
     }
     
 
@@ -1762,6 +1767,7 @@ input:checked + .toggle-slider:before {
         display: -webkit-box !important;
         -webkit-line-clamp: 1 !important;
         -webkit-box-orient: vertical !important;
+        color: #2c3e50 !important;
     }
     
 
@@ -3114,7 +3120,7 @@ input:checked + .toggle-slider:before {
     max-width: 400px;
     max-height: 80vh;
     height: -webkit-fill-available;
-    overflow: hidden;
+    overflow-y: scroll;
     transform: scale(0.8) translateY(-20px);
     transition: all 0.3s ease;
 }
@@ -3162,7 +3168,8 @@ input:checked + .toggle-slider:before {
 .client-modal-body {
     padding: 20px;
     overflow-y: scroll;
-    height: -webkit-fill-available;
+    height: auto;
+    min-height: 450px;
 }
 
 .client-modal-footer {
@@ -3226,13 +3233,13 @@ input:checked + .toggle-slider:before {
     max-height: 100px;
 }
 
-.input-with-icons {
+.form-group .input-with-icons {
     position: relative;
     display: flex;
     align-items: center;
 }
 
-.input-with-icons input {
+.form-group .input-with-icons input {
     width: 100%;
     padding: 12px 40px 12px 40px;
     border: 1px solid #e9ecef;
@@ -3241,7 +3248,7 @@ input:checked + .toggle-slider:before {
     transition: all 0.2s ease;
 }
 
-.input-with-icons input:focus {
+.form-group .input-with-icons input:focus {
     outline: none;
     border-color: #007bff;
     box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);

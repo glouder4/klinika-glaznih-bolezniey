@@ -13,6 +13,14 @@
     // Инициализация модуля
     document.addEventListener('DOMContentLoaded', function() {
         initCalendar();
+        
+        // Скрываем элементы управления для не-админов
+        if (window.IS_ADMIN === false) {
+            const adminOnlyElements = document.querySelectorAll('.admin-only');
+            adminOnlyElements.forEach(el => {
+                el.style.display = 'none';
+            });
+        }
     });
 
     function initCalendar() {
@@ -999,23 +1007,35 @@
                     sidePanelHeader.style.background = `linear-gradient(135deg, ${eventColor}, ${eventColor}dd)`;
                 }
                 
+                // Скрываем/показываем кнопки управления в зависимости от прав пользователя
+                const actionsPanel = document.querySelector('.side-panel-actions');
+                if (actionsPanel && window.IS_ADMIN !== undefined) {
+                    actionsPanel.style.display = window.IS_ADMIN ? 'flex' : 'none';
+                }
+                
                 // Подсчитываем количество запросов, которые будут выполнены
                 let loadingCount = 2; // Подтверждение и визит всегда загружаются
                 
                 // Загружаем данные контакта, если есть CONTACT_ENTITY_ID
+                console.log('showEventSidePanel: CONTACT_ENTITY_ID =', event.CONTACT_ENTITY_ID);
                 if (event.CONTACT_ENTITY_ID) {
                     loadingCount++; // Увеличиваем счетчик только если будет запрос
+                    console.log('showEventSidePanel: Загружаем контакт с ID:', event.CONTACT_ENTITY_ID);
                     loadEventContact(event.CONTACT_ENTITY_ID);
                 } else {
+                    console.log('showEventSidePanel: Нет CONTACT_ENTITY_ID, сбрасываем клиента');
                     // Сбрасываем информацию о клиенте, если контакта нет
                     resetClientInfoInSidePanel();
                 }
                 
                 // Загружаем данные сделки, если есть DEAL_ENTITY_ID
+                console.log('showEventSidePanel: DEAL_ENTITY_ID =', event.DEAL_ENTITY_ID);
                 if (event.DEAL_ENTITY_ID) {
                     loadingCount++; // Увеличиваем счетчик только если будет запрос
+                    console.log('showEventSidePanel: Загружаем сделку с ID:', event.DEAL_ENTITY_ID);
                     loadEventDeal(event.DEAL_ENTITY_ID);
                 } else {
+                    console.log('showEventSidePanel: Нет DEAL_ENTITY_ID, сбрасываем сделку');
                     // Сбрасываем информацию о сделке, если сделки нет
                     resetDealInfoInSidePanel();
                 }
@@ -1196,6 +1216,9 @@
         
         // Скрываем выпадающий список
         hideContactDropdown();
+        
+        // Скрываем форму создания контакта и возвращаемся к поиску
+        hideCreateContactForm();
     };
 
     function openEditEventModal(eventId) {
@@ -1784,6 +1807,7 @@
             date: scheduleData.date,
             time: scheduleData.time,
             employee_id: scheduleData.employee_id,
+            branch_id: scheduleData.branch_id,
             repeat: scheduleData.repeat,
             frequency: scheduleData.frequency || null,
             weekdays: scheduleData.weekdays || [],
@@ -1938,6 +1962,7 @@
                     date: formData.get('date'),
                     time: formData.get('time'),
                     employee_id: formData.get('employee_id'),
+                    branch_id: formData.get('branch_id'),
                     repeat: formData.get('repeat') === 'on',
                     frequency: formData.get('frequency'),
                     weekdays: formData.getAll('weekdays[]'),
@@ -2632,12 +2657,19 @@
             
             // Добавляем обработчики клика для контактов
             const contactItems = dropdown.querySelectorAll('.search-contact-item');
+            console.log('Добавляем обработчики для', contactItems.length, 'контактов');
             contactItems.forEach(item => {
                 item.addEventListener('click', function() {
+                    console.log('Клик по контакту, элемент:', this);
                     const contactId = this.getAttribute('data-contact-id');
+                    console.log('Contact ID:', contactId);
                     const contact = contacts.find(c => c.id == contactId);
+                    console.log('Найденный контакт:', contact);
                     if (contact) {
+                        console.log('Вызываем selectContact для:', contact);
                         selectContact(contact);
+                    } else {
+                        console.error('Контакт не найден для ID:', contactId);
                     }
                 });
             });
@@ -2856,10 +2888,14 @@
     
     // Функция показа дополнительных полей и кнопок
     function showContactDetailsFields() {
+        console.log('showContactDetailsFields вызвана');
+        
         // Показываем дополнительные поля с анимацией
         const detailFields = document.querySelectorAll('.contact-details-field');
+        console.log('Найдено дополнительных полей:', detailFields.length);
         detailFields.forEach((field, index) => {
             setTimeout(() => {
+                console.log('Показываем поле:', field);
                 field.style.display = 'block';
                 field.classList.add('show');
             }, index * 100); // Задержка для последовательного появления
@@ -2867,11 +2903,17 @@
         
         // Показываем кнопки в футере с анимацией
         const footer = document.querySelector('.client-modal-footer');
+        console.log('Найден футер:', footer);
         if (footer) {
+            const delay = detailFields.length * 100 + 100;
+            console.log('Показываем футер через', delay, 'мс');
             setTimeout(() => {
+                console.log('Показываем футер сейчас');
                 footer.style.display = 'flex';
                 footer.classList.add('show');
-            }, detailFields.length * 100 + 100);
+            }, delay);
+        } else {
+            console.error('Футер не найден!');
         }
         
         // Обновляем инструкцию
@@ -3251,6 +3293,17 @@
             dealStatusElement.textContent = 'Нет сделки';
             dealStatusElement.style.color = '#6c757d';
         }
+        
+        // Сбрасываем иконку сделки только для текущего события
+        if (window.currentEventId) {
+            const eventElement = document.querySelector(`[data-event-id="${window.currentEventId}"]`);
+            if (eventElement) {
+                const dealIcon = eventElement.querySelector('.deal-icon');
+                if (dealIcon) {
+                    dealIcon.classList.remove('active');
+                }
+            }
+        }
     }
 
     // Функция создания новой сделки
@@ -3483,6 +3536,9 @@
         if (backToSearch) {
             backToSearch.style.display = 'none';
         }
+        
+        // Очищаем поля формы
+        clearCreateContactForm();
     }
     
     // Функция очистки формы создания контакта
@@ -4864,11 +4920,16 @@
             dealStatus.style.color = '#28a745';
         }
         
-        // Обновляем иконку сделки в событии
-        const eventIcons = document.querySelectorAll('.event-icon.deal-icon');
-        eventIcons.forEach(icon => {
-            icon.classList.add('active');
-        });
+        // Обновляем иконку сделки только для текущего события
+        if (window.currentEventId) {
+            const eventElement = document.querySelector(`[data-event-id="${window.currentEventId}"]`);
+            if (eventElement) {
+                const dealIcon = eventElement.querySelector('.deal-icon');
+                if (dealIcon) {
+                    dealIcon.classList.add('active');
+                }
+            }
+        }
     }
 
     // Делаем функции доступными глобально для использования в HTML

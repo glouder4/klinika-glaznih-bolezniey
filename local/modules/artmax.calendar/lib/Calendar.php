@@ -319,9 +319,9 @@ class Calendar
     }
 
     /**
-     * Проверить доступность времени для конкретного врача
+     * Проверить доступность времени для конкретного врача в конкретном филиале
      */
-    public function isTimeAvailableForDoctor($dateFrom, $dateTo, $employeeId, $excludeId = null)
+    public function isTimeAvailableForDoctor($dateFrom, $dateTo, $employeeId, $excludeId = null, $branchId = null)
     {
         // Если врач не указан, считаем время доступным (не проверяем конфликты)
         if (!$employeeId || $employeeId === '' || $employeeId === '0') {
@@ -333,7 +333,7 @@ class Calendar
 
         // Логируем параметры
         file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-            "IS_TIME_AVAILABLE_FOR_DOCTOR: Checking for employeeId=" . $employeeId . ", dateFrom=" . $dateFrom . ", dateTo=" . $dateTo . "\n", 
+            "IS_TIME_AVAILABLE_FOR_DOCTOR: Checking for employeeId=" . $employeeId . ", branchId=" . $branchId . ", dateFrom=" . $dateFrom . ", dateTo=" . $dateTo . "\n", 
             FILE_APPEND | LOCK_EX);
         
         // Извлекаем дату из dateFrom для фильтрации по конкретному дню
@@ -343,11 +343,16 @@ class Calendar
             "IS_TIME_AVAILABLE_FOR_DOCTOR: Extracted dateOnly=" . $dateOnly . "\n", 
             FILE_APPEND | LOCK_EX);
         
-        // Проверяем пересечение временных интервалов только для конкретного врача, только активных записей и только на конкретную дату
+        // Проверяем пересечение временных интервалов только для конкретного врача, только активных записей, только на конкретную дату И только в том же филиале
         if ($employeeId === null) {
             $sql = "SELECT COUNT(*) as count FROM artmax_calendar_events WHERE EMPLOYEE_ID IS NULL AND STATUS != 'cancelled' AND DATE(DATE_FROM) = '$dateOnly' AND DATE_FROM < '" . $this->connection->getSqlHelper()->forSql($dateTo) . "' AND DATE_TO > '" . $this->connection->getSqlHelper()->forSql($dateFrom) . "'";
         } else {
             $sql = "SELECT COUNT(*) as count FROM artmax_calendar_events WHERE EMPLOYEE_ID = " . (int)$employeeId . " AND STATUS != 'cancelled' AND DATE(DATE_FROM) = '$dateOnly' AND DATE_FROM < '" . $this->connection->getSqlHelper()->forSql($dateTo) . "' AND DATE_TO > '" . $this->connection->getSqlHelper()->forSql($dateFrom) . "'";
+        }
+        
+        // Добавляем проверку филиала, если он указан
+        if ($branchId) {
+            $sql .= " AND BRANCH_ID = " . (int)$branchId;
         }
         
         if ($excludeId) {
@@ -362,12 +367,15 @@ class Calendar
             "IS_TIME_AVAILABLE_FOR_DOCTOR: dateOnly = " . $dateOnly . ", dateFrom = " . $dateFrom . ", dateTo = " . $dateTo . "\n", 
             FILE_APPEND | LOCK_EX);
         
-        // Проверяем, какие события есть у врача на эту дату
-        $checkSql = "SELECT ID, TITLE, DATE_FROM, DATE_TO FROM artmax_calendar_events WHERE EMPLOYEE_ID = " . (int)$employeeId . " AND DATE(DATE_FROM) = '$dateOnly'";
+        // Проверяем, какие события есть у врача на эту дату в этом филиале
+        $checkSql = "SELECT ID, TITLE, DATE_FROM, DATE_TO, BRANCH_ID FROM artmax_calendar_events WHERE EMPLOYEE_ID = " . (int)$employeeId . " AND DATE(DATE_FROM) = '$dateOnly'";
+        if ($branchId) {
+            $checkSql .= " AND BRANCH_ID = " . (int)$branchId;
+        }
         $checkResult = $this->connection->query($checkSql);
         $existingEvents = $checkResult->fetchAll();
         file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-            "IS_TIME_AVAILABLE_FOR_DOCTOR: Existing events on $dateOnly: " . json_encode($existingEvents) . "\n", 
+            "IS_TIME_AVAILABLE_FOR_DOCTOR: Existing events on $dateOnly" . ($branchId ? " in branch $branchId" : "") . ": " . json_encode($existingEvents) . "\n", 
             FILE_APPEND | LOCK_EX);
         
         $result = $this->connection->query($sql);
@@ -375,16 +383,22 @@ class Calendar
         
         $count = $row['count'];
         file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-            "IS_TIME_AVAILABLE_FOR_DOCTOR: Found " . $count . " conflicting events for doctor\n", 
+            "IS_TIME_AVAILABLE_FOR_DOCTOR: Found " . $count . " conflicting events for doctor" . ($branchId ? " in branch $branchId" : "") . "\n", 
             FILE_APPEND | LOCK_EX);
         
         // Если есть конфликты, показываем какие именно события конфликтуют
         if ($count > 0) {
             if ($employeeId === null) {
-                $conflictSql = "SELECT ID, TITLE, DATE_FROM, DATE_TO FROM artmax_calendar_events WHERE EMPLOYEE_ID IS NULL AND STATUS != 'cancelled' AND DATE(DATE_FROM) = '$dateOnly' AND DATE_FROM < '" . $this->connection->getSqlHelper()->forSql($dateTo) . "' AND DATE_TO > '" . $this->connection->getSqlHelper()->forSql($dateFrom) . "'";
+                $conflictSql = "SELECT ID, TITLE, DATE_FROM, DATE_TO, BRANCH_ID FROM artmax_calendar_events WHERE EMPLOYEE_ID IS NULL AND STATUS != 'cancelled' AND DATE(DATE_FROM) = '$dateOnly' AND DATE_FROM < '" . $this->connection->getSqlHelper()->forSql($dateTo) . "' AND DATE_TO > '" . $this->connection->getSqlHelper()->forSql($dateFrom) . "'";
             } else {
-                $conflictSql = "SELECT ID, TITLE, DATE_FROM, DATE_TO FROM artmax_calendar_events WHERE EMPLOYEE_ID = " . (int)$employeeId . " AND STATUS != 'cancelled' AND DATE(DATE_FROM) = '$dateOnly' AND DATE_FROM < '" . $this->connection->getSqlHelper()->forSql($dateTo) . "' AND DATE_TO > '" . $this->connection->getSqlHelper()->forSql($dateFrom) . "'";
+                $conflictSql = "SELECT ID, TITLE, DATE_FROM, DATE_TO, BRANCH_ID FROM artmax_calendar_events WHERE EMPLOYEE_ID = " . (int)$employeeId . " AND STATUS != 'cancelled' AND DATE(DATE_FROM) = '$dateOnly' AND DATE_FROM < '" . $this->connection->getSqlHelper()->forSql($dateTo) . "' AND DATE_TO > '" . $this->connection->getSqlHelper()->forSql($dateFrom) . "'";
             }
+            
+            // Добавляем проверку филиала для конфликтов
+            if ($branchId) {
+                $conflictSql .= " AND BRANCH_ID = " . (int)$branchId;
+            }
+            
             if ($excludeId) {
                 $conflictSql .= " AND ID != " . (int)$excludeId;
             }
@@ -472,7 +486,7 @@ class Calendar
     /**
      * Получить события по филиалу
      */
-    public function getEventsByBranch($branchId, $dateFrom = null, $dateTo = null, $userId = null, $limit = null)
+    public function getEventsByBranch($branchId, $dateFrom = null, $dateTo = null, $userId = null, $limit = null, $employeeId = null)
     {
         // Проверяем branchId
         if (!$branchId || !is_numeric($branchId)) {
@@ -517,6 +531,11 @@ class Calendar
         if ($userId) {
             $sql .= " AND USER_ID = " . (int)$userId;
         }
+        
+        // Фильтр по врачу (EMPLOYEE_ID)
+        if ($employeeId) {
+            $sql .= " AND EMPLOYEE_ID = " . (int)$employeeId;
+        }
 
         // Сортировка
         $sql .= " ORDER BY DATE_FROM ASC";
@@ -526,13 +545,50 @@ class Calendar
             $sql .= " LIMIT " . (int)$limit;
         }
 
+        // Логирование SQL запроса
+        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+            "\n=== getEventsByBranch SQL ===\n", 
+            FILE_APPEND | LOCK_EX);
+        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+            "branchId: " . $branchId . "\n", 
+            FILE_APPEND | LOCK_EX);
+        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+            "dateFrom: " . ($dateFrom ?? 'null') . "\n", 
+            FILE_APPEND | LOCK_EX);
+        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+            "dateTo: " . ($dateTo ?? 'null') . "\n", 
+            FILE_APPEND | LOCK_EX);
+        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+            "userId: " . ($userId ?? 'null') . "\n", 
+            FILE_APPEND | LOCK_EX);
+        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+            "employeeId: " . ($employeeId ?? 'null') . "\n", 
+            FILE_APPEND | LOCK_EX);
+        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+            "SQL: " . $sql . "\n", 
+            FILE_APPEND | LOCK_EX);
+
         try {
             $result = $this->connection->query($sql);
             $events = $result->fetchAll();
 
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "Events found: " . count($events) . "\n", 
+                FILE_APPEND | LOCK_EX);
+            
+            // Выводим первые 3 события для проверки
+            foreach (array_slice($events, 0, 3) as $idx => $event) {
+                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                    "Event #" . ($idx + 1) . ": ID=" . $event['ID'] . ", USER_ID=" . ($event['USER_ID'] ?? 'null') . ", TITLE=" . ($event['TITLE'] ?? 'null') . "\n", 
+                    FILE_APPEND | LOCK_EX);
+            }
+
             // Если нужно — можно дополнительно обработать, но уже не обязательно
             return $events ?: [];
         } catch (\Exception $e) {
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "ERROR: " . $e->getMessage() . "\n", 
+                FILE_APPEND | LOCK_EX);
             // Логируйте при необходимости
             // error_log("DB Error in getEventsByBranch: " . $e->getMessage());
             return [];
@@ -1003,7 +1059,7 @@ class Calendar
     /**
      * Переносит событие на новое время с обменом местами
      */
-    public function moveEvent($eventId, $newDateFrom, $newDateTo, $employeeId = null)
+    public function moveEvent($eventId, $newDateFrom, $newDateTo, $employeeId = null, $branchId = null)
     {
         try {
             // Получаем данные о переносимом событии
@@ -1037,46 +1093,81 @@ class Calendar
                 // Если на новом месте есть событие - обмениваемся местами
                 
                 // 1. Обновляем событие на новом месте (становится переносимым)
-                $oldDateFrom = $movingEvent['DATE_FROM'];
-                $oldDateTo = $movingEvent['DATE_TO'];
+                // Оно получает старое время, старого врача и старый филиал от переносимого события
+                $oldDateFrom = $this->convertRussianDateToStandard($movingEvent['DATE_FROM']);
+                $oldDateTo = $this->convertRussianDateToStandard($movingEvent['DATE_TO']);
+                $oldEmployeeId = $movingEvent['EMPLOYEE_ID'];
+                $oldBranchId = $movingEvent['BRANCH_ID'];
                 
-                $updateTargetSql = "
-                    UPDATE artmax_calendar_events 
-                    SET DATE_FROM = '$oldDateFrom',
-                        DATE_TO = '$oldDateTo',
-                        ORIGINAL_DATE_FROM = '$oldDateFrom',
-                        ORIGINAL_DATE_TO = '$oldDateTo',
-                        TIME_IS_CHANGED = 0,
-                        UPDATED_AT = NOW()
-                    WHERE ID = " . (int)$targetEvent['ID'];
+                // Логируем для отладки
+                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                    "MOVE_EVENT: Original dates from moving event:\n", 
+                    FILE_APPEND | LOCK_EX);
+                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                    "  - Original DATE_FROM: " . $movingEvent['DATE_FROM'] . "\n", 
+                    FILE_APPEND | LOCK_EX);
+                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                    "  - Converted DATE_FROM: " . $oldDateFrom . "\n", 
+                    FILE_APPEND | LOCK_EX);
+                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                    "  - Original DATE_TO: " . $movingEvent['DATE_TO'] . "\n", 
+                    FILE_APPEND | LOCK_EX);
+                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                    "  - Converted DATE_TO: " . $oldDateTo . "\n", 
+                    FILE_APPEND | LOCK_EX);
 
+                $targetSet = [];
+                $targetSet[] = "DATE_FROM = '" . $this->connection->getSqlHelper()->forSql($oldDateFrom) . "'";
+                $targetSet[] = "DATE_TO = '" . $this->connection->getSqlHelper()->forSql($oldDateTo) . "'";
+                $targetSet[] = "ORIGINAL_DATE_FROM = '" . $this->connection->getSqlHelper()->forSql($oldDateFrom) . "'";
+                $targetSet[] = "ORIGINAL_DATE_TO = '" . $this->connection->getSqlHelper()->forSql($oldDateTo) . "'";
+                $targetSet[] = "TIME_IS_CHANGED = 0";
+                $targetSet[] = "UPDATED_AT = NOW()";
+                
+                // Меняем врача и филиал на старые от переносимого события
+                if ($oldEmployeeId) {
+                    $targetSet[] = "EMPLOYEE_ID = " . (int)$oldEmployeeId;
+                } else {
+                    $targetSet[] = "EMPLOYEE_ID = NULL";
+                }
+                if ($oldBranchId) {
+                    $targetSet[] = "BRANCH_ID = " . (int)$oldBranchId;
+                }
+
+                $updateTargetSql = "UPDATE artmax_calendar_events SET " . implode(', ', $targetSet) . " WHERE ID = " . (int)$targetEvent['ID'];
                 $this->connection->query($updateTargetSql);
 
                 // 2. Обновляем переносимое событие (получает новое время и флаг изменения)
-                $employeeUpdate = $employeeId ? ", EMPLOYEE_ID = " . (int)$employeeId : "";
-                $updateMovingSql = "
-                    UPDATE artmax_calendar_events 
-                    SET DATE_FROM = '$newDateFrom',
-                        DATE_TO = '$newDateTo',
-                        TIME_IS_CHANGED = 1
-                        $employeeUpdate,
-                        UPDATED_AT = NOW()
-                    WHERE ID = " . (int)$eventId;
+                $movingSet = [];
+                $movingSet[] = "DATE_FROM = '" . $this->connection->getSqlHelper()->forSql($newDateFrom) . "'";
+                $movingSet[] = "DATE_TO = '" . $this->connection->getSqlHelper()->forSql($newDateTo) . "'";
+                $movingSet[] = "TIME_IS_CHANGED = 1";
+                if ($employeeId) {
+                    $movingSet[] = "EMPLOYEE_ID = " . (int)$employeeId;
+                }
+                if ($branchId) {
+                    $movingSet[] = "BRANCH_ID = " . (int)$branchId;
+                }
+                $movingSet[] = "UPDATED_AT = NOW()";
 
+                $updateMovingSql = "UPDATE artmax_calendar_events SET " . implode(', ', $movingSet) . " WHERE ID = " . (int)$eventId;
                 $this->connection->query($updateMovingSql);
 
             } else {
                 // Если на новом месте пусто - просто переносим событие
-                $employeeUpdate = $employeeId ? ", EMPLOYEE_ID = " . (int)$employeeId : "";
-                $updateMovingSql = "
-                    UPDATE artmax_calendar_events 
-                    SET DATE_FROM = '$newDateFrom',
-                        DATE_TO = '$newDateTo',
-                        TIME_IS_CHANGED = 1
-                        $employeeUpdate,
-                        UPDATED_AT = NOW()
-                    WHERE ID = " . (int)$eventId;
+                $movingSet = [];
+                $movingSet[] = "DATE_FROM = '" . $this->connection->getSqlHelper()->forSql($newDateFrom) . "'";
+                $movingSet[] = "DATE_TO = '" . $this->connection->getSqlHelper()->forSql($newDateTo) . "'";
+                $movingSet[] = "TIME_IS_CHANGED = 1";
+                if ($employeeId) {
+                    $movingSet[] = "EMPLOYEE_ID = " . (int)$employeeId;
+                }
+                if ($branchId) {
+                    $movingSet[] = "BRANCH_ID = " . (int)$branchId;
+                }
+                $movingSet[] = "UPDATED_AT = NOW()";
 
+                $updateMovingSql = "UPDATE artmax_calendar_events SET " . implode(', ', $movingSet) . " WHERE ID = " . (int)$eventId;
                 $this->connection->query($updateMovingSql);
             }
 

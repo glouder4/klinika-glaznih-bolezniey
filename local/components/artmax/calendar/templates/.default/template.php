@@ -8,6 +8,14 @@ Loc::loadMessages(__FILE__);
 echo '<!-- STATIC LOAD DEBUG: Total events = ' . count($arResult['EVENTS']) . ' -->';
 echo '<!-- STATIC LOAD DEBUG: Events by date keys = ' . implode(', ', array_keys($arResult['EVENTS_BY_DATE'])) . ' -->';
 
+// Передаем IS_ADMIN в JavaScript
+?>
+<script>
+    window.IS_ADMIN = <?= $arResult['IS_ADMIN'] ? 'true' : 'false' ?>;
+    window.CURRENT_USER_ID = <?= $arResult['CURRENT_USER_ID'] ?>;
+</script>
+<?php
+
 /**
  * Конвертирует дату из российского формата (день.месяц.год) в стандартный (год-месяц-день)
  * @param string $dateString Дата в формате "04.08.2025 09:00:00"
@@ -155,6 +163,7 @@ $totalDays = 42; // 6 недель * 7 дней
         </div>
 
         
+        <?php if ($arResult['IS_ADMIN']): ?>
         <div class="header-right">
             <button class="btn btn-primary btn-add-branch" onclick="openAddBranchModal()" title="Добавить филиал">
                 ➕ Добавить филиал
@@ -163,6 +172,7 @@ $totalDays = 42; // 6 недель * 7 дней
                 ⚙️ Настройки филиала
             </button>
         </div>
+        <?php endif; ?>
     </div>
 
     <!-- Основной календарь -->
@@ -172,17 +182,21 @@ $totalDays = 42; // 6 недель * 7 дней
                 <span class="current-month"><?= translateMonthToRussian($currentDate->format('F')) . ', ' . $currentDate->format('Y') ?></span>
             </div>
             <div class="calendar-controls">
+                <?php if ($arResult['IS_ADMIN']): ?>
                 <button class="btn btn-primary btn-create">
                     СОЗДАТЬ РАСПИСАНИЕ
                 </button>
+                <?php endif; ?>
                 <span class="view-type">Месяц</span>
                 <button class="btn-nav" onclick="previousMonth()">◀</button>
                 <button class="btn-nav" onclick="nextMonth()">▶</button>
                 <button class="btn-today" onclick="goToToday()">Сегодня</button>
                 <button class="btn-refresh" onclick="refreshCalendarEvents()" title="Обновить события">🔄</button>
+                <?php if ($arResult['IS_ADMIN']): ?>
                 <button class="btn btn-danger btn-clear-all" onclick="clearAllEvents()" title="Удалить все события">
                     🗑️
                 </button>
+                <?php endif; ?>
             </div>
         </div>
 
@@ -623,6 +637,9 @@ $totalDays = 42; // 6 недель * 7 дней
             </div>
             
             <form id="scheduleForm" class="schedule-form">
+                <!-- Скрытое поле для ID филиала -->
+                <input type="hidden" id="schedule-branch-id" name="branch_id" value="<?= $arResult['BRANCH']['ID'] ?>">
+                
                 <div class="form-group">
                     <label for="schedule-title">Название *</label>
                     <input type="text" id="schedule-title" name="title" required placeholder="Введите название расписания">
@@ -866,10 +883,10 @@ $totalDays = 42; // 6 недель * 7 дней
                             <div class="client-placeholder">Добавьте информацию о клиенте</div>
                         </div>
                         <div class="client-actions">
-                            <button class="action-btn add-contact-btn" title="Добавить" onclick="event.stopPropagation(); openClientModal();">➕</button>
+                            <button class="action-btn add-contact-btn admin-only" title="Добавить" onclick="event.stopPropagation(); openClientModal();">➕</button>
                         </div>
                     </div>
-                    <div class="add-note-section">
+                    <div class="add-note-section admin-only">
                         <button class="add-note-btn" id="add-note-btn" onclick="event.stopPropagation(); openNoteModal();">+ Добавить заметку к записи</button>
                         <div class="note-display" id="note-display" style="display: none;">
                             <div class="note-content">
@@ -890,8 +907,8 @@ $totalDays = 42; // 6 недель * 7 дней
                             <div class="card-status" id="deal-status">Не добавлена</div>
                         </div>
                         <div class="card-actions" onclick="event.stopPropagation()">
-                            <button class="card-action-btn add-btn" onclick="createNewDeal()" title="Создать новую сделку">+</button>
-                            <button class="card-action-btn select-btn" onclick="openDealModal()">Выбрать</button>
+                            <button class="card-action-btn add-btn admin-only" onclick="createNewDeal()" title="Создать новую сделку">+</button>
+                            <button class="card-action-btn select-btn admin-only" onclick="openDealModal()">Выбрать</button>
                         </div>
                     </div>
 
@@ -902,7 +919,7 @@ $totalDays = 42; // 6 недель * 7 дней
                             <div class="card-status" id="employee-status">Не назначен</div>
                         </div>
                         <div class="card-actions" onclick="event.stopPropagation()">
-                            <button class="card-action-btn add-btn" onclick="openEmployeeModal()" title="Назначить врача">+</button>
+                            <button class="card-action-btn add-btn admin-only" onclick="openEmployeeModal()" title="Назначить врача">+</button>
                         </div>
                     </div>
 
@@ -914,10 +931,10 @@ $totalDays = 42; // 6 недель * 7 дней
                             <div class="card-title">Подтверждение</div>
                             <div class="card-status" id="confirmation-status">Ожидается подтверждение</div>
                         </div>
-                        <button class="card-action-btn" id="confirmation-select-btn" onclick="toggleConfirmationDropdown()">Выбрать ▼</button>
+                        <button class="card-action-btn admin-only" id="confirmation-select-btn" onclick="toggleConfirmationDropdown()">Выбрать ▼</button>
                         
                         <!-- Выпадающее меню подтверждения -->
-                        <div class="confirmation-dropdown" id="confirmation-dropdown">
+                        <div class="confirmation-dropdown admin-only" id="confirmation-dropdown">
                             <div class="confirmation-dropdown-item" onclick="setConfirmationStatus('confirmed')">Подтверждено</div>
                             <div class="confirmation-dropdown-item" onclick="setConfirmationStatus('not_confirmed')">Не подтверждено</div>
                         </div>
@@ -929,10 +946,10 @@ $totalDays = 42; // 6 недель * 7 дней
                             <div class="card-title">Визит</div>
                             <div class="card-status" id="visit-status">Не указано</div>
                         </div>
-                        <button class="card-action-btn" id="visit-select-btn" onclick="toggleVisitDropdown()">Выбрать ▼</button>
+                        <button class="card-action-btn admin-only" id="visit-select-btn" onclick="toggleVisitDropdown()">Выбрать ▼</button>
                         
                         <!-- Выпадающее меню визита -->
-                        <div class="visit-dropdown" id="visit-dropdown">
+                        <div class="visit-dropdown admin-only" id="visit-dropdown">
                             <div class="visit-dropdown-item" onclick="setVisitStatus('not_specified')">Не указано</div>
                             <div class="visit-dropdown-item" onclick="setVisitStatus('client_came')">Клиент пришел</div>
                             <div class="visit-dropdown-item" onclick="setVisitStatus('client_did_not_come')">Клиент не пришел</div>

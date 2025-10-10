@@ -135,35 +135,12 @@ switch ($action) {
 
         $userId = $GLOBALS['USER']->GetID();
 
-        // Логируем полученные данные
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-            "=== AJAX ADD_EVENT DEBUG ===\n",
-            FILE_APPEND | LOCK_EX);
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-            "AJAX: Received data:\n",
-            FILE_APPEND | LOCK_EX);
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-            "  - title: {$title}\n",
-            FILE_APPEND | LOCK_EX);
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-            "  - dateFrom: {$dateFrom}\n",
-            FILE_APPEND | LOCK_EX);
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-            "  - dateTo: {$dateTo}\n",
-            FILE_APPEND | LOCK_EX);
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-            "  - eventColor: {$eventColor}\n",
-            FILE_APPEND | LOCK_EX);
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-            "=== END AJAX ADD_EVENT DEBUG ===\n",
-            FILE_APPEND | LOCK_EX);
-
         // Сохраняем время как есть, без конвертации в UTC
         // Это позволит избежать проблем с часовыми поясами
 
-        // Проверяем доступность времени для врача
-        if (!$calendarObj->isTimeAvailableForDoctor($dateFrom, $dateTo, $employeeId)) {
-            die(json_encode(['success' => false, 'error' => 'Время уже занято для выбранного врача']));
+        // Проверяем доступность времени для врача в конкретном филиале
+        if (!$calendarObj->isTimeAvailableForDoctor($dateFrom, $dateTo, $employeeId, null, $branchId)) {
+            die(json_encode(['success' => false, 'error' => 'Время уже занято для выбранного врача в этом филиале']));
         }
 
         // Добавляем событие с цветом (без конвертации в UTC)
@@ -273,8 +250,8 @@ switch ($action) {
                 "UPDATE_EVENT_DEBUG: Checking conflicts with doctorToCheck=" . $doctorToCheck . "\n", 
                 FILE_APPEND | LOCK_EX);
             
-            if (!$calendarObj->isTimeAvailableForDoctor($dateFrom, $dateTo, $doctorToCheck, $eventId)) {
-                die(json_encode(['success' => false, 'error' => 'Время уже занято для выбранного врача']));
+            if (!$calendarObj->isTimeAvailableForDoctor($dateFrom, $dateTo, $doctorToCheck, $eventId, $branchId)) {
+                die(json_encode(['success' => false, 'error' => 'Время уже занято для выбранного врача в этом филиале']));
             }
         }
 
@@ -345,6 +322,7 @@ switch ($action) {
         $dateTo = $_POST['dateTo'] ?? '';
         $employeeId = $_POST['employeeId'] ?? null;
         $excludeEventId = $_POST['excludeEventId'] ?? null;
+        $branchId = $_POST['branchId'] ?? null;
 
         if (!$dateFrom || !$dateTo) {
             http_response_code(400);
@@ -356,7 +334,7 @@ switch ($action) {
             $convertedDateFrom = convertRussianDateToStandard($dateFrom);
             $convertedDateTo = convertRussianDateToStandard($dateTo);
             
-            $available = $calendarObj->isTimeAvailableForDoctor($convertedDateFrom, $convertedDateTo, $employeeId, $excludeEventId);
+            $available = $calendarObj->isTimeAvailableForDoctor($convertedDateFrom, $convertedDateTo, $employeeId, $excludeEventId, $branchId);
             die(json_encode(['success' => true, 'available' => $available]));
         } catch (Exception $e) {
             die(json_encode(['success' => false, 'error' => $e->getMessage()]));
@@ -401,7 +379,8 @@ switch ($action) {
 
     case 'moveEvent':
         $eventId = (int)($_POST['eventId'] ?? 0);
-        $employeeId = $_POST['employeeId'] ?? null;
+        $branchId = isset($_POST['branchId']) ? (int)$_POST['branchId'] : null;
+        $employeeId = isset($_POST['employeeId']) ? (int)$_POST['employeeId'] : null;
         $newDateFrom = $_POST['dateFrom'] ?? '';
         $newDateTo = $_POST['dateTo'] ?? '';
 
@@ -411,11 +390,21 @@ switch ($action) {
         }
 
         try {
-            $result = $calendarObj->moveEvent($eventId, $newDateFrom, $newDateTo, $employeeId);
-            if ($result) {
+            $component = new ArtmaxCalendarComponent();
+            $params = [
+                'event_id' => $eventId,
+                'branch_id' => $branchId,
+                'employee_id' => $employeeId,
+                'date_from' => $newDateFrom,
+                'date_to' => $newDateTo,
+            ];
+
+            $result = $component->moveEventAction($params);
+            if (!empty($result['success'])) {
                 die(json_encode(['success' => true]));
             } else {
-                die(json_encode(['success' => false, 'error' => 'Ошибка переноса записи']));
+                $error = $result['error'] ?? 'Ошибка переноса записи';
+                die(json_encode(['success' => false, 'error' => $error]));
             }
         } catch (Exception $e) {
             die(json_encode(['success' => false, 'error' => $e->getMessage()]));
@@ -453,7 +442,8 @@ switch ($action) {
                     $dateFromStandard, 
                     $dateToStandard, 
                     $event['EMPLOYEE_ID'], 
-                    $eventId
+                    $eventId,
+                    $event['BRANCH_ID']
                 );
                 
                 if (!$isAvailable) {
@@ -658,6 +648,7 @@ switch ($action) {
             'date' => $_POST['date'] ?? '',
             'time' => $_POST['time'] ?? '',
             'employee_id' => $_POST['employee_id'] ?? null,
+            'branch_id' => $_POST['branch_id'] ?? 1,
             'repeat' => $_POST['repeat'] === 'on' || $_POST['repeat'] === 'true',
             'frequency' => $_POST['frequency'] ?? null,
             'weekdays' => $weekdays,
@@ -821,15 +812,19 @@ switch ($action) {
         
     case 'saveEventContact':
         $eventId = $_POST['eventId'] ?? 0;
-        $contactId = $_POST['contactId'] ?? 0;
         $contactData = $_POST['contactData'] ?? '';
         
-        if (empty($eventId) || empty($contactId)) {
-            die(json_encode(['success' => false, 'error' => 'ID события или контакта не указан']));
+        if (empty($eventId) || empty($contactData)) {
+            die(json_encode(['success' => false, 'error' => 'ID события или данные контакта не указаны']));
         }
         
         try {
             $contactData = json_decode($contactData, true);
+            if (!$contactData || !isset($contactData['id'])) {
+                die(json_encode(['success' => false, 'error' => 'Неверный формат данных контакта']));
+            }
+            
+            $contactId = $contactData['id'];
             $component = new ArtmaxCalendarComponent();
             $result = $component->saveEventContactAction($eventId, $contactId, $contactData);
             die(json_encode($result));
