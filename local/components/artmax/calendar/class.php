@@ -114,6 +114,18 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                 "Events loaded: " . count($events) . "\n", 
                 FILE_APPEND | LOCK_EX);
             
+            // Загружаем данные контактов для каждого события
+            foreach ($events as &$event) {
+                if (!empty($event['CONTACT_ENTITY_ID'])) {
+                    $contactData = $this->getContactFromCRM($event['CONTACT_ENTITY_ID']);
+                    if ($contactData) {
+                        $event['CONTACT_NAME'] = $contactData['name'] ?? '';
+                        $event['CONTACT_PHONE'] = $contactData['phone'] ?? '';
+                    }
+                }
+            }
+            unset($event); // Разрываем ссылку после foreach
+            
             // Отладочная информация
             error_log("=== STATIC LOAD START ===");
             error_log("STATIC LOAD: dateFrom=$dateFrom, dateTo=$dateTo, events count=" . count($events));
@@ -395,6 +407,18 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
             
             $calendarObj = new \Artmax\Calendar\Calendar();
             $events = $calendarObj->getEventsByBranch($branchId, $dateFrom, $dateTo, null, null, $employeeId);
+            
+            // Загружаем данные контактов для каждого события
+            foreach ($events as &$event) {
+                if (!empty($event['CONTACT_ENTITY_ID'])) {
+                    $contactData = $this->getContactFromCRM($event['CONTACT_ENTITY_ID']);
+                    if ($contactData) {
+                        $event['CONTACT_NAME'] = $contactData['name'] ?? '';
+                        $event['CONTACT_PHONE'] = $contactData['phone'] ?? '';
+                    }
+                }
+            }
+            unset($event); // Разрываем ссылку после foreach
 
             return ['success' => true, 'events' => $events];
         } catch (\Exception $e) {

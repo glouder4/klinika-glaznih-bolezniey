@@ -649,7 +649,9 @@
                         description: formData.get('description'),
                         dateFrom: formatLocalDateTime(startDateTime),
                         dateTo: formatLocalDateTime(endDateTime),
-                        eventColor: formData.get('event-color') || '#3498db'
+                        eventColor: formData.get('event-color') || '#3498db',
+                        contactName: '',
+                        contactPhone: ''
                     });
                 } else {
                     showNotification('Ошибка: ' + (data.error || 'Неизвестная ошибка'), 'error');
@@ -1863,7 +1865,9 @@
                             dateTo: event.DATE_TO,
                             eventColor: event.EVENT_COLOR || scheduleData.eventColor || '#3498db',
                             contactEntityId: event.CONTACT_ENTITY_ID,
-                            dealEntityId: event.DEAL_ENTITY_ID
+                            dealEntityId: event.DEAL_ENTITY_ID,
+                            contactName: event.CONTACT_NAME || '',
+                            contactPhone: event.CONTACT_PHONE || ''
                         };
                         
                         addEventToCalendar(eventData);
@@ -3200,6 +3204,11 @@
                 ? contactInfo.join(' • ') 
                 : 'Контактная информация не указана';
         }
+        
+        // Обновляем заголовок события в календаре
+        if (window.currentEventId) {
+            updateEventTitleInCalendar(window.currentEventId, client.name || client.contact || '', client.phone || '');
+        }
     }
 
     function loadEventContact(contactId) {
@@ -3700,6 +3709,30 @@
             if (contactIcon) {
                 contactIcon.classList.remove('inactive');
                 contactIcon.classList.add('active');
+            }
+        }
+    }
+    
+    // Функция обновления заголовка события в календаре
+    function updateEventTitleInCalendar(eventId, contactName, contactPhone) {
+        const eventElement = document.querySelector(`[data-event-id="${eventId}"]`);
+        if (eventElement) {
+            const titleElement = eventElement.querySelector('.event-title');
+            if (titleElement) {
+                // Получаем оригинальное название события (до первого " - ")
+                let originalTitle = titleElement.textContent.split(' - ')[0];
+                
+                // Формируем новый заголовок: Название - Имя - Телефон
+                let newTitle = originalTitle;
+                if (contactName) {
+                    newTitle += ' - ' + contactName;
+                }
+                if (contactPhone) {
+                    newTitle += ' - ' + contactPhone;
+                }
+                
+                titleElement.textContent = newTitle;
+                console.log('updateEventTitleInCalendar: Обновлен заголовок события', eventId, 'на', newTitle);
             }
         }
     }
@@ -5547,9 +5580,18 @@
             });
         }
 
+        // Формируем заголовок: Название - Имя - Телефон
+        let eventTitle = eventData.title || '';
+        if (eventData.contactName) {
+            eventTitle += ' - ' + eventData.contactName;
+        }
+        if (eventData.contactPhone) {
+            eventTitle += ' - ' + eventData.contactPhone;
+        }
+        
         eventElement.innerHTML = `
             <div class="event-content">
-                <div class="event-title">${eventData.title}</div>
+                <div class="event-title">${eventTitle}</div>
                 <div class="event-time">
                     ${timeString} – ${endTimeString}
                     <div class="event-icons">
@@ -6238,9 +6280,18 @@
             });
         }
 
+        // Формируем заголовок: Название - Имя - Телефон
+        let eventTitle = event.TITLE || '';
+        if (event.CONTACT_NAME) {
+            eventTitle += ' - ' + event.CONTACT_NAME;
+        }
+        if (event.CONTACT_PHONE) {
+            eventTitle += ' - ' + event.CONTACT_PHONE;
+        }
+        
         eventElement.innerHTML = `
             <div class="event-content">
-                <div class="event-title">${event.TITLE}</div>
+                <div class="event-title">${eventTitle}</div>
                 <div class="event-time">
                     ${timeString} – ${endTimeString}
                     <div class="event-icons">

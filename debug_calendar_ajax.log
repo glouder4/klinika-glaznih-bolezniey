@@ -1,0 +1,2 @@
+=== LOG CLEARED FOR TESTING ===
+Time: <?php echo date('Y-m-d H:i:s'); ?>

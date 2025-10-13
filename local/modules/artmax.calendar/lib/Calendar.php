@@ -532,9 +532,9 @@ class Calendar
             $sql .= " AND USER_ID = " . (int)$userId;
         }
         
-        // Фильтр по врачу (EMPLOYEE_ID)
+        // Фильтр по врачу (EMPLOYEE_ID) - ИСПРАВЛЕНО: врач видит записи где он назначен ИЛИ создал
         if ($employeeId) {
-            $sql .= " AND EMPLOYEE_ID = " . (int)$employeeId;
+            $sql .= " AND (EMPLOYEE_ID = " . (int)$employeeId . " OR USER_ID = " . (int)$employeeId . ")";
         }
 
         // Сортировка

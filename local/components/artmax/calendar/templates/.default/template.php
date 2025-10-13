@@ -14,6 +14,32 @@ echo '<!-- STATIC LOAD DEBUG: Events by date keys = ' . implode(', ', array_keys
     window.IS_ADMIN = <?= $arResult['IS_ADMIN'] ? 'true' : 'false' ?>;
     window.CURRENT_USER_ID = <?= $arResult['CURRENT_USER_ID'] ?>;
 </script>
+
+<!-- ИСПРАВЛЕНИЕ: CSS стили для отображения заметок врачам (только просмотр) -->
+<style>
+<?php if (!$arResult['IS_ADMIN'] && $USER->IsAuthorized()): ?>
+/* Врачи видят секцию заметок, но БЕЗ кнопок редактирования */
+.add-note-section {
+    display: block !important;
+    visibility: visible !important;
+}
+
+.note-display {
+    display: block !important;
+}
+
+/* ВАЖНО: Врачи НЕ видят кнопки добавления/редактирования заметок */
+.add-note-btn,
+.edit-note-btn {
+    display: none !important;
+    visibility: hidden !important;
+}
+
+.note-content {
+    display: block !important;
+}
+<?php endif; ?>
+</style>
 <?php
 
 /**
@@ -174,7 +200,7 @@ $totalDays = 42; // 6 недель * 7 дней
         </div>
         <?php endif; ?>
     </div>
-
+  
     <!-- Основной календарь -->
     <div class="calendar-main">
         <div class="calendar-toolbar">
@@ -263,7 +289,17 @@ $totalDays = 42; // 6 недель * 7 дней
                                 
                                 echo '<div class="calendar-event ' . $statusClass . $timeChangedClass . '" data-event-id="' . $event['ID'] . '" style="' . $style . '" onclick="event.stopPropagation();">';
                                 echo '<div class="event-content">';
-                                echo '<div class="event-title">' . htmlspecialchars($event['TITLE']) . '</div>';
+                                
+                                // Формируем заголовок: Название - Имя - Телефон
+                                $eventTitle = htmlspecialchars($event['TITLE']);
+                                if (!empty($event['CONTACT_NAME'])) {
+                                    $eventTitle .= ' - ' . htmlspecialchars($event['CONTACT_NAME']);
+                                }
+                                if (!empty($event['CONTACT_PHONE'])) {
+                                    $eventTitle .= ' - ' . htmlspecialchars($event['CONTACT_PHONE']);
+                                }
+                                
+                                echo '<div class="event-title">' . $eventTitle . '</div>';
                                 echo '<div class="event-time">';
                                 echo '<span>';
                                 echo $eventTime . ' – ' . $eventEndTime;
@@ -1376,8 +1412,47 @@ $totalDays = 42; // 6 недель * 7 дней
         }
     }
 
+    // ИСПРАВЛЕНИЕ: Показать заметки для врачей (только просмотр, без редактирования)
+    function initDoctorNotesAccess() {
+        // Если пользователь не администратор, но авторизован - показываем заметки БЕЗ кнопок редактирования
+        if (!window.IS_ADMIN && window.CURRENT_USER_ID) {
+            console.log('Включаем просмотр заметок для врача ID:', window.CURRENT_USER_ID);
+            
+            // Находим все блоки заметок и делаем их видимыми для врачей
+            const noteSections = document.querySelectorAll('.add-note-section');
+            noteSections.forEach(section => {
+                section.style.display = 'block';
+                section.style.visibility = 'visible';
+                
+                // Показываем блок отображения заметок
+                const noteDisplay = section.querySelector('.note-display');
+                if (noteDisplay) {
+                    noteDisplay.style.display = 'block';
+                }
+            });
+            
+            // ВАЖНО: Скрываем кнопки добавления/редактирования для врачей
+            const addNoteButtons = document.querySelectorAll('.add-note-btn');
+            addNoteButtons.forEach(btn => {
+                btn.style.display = 'none';
+                btn.style.visibility = 'hidden';
+            });
+            
+            const editNoteButtons = document.querySelectorAll('.edit-note-btn');
+            editNoteButtons.forEach(btn => {
+                btn.style.display = 'none';
+                btn.style.visibility = 'hidden';
+            });
+            
+            console.log('Врач видит заметки (только просмотр, без редактирования)');
+        }
+    }
+
     // Обработка клика по ячейке календаря
     document.addEventListener('DOMContentLoaded', function() {
+        // Инициализируем доступ к заметкам для врачей
+        initDoctorNotesAccess();
+        
         const calendarDays = document.querySelectorAll('.calendar-day');
         calendarDays.forEach(day => {
             day.addEventListener('click', function() {
