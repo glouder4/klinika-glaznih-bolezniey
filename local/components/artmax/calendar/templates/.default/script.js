@@ -1043,10 +1043,13 @@
                 }
                 
                 // Загружаем данные врача, если есть EMPLOYEE_ID
+                console.log('showEventSidePanel: EMPLOYEE_ID =', event.EMPLOYEE_ID);
                 if (event.EMPLOYEE_ID) {
                     loadingCount++; // Увеличиваем счетчик только если будет запрос
+                    console.log('showEventSidePanel: Загружаем врача с ID:', event.EMPLOYEE_ID);
                     loadEventEmployee(event.EMPLOYEE_ID);
                 } else {
+                    console.log('showEventSidePanel: Нет EMPLOYEE_ID, сбрасываем врача');
                     // Сбрасываем информацию о враче, если врача нет
                     resetEmployeeInfoInSidePanel();
                 }
@@ -1063,8 +1066,8 @@
                 // Загружаем и отображаем статус визита
                 loadEventVisitStatus(eventId);
                 
-                // Загружаем и отображаем заметку
-                loadEventNote(eventId);
+                // Отображаем заметку (данные уже есть в event)
+                updateNoteDisplay(event.NOTE || '');
                 
                 // Обновляем кнопку в зависимости от статуса события
                 console.log('showEventSidePanel: Статус события:', event.STATUS);
@@ -3237,10 +3240,18 @@
                 console.log('loadEventContact: Контакт не найден или ошибка:', data.error);
                 resetClientInfoInSidePanel();
             }
+            
+            // Увеличиваем счетчик завершенных загрузок
+            window.sidePanelLoadingComplete++;
+            checkSidePanelLoadingComplete();
         })
         .catch(error => {
             console.error('loadEventContact: Ошибка при загрузке контакта:', error);
             resetClientInfoInSidePanel();
+            
+            // Увеличиваем счетчик завершенных загрузок даже при ошибке
+            window.sidePanelLoadingComplete++;
+            checkSidePanelLoadingComplete();
         });
     }
 
@@ -4332,6 +4343,7 @@
 
     // Загрузка данных врача для боковой панели
     function loadEventEmployee(employeeId) {
+        console.log('loadEventEmployee: Загружаем врача с ID:', employeeId);
         const csrfToken = getCSRFToken();
         fetch('/local/components/artmax/calendar/ajax.php', {
             method: 'POST',
@@ -4345,16 +4357,29 @@
                 sessid: csrfToken
             })
         })
-        .then(response => response.json())
+        .then(response => {
+            console.log('loadEventEmployee: Получен ответ от сервера');
+            return response.json();
+        })
         .then(data => {
-            if (data.success && data.employees) {
-                const employee = data.employees.find(emp => emp.ID === employeeId);
-                if (employee) {
-                    updateEmployeeCardInSidePanel(employee);
+            console.log('loadEventEmployee: Данные распарсены:', data);
+            try {
+                if (data.success && data.employees) {
+                    console.log('loadEventEmployee: Всего врачей:', data.employees.length);
+                    const employee = data.employees.find(emp => String(emp.ID) === String(employeeId));
+                    if (employee) {
+                        console.log('loadEventEmployee: Врач найден:', employee);
+                        updateEmployeeCardInSidePanel(employee);
+                    } else {
+                        console.log('loadEventEmployee: Врач с ID', employeeId, 'не найден в списке');
+                        resetEmployeeInfoInSidePanel();
+                    }
                 } else {
+                    console.log('loadEventEmployee: Ошибка в данных или нет врачей');
                     resetEmployeeInfoInSidePanel();
                 }
-            } else {
+            } catch (error) {
+                console.error('loadEventEmployee: Ошибка при обработке данных врача:', error);
                 resetEmployeeInfoInSidePanel();
             }
             
@@ -4363,7 +4388,7 @@
             checkSidePanelLoadingComplete();
         })
         .catch(error => {
-            console.error('Ошибка при загрузке данных врача:', error);
+            console.error('loadEventEmployee: ОШИБКА при загрузке данных врача:', error);
             resetEmployeeInfoInSidePanel();
             
             // Увеличиваем счетчик завершенных загрузок даже при ошибке
@@ -5115,6 +5140,7 @@
     }
 
     function loadEventConfirmationStatus(eventId) {
+        console.log('loadEventConfirmationStatus: Загружаем статус подтверждения для события:', eventId);
         const params = new URLSearchParams();
         params.append('action', 'get_confirmation_status');
         params.append('event_id', eventId);
@@ -5128,12 +5154,16 @@
             },
             body: params
         })
-        .then(response => response.json())
+        .then(response => {
+            console.log('loadEventConfirmationStatus: Получен ответ от сервера');
+            return response.json();
+        })
         .then(data => {
+            console.log('loadEventConfirmationStatus: Данные распарсены:', data);
             if (data.success) {
                 updateConfirmationStatusDisplay(data.confirmation_status);
             } else {
-                console.error('Ошибка при загрузке статуса подтверждения:', data.message);
+                console.error('loadEventConfirmationStatus: Ошибка при загрузке статуса подтверждения:', data.message);
                 // Устанавливаем статус по умолчанию
                 updateConfirmationStatusDisplay('pending');
             }
@@ -5143,7 +5173,7 @@
             checkSidePanelLoadingComplete();
         })
         .catch(error => {
-            console.error('Ошибка AJAX запроса при загрузке статуса подтверждения:', error);
+            console.error('loadEventConfirmationStatus: ОШИБКА AJAX запроса при загрузке статуса подтверждения:', error);
             // Устанавливаем статус по умолчанию
             updateConfirmationStatusDisplay('pending');
             // Увеличиваем счетчик завершенных загрузок даже при ошибке
@@ -5275,6 +5305,7 @@
     }
 
     function loadEventVisitStatus(eventId) {
+        console.log('loadEventVisitStatus: Загружаем статус визита для события:', eventId);
         const params = new URLSearchParams();
         params.append('action', 'get_visit_status');
         params.append('event_id', eventId);
@@ -5288,12 +5319,16 @@
             },
             body: params
         })
-        .then(response => response.json())
+        .then(response => {
+            console.log('loadEventVisitStatus: Получен ответ от сервера');
+            return response.json();
+        })
         .then(data => {
+            console.log('loadEventVisitStatus: Данные распарсены:', data);
             if (data.success) {
                 updateVisitStatusDisplay(data.visit_status || 'not_specified');
             } else {
-                console.error('Ошибка при загрузке статуса визита:', data.message);
+                console.error('loadEventVisitStatus: Ошибка при загрузке статуса визита:', data.message);
                 updateVisitStatusDisplay('not_specified');
             }
             // Увеличиваем счетчик завершенных загрузок
@@ -5302,7 +5337,7 @@
             checkSidePanelLoadingComplete();
         })
         .catch(error => {
-            console.error('Ошибка AJAX запроса:', error);
+            console.error('loadEventVisitStatus: ОШИБКА AJAX запроса:', error);
             updateVisitStatusDisplay('not_specified');
             // Увеличиваем счетчик завершенных загрузок даже при ошибке
             window.sidePanelLoadingComplete++;
@@ -5401,7 +5436,6 @@
 
     // Функция для проверки завершения всех загрузок
     function checkSidePanelLoadingComplete() {
-        window.sidePanelLoadingComplete++;
         console.log(`Загрузка завершена: ${window.sidePanelLoadingComplete}/${window.sidePanelLoadingCount}`);
         
         if (window.sidePanelLoadingComplete >= window.sidePanelLoadingCount) {

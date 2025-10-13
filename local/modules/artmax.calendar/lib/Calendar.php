@@ -196,6 +196,7 @@ class Calendar
                 EVENT_COLOR,
                 CONTACT_ENTITY_ID,
                 DEAL_ENTITY_ID,
+                ACTIVITY_ID,
                 NOTE,
                 EMPLOYEE_ID,
                 CONFIRMATION_STATUS,
@@ -502,10 +503,13 @@ class Calendar
             DATE_FORMAT(DATE_FROM, '%d.%m.%Y %H:%i:%s') AS DATE_FROM,
             DATE_FORMAT(DATE_TO, '%d.%m.%Y %H:%i:%s') AS DATE_TO,
             USER_ID,
+            EMPLOYEE_ID,
             BRANCH_ID,
             EVENT_COLOR,
             CONTACT_ENTITY_ID,
             DEAL_ENTITY_ID,
+            ACTIVITY_ID,
+            NOTE,
             CONFIRMATION_STATUS,
             STATUS,
             TIME_IS_CHANGED,
@@ -1206,6 +1210,167 @@ class Calendar
             return $events;
         } catch (\Exception $e) {
             error_log('Ошибка получения событий пользователя: ' . $e->getMessage());
+            return false;
+        }
+    }
+    
+    /**
+     * Создать активность (бронирование) в CRM сделке
+     * @param int $dealId ID сделки
+     * @param string $title Название события
+     * @param string $dateFrom Дата и время начала
+     * @param string $dateTo Дата и время окончания
+     * @param int $responsibleId ID ответственного
+     * @return int|false ID созданной активности или false
+     */
+    public function createCrmActivity($dealId, $title, $dateFrom, $dateTo, $responsibleId)
+    {
+        if (!\CModule::IncludeModule('crm')) {
+            error_log('CRM модуль не подключен');
+            return false;
+        }
+        
+        try {
+            // Конвертируем даты в ISO формат для Bitrix24 API
+            $startTime = date('c', strtotime($dateFrom)); // ISO 8601 format
+            $endTime = date('c', strtotime($dateTo));
+            
+            // Создаем активность типа "Встреча" (TYPE_ID = 1)
+            $activity = new \CCrmActivity(false);
+            
+            $fields = [
+                'OWNER_TYPE_ID' => 2, // 2 = Deal (Сделка)
+                'OWNER_ID' => $dealId,
+                'TYPE_ID' => 1, // 1 = Встреча/Звонок
+                'PROVIDER_ID' => 'CRM_MEETING', // Провайдер для встреч
+                'PROVIDER_TYPE_ID' => 'MEETING', // Тип провайдера
+                'SUBJECT' => $title,
+                'DESCRIPTION' => 'Запись из календаря клиники',
+                'DESCRIPTION_TYPE' => 1, // 1 = plain text
+                'START_TIME' => $startTime,
+                'END_TIME' => $endTime,
+                'COMPLETED' => 'N',
+                'RESPONSIBLE_ID' => $responsibleId,
+                'PRIORITY' => 2, // 2 = средний приоритет
+                'NOTIFY_TYPE' => 0, // Не уведомлять
+                'AUTOCOMPLETE_RULE' => 0,
+            ];
+            
+            $activityId = $activity->Add($fields);
+            
+            if ($activityId) {
+                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                    "CRM_ACTIVITY: Создана активность ID=$activityId для сделки ID=$dealId\n", 
+                    FILE_APPEND | LOCK_EX);
+                return $activityId;
+            } else {
+                $error = $activity->LAST_ERROR;
+                error_log('Ошибка создания CRM активности: ' . $error);
+                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                    "CRM_ACTIVITY ERROR: " . $error . "\n", 
+                    FILE_APPEND | LOCK_EX);
+                return false;
+            }
+            
+        } catch (\Exception $e) {
+            error_log('Ошибка создания CRM активности: ' . $e->getMessage());
+            return false;
+        }
+    }
+    
+    /**
+     * Обновить активность в CRM
+     * @param int $activityId ID активности
+     * @param string $title Название
+     * @param string $dateFrom Дата начала
+     * @param string $dateTo Дата окончания
+     * @return bool
+     */
+    public function updateCrmActivity($activityId, $title, $dateFrom, $dateTo)
+    {
+        if (!\CModule::IncludeModule('crm')) {
+            error_log('CRM модуль не подключен');
+            return false;
+        }
+        
+        try {
+            // Конвертируем даты в ISO формат
+            $startTime = date('c', strtotime($dateFrom));
+            $endTime = date('c', strtotime($dateTo));
+            
+            $activity = new \CCrmActivity(false);
+            
+            $fields = [
+                'SUBJECT' => $title,
+                'START_TIME' => $startTime,
+                'END_TIME' => $endTime,
+            ];
+            
+            $result = $activity->Update($activityId, $fields);
+            
+            if ($result) {
+                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                    "CRM_ACTIVITY: Обновлена активность ID=$activityId\n", 
+                    FILE_APPEND | LOCK_EX);
+                return true;
+            } else {
+                $error = $activity->LAST_ERROR;
+                error_log('Ошибка обновления CRM активности: ' . $error);
+                return false;
+            }
+            
+        } catch (\Exception $e) {
+            error_log('Ошибка обновления CRM активности: ' . $e->getMessage());
+            return false;
+        }
+    }
+    
+    /**
+     * Удалить активность из CRM
+     * @param int $activityId ID активности
+     * @return bool
+     */
+    public function deleteCrmActivity($activityId)
+    {
+        if (!\CModule::IncludeModule('crm')) {
+            return false;
+        }
+        
+        try {
+            $activity = new \CCrmActivity(false);
+            $result = $activity->Delete($activityId);
+            
+            if ($result) {
+                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                    "CRM_ACTIVITY: Удалена активность ID=$activityId\n", 
+                    FILE_APPEND | LOCK_EX);
+            }
+            
+            return $result;
+        } catch (\Exception $e) {
+            error_log('Ошибка удаления CRM активности: ' . $e->getMessage());
+            return false;
+        }
+    }
+    
+    /**
+     * Сохранить ID активности CRM к событию
+     * @param int $eventId ID события
+     * @param int $activityId ID активности CRM
+     * @return bool
+     */
+    public function saveEventActivityId($eventId, $activityId)
+    {
+        $sql = "UPDATE artmax_calendar_events SET ACTIVITY_ID = " . (int)$activityId . " WHERE ID = " . (int)$eventId;
+        
+        try {
+            $this->connection->query($sql);
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "Сохранен ACTIVITY_ID=$activityId для события ID=$eventId\n", 
+                FILE_APPEND | LOCK_EX);
+            return true;
+        } catch (\Exception $e) {
+            error_log('Ошибка сохранения ACTIVITY_ID: ' . $e->getMessage());
             return false;
         }
     }

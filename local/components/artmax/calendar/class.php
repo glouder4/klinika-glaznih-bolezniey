@@ -1030,8 +1030,11 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                 return ['success' => false, 'error' => 'Нет прав на редактирование'];
             }
 
+            // Получаем employeeId из существующего события
+            $employeeId = $existingEvent['EMPLOYEE_ID'] ?? null;
+
             // Проверяем доступность времени для врача в конкретном филиале (исключая текущее событие)
-            if (!$calendarObj->isTimeAvailableForDoctor($dateFrom, $dateTo, $employeeId, $eventId, $existingEvent['BRANCH_ID'])) {
+            if ($employeeId && !$calendarObj->isTimeAvailableForDoctor($dateFrom, $dateTo, $employeeId, $eventId, $existingEvent['BRANCH_ID'])) {
                 return ['success' => false, 'error' => 'Время уже занято для выбранного врача в этом филиале'];
             }
 
@@ -1039,6 +1042,22 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
             $result = $calendarObj->updateEvent($eventId, $title, $description, $dateFrom, $dateTo, $eventColor, $branchId);
 
             if ($result) {
+                // Если есть привязанная активность CRM, обновляем её
+                if (!empty($existingEvent['ACTIVITY_ID'])) {
+                    $activityUpdated = $calendarObj->updateCrmActivity(
+                        $existingEvent['ACTIVITY_ID'],
+                        $title,
+                        $dateFrom,
+                        $dateTo
+                    );
+                    
+                    if ($activityUpdated) {
+                        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                            "UPDATE_EVENT: Обновлена активность CRM ID={$existingEvent['ACTIVITY_ID']}\n", 
+                            FILE_APPEND | LOCK_EX);
+                    }
+                }
+                
                 return ['success' => true];
             } else {
                 return ['success' => false, 'error' => 'Ошибка обновления события'];
@@ -1288,7 +1307,43 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
             $result = $calendar->updateEventDeal($eventId, $dealDataArray['id']);
 
             if ($result) {
-                return ['success' => true, 'message' => 'Сделка сохранена'];
+                // Создаем или обновляем активность в сделке
+                $dealId = $dealDataArray['id'];
+                
+                // Проверяем, есть ли уже активность у события
+                if (!empty($event['ACTIVITY_ID'])) {
+                    // Обновляем существующую активность
+                    $activityUpdated = $calendar->updateCrmActivity(
+                        $event['ACTIVITY_ID'],
+                        $event['TITLE'],
+                        $event['DATE_FROM'],
+                        $event['DATE_TO']
+                    );
+                    
+                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                        "SAVE_DEAL: Обновлена активность ID={$event['ACTIVITY_ID']}\n", 
+                        FILE_APPEND | LOCK_EX);
+                } else {
+                    // Создаем новую активность
+                    $activityId = $calendar->createCrmActivity(
+                        $dealId,
+                        $event['TITLE'],
+                        $event['DATE_FROM'],
+                        $event['DATE_TO'],
+                        $event['EMPLOYEE_ID'] ?? \CCrmSecurityHelper::GetCurrentUserID()
+                    );
+                    
+                    if ($activityId) {
+                        // Сохраняем ID активности
+                        $calendar->saveEventActivityId($eventId, $activityId);
+                        
+                        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                            "SAVE_DEAL: Создана активность ID=$activityId для события ID=$eventId\n", 
+                            FILE_APPEND | LOCK_EX);
+                    }
+                }
+                
+                return ['success' => true, 'message' => 'Сделка сохранена и бронирование синхронизировано'];
             } else {
                 return ['success' => false, 'error' => 'Ошибка сохранения сделки'];
             }
@@ -1498,9 +1553,28 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                 // Привязываем сделку к событию
                 $calendar->updateEventDeal($eventId, $dealId);
                 
+                // Создаем активность (бронирование) в сделке с датой и временем события
+                $activityId = $calendar->createCrmActivity(
+                    $dealId, 
+                    $event['TITLE'], 
+                    $event['DATE_FROM'], 
+                    $event['DATE_TO'],
+                    $event['EMPLOYEE_ID'] ?? $USER->GetID()
+                );
+                
+                if ($activityId) {
+                    // Сохраняем ID активности к событию
+                    $calendar->saveEventActivityId($eventId, $activityId);
+                    
+                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                        "CREATE_DEAL: Создана активность ID=$activityId для события ID=$eventId\n", 
+                        FILE_APPEND | LOCK_EX);
+                }
+                
                 return [
                     'success' => true, 
                     'dealId' => $dealId,
+                    'activityId' => $activityId ?? null,
                     'message' => 'Сделка успешно создана и привязана к событию'
                 ];
             } else {
