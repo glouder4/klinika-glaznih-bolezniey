@@ -142,7 +142,7 @@ class Calendar
     /**
      * Получить timezone филиала
      */
-    private function getBranchTimezone($branchId)
+    public function getBranchTimezone($branchId)
     {
         $sql = "SELECT TIMEZONE_NAME FROM artmax_calendar_branches WHERE ID = " . (int)$branchId;
         $result = $this->connection->query($sql);
@@ -156,7 +156,7 @@ class Calendar
     /**
      * Конвертировать время в timezone филиала
      */
-    private function convertTimeToBranchTimezone($timeString, $branchTimezone)
+    public function convertTimeToBranchTimezone($timeString, $branchTimezone)
     {
         try {
             // Создаем DateTime объект из строки времени (предполагаем, что это UTC)
@@ -1225,15 +1225,42 @@ class Calendar
      */
     public function createCrmActivity($dealId, $title, $dateFrom, $dateTo, $responsibleId)
     {
+        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+            "createCrmActivity: Начало. DealID=$dealId, Title=$title, DateFrom=$dateFrom, DateTo=$dateTo, ResponsibleID=$responsibleId\n", 
+            FILE_APPEND | LOCK_EX);
+            
         if (!\CModule::IncludeModule('crm')) {
             error_log('CRM модуль не подключен');
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "createCrmActivity ERROR: CRM модуль не подключен\n", 
+                FILE_APPEND | LOCK_EX);
             return false;
         }
         
+        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+            "createCrmActivity: CRM модуль подключен успешно\n", 
+            FILE_APPEND | LOCK_EX);
+        
         try {
-            // Конвертируем даты в ISO формат для Bitrix24 API
-            $startTime = date('c', strtotime($dateFrom)); // ISO 8601 format
-            $endTime = date('c', strtotime($dateTo));
+            // Конвертируем даты в формат MySQL datetime (Y-m-d H:i:s)
+            $startTimestamp = strtotime($dateFrom);
+            $endTimestamp = strtotime($dateTo);
+            
+            // Важно: формат должен быть MySQL datetime для корректного отображения в CRM
+            $startTime = date('d.m.Y H:i:s', $startTimestamp);
+            $endTime = date('d.m.Y H:i:s', $endTimestamp);
+            
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "createCrmActivity: Конвертированные даты - StartTime=$startTime, EndTime=$endTime\n", 
+                FILE_APPEND | LOCK_EX);
+            
+            // Проверяем, существует ли класс CCrmActivity
+            if (!class_exists('\CCrmActivity')) {
+                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                    "createCrmActivity ERROR: Класс CCrmActivity не найден\n", 
+                    FILE_APPEND | LOCK_EX);
+                return false;
+            }
             
             // Создаем активность типа "Встреча" (TYPE_ID = 1)
             $activity = new \CCrmActivity(false);
@@ -1241,22 +1268,27 @@ class Calendar
             $fields = [
                 'OWNER_TYPE_ID' => 2, // 2 = Deal (Сделка)
                 'OWNER_ID' => $dealId,
-                'TYPE_ID' => 1, // 1 = Встреча/Звонок
-                'PROVIDER_ID' => 'CRM_MEETING', // Провайдер для встреч
-                'PROVIDER_TYPE_ID' => 'MEETING', // Тип провайдера
+                'TYPE_ID' => 2, // 2 = Meeting (Встреча)
                 'SUBJECT' => $title,
                 'DESCRIPTION' => 'Запись из календаря клиники',
-                'DESCRIPTION_TYPE' => 1, // 1 = plain text
+                'DESCRIPTION_TYPE' => 3, // 3 = bbCode
+                'DEADLINE' => $endTime, // Дата завершения
                 'START_TIME' => $startTime,
                 'END_TIME' => $endTime,
                 'COMPLETED' => 'N',
                 'RESPONSIBLE_ID' => $responsibleId,
-                'PRIORITY' => 2, // 2 = средний приоритет
-                'NOTIFY_TYPE' => 0, // Не уведомлять
-                'AUTOCOMPLETE_RULE' => 0,
+                'PRIORITY' => 2, // Средний приоритет
             ];
             
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "createCrmActivity: Поля для создания активности: " . print_r($fields, true) . "\n", 
+                FILE_APPEND | LOCK_EX);
+            
             $activityId = $activity->Add($fields);
+            
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "createCrmActivity: activity->Add() вернул: " . var_export($activityId, true) . "\n", 
+                FILE_APPEND | LOCK_EX);
             
             if ($activityId) {
                 file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
@@ -1265,15 +1297,24 @@ class Calendar
                 return $activityId;
             } else {
                 $error = $activity->LAST_ERROR;
-                error_log('Ошибка создания CRM активности: ' . $error);
+                
+                // Получаем глобальную переменную APPLICATION с ошибками
+                global $APPLICATION;
+                $appError = $APPLICATION->GetException();
+                
                 file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                    "CRM_ACTIVITY ERROR: " . $error . "\n", 
+                    "CRM_ACTIVITY ERROR: LAST_ERROR='" . $error . "', APP_ERROR='" . ($appError ? $appError->GetString() : 'нет') . "'\n", 
                     FILE_APPEND | LOCK_EX);
+                    
+                error_log('Ошибка создания CRM активности: ' . $error);
                 return false;
             }
             
         } catch (\Exception $e) {
             error_log('Ошибка создания CRM активности: ' . $e->getMessage());
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "createCrmActivity EXCEPTION: " . $e->getMessage() . "\n" . $e->getTraceAsString() . "\n", 
+                FILE_APPEND | LOCK_EX);
             return false;
         }
     }
@@ -1294,9 +1335,9 @@ class Calendar
         }
         
         try {
-            // Конвертируем даты в ISO формат
-            $startTime = date('c', strtotime($dateFrom));
-            $endTime = date('c', strtotime($dateTo));
+            // Конвертируем даты в формат MySQL (Y-m-d H:i:s)
+            $startTime = date('Y-m-d H:i:s', strtotime($dateFrom));
+            $endTime = date('Y-m-d H:i:s', strtotime($dateTo));
             
             $activity = new \CCrmActivity(false);
             

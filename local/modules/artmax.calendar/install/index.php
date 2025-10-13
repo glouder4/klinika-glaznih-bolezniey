@@ -123,6 +123,71 @@ class artmax_calendar extends CModule
         VALUES ('Филиал - 1', '', '', '', 'Europe/Moscow')
         ";
         $connection->query($sqlDefaultBranch);
+        
+        // Создаем пользовательское поле "Бронирование" для сделки
+        $this->createDealBookingField();
+    }
+    
+    /**
+     * Создание пользовательского поля "Бронирование" для сделки
+     */
+    private function createDealBookingField()
+    {
+        if (!\Bitrix\Main\Loader::includeModule('crm')) {
+            return;
+        }
+        
+        $fieldCode = 'UF_CRM_CALENDAR_BOOKING';
+        
+        // Проверяем, существует ли уже поле
+        $existingField = \CUserTypeEntity::GetList(
+            [],
+            [
+                'ENTITY_ID' => 'CRM_DEAL',
+                'FIELD_NAME' => $fieldCode
+            ]
+        )->Fetch();
+        
+        if ($existingField) {
+            // Сохраняем ID существующего поля в настройках модуля
+            \Bitrix\Main\Config\Option::set('artmax.calendar', 'deal_booking_field', $fieldCode);
+            return;
+        }
+        
+        // Создаем новое поле типа "Бронирование"
+        $userTypeEntity = new \CUserTypeEntity();
+        $fieldId = $userTypeEntity->Add([
+            'ENTITY_ID' => 'CRM_DEAL',
+            'FIELD_NAME' => $fieldCode,
+            'USER_TYPE_ID' => 'resourcebooking', // Тип "Бронирование"
+            'SORT' => 500,
+            'MULTIPLE' => 'Y', // Множественное
+            'MANDATORY' => 'N',
+            'SHOW_FILTER' => 'N',
+            'SHOW_IN_LIST' => 'Y',
+            'EDIT_IN_LIST' => 'Y',
+            'IS_SEARCHABLE' => 'N',
+            'SETTINGS' => [
+                'CALENDAR_IBLOCK_ID' => 0 // ID инфоблока календаря (если нужен)
+            ],
+            'EDIT_FORM_LABEL' => [
+                'ru' => 'Бронирование из календаря клиники',
+                'en' => 'Calendar Clinic Booking'
+            ],
+            'LIST_COLUMN_LABEL' => [
+                'ru' => 'Бронирование',
+                'en' => 'Booking'
+            ],
+            'LIST_FILTER_LABEL' => [
+                'ru' => 'Бронирование',
+                'en' => 'Booking'
+            ]
+        ]);
+        
+        if ($fieldId) {
+            // Сохраняем код поля в настройках модуля
+            \Bitrix\Main\Config\Option::set('artmax.calendar', 'deal_booking_field', $fieldCode);
+        }
     }
 
     public function UnInstallDB()
@@ -133,9 +198,39 @@ class artmax_calendar extends CModule
         $connection->query("DROP TABLE IF EXISTS artmax_calendar_events");
         $connection->query("DROP TABLE IF EXISTS artmax_calendar_branches");
         
+        // Удаляем пользовательское поле бронирования
+        $this->deleteDealBookingField();
+        
         // Удаляем настройки модуля
         \Bitrix\Main\Config\Option::delete('artmax.calendar', ['name' => 'menu_item_id']);
         \Bitrix\Main\Config\Option::delete('artmax.calendar', ['name' => 'custom_section_id']);
+        \Bitrix\Main\Config\Option::delete('artmax.calendar', ['name' => 'deal_booking_field']);
+    }
+    
+    /**
+     * Удаление пользовательского поля "Бронирование" для сделки
+     */
+    private function deleteDealBookingField()
+    {
+        if (!\Bitrix\Main\Loader::includeModule('crm')) {
+            return;
+        }
+        
+        $fieldCode = \Bitrix\Main\Config\Option::get('artmax.calendar', 'deal_booking_field', 'UF_CRM_CALENDAR_BOOKING');
+        
+        // Ищем поле
+        $existingField = \CUserTypeEntity::GetList(
+            [],
+            [
+                'ENTITY_ID' => 'CRM_DEAL',
+                'FIELD_NAME' => $fieldCode
+            ]
+        )->Fetch();
+        
+        if ($existingField) {
+            $userTypeEntity = new \CUserTypeEntity();
+            $userTypeEntity->Delete($existingField['ID']);
+        }
     }
 
     public function InstallEvents()

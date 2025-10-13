@@ -1058,6 +1058,64 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                     }
                 }
                 
+                // Если есть привязанная сделка, обновляем бронирование
+                if (!empty($existingEvent['DEAL_ENTITY_ID']) && \CModule::IncludeModule('crm')) {
+                    $responsibleId = $existingEvent['EMPLOYEE_ID'] ?? $userId;
+                    
+                    // Получаем часовой пояс филиала
+                    $calendar = new \Artmax\Calendar\Calendar();
+                    $branchTimezone = $calendar->getBranchTimezone($existingEvent['BRANCH_ID']);
+                    
+                    // Получаем текущее время сервера и время филиала для вычисления разности
+                    $serverTime = new \DateTime('now');
+                    $branchTime = new \DateTime('now', new \DateTimeZone($branchTimezone));
+                    $timeDifference = $serverTime->getOffset() - $branchTime->getOffset();
+                    
+                    // Корректируем время с учетом разности
+                    $originalDateTime = \DateTime::createFromFormat('d.m.Y H:i:s', $dateFrom, new \DateTimeZone($branchTimezone));
+                    $correctedDateTime = clone $originalDateTime;
+                    if ($timeDifference < 0) {
+                        // Филиал впереди сервера - вычитаем разность
+                        $correctedDateTime->sub(new \DateInterval('PT' . abs($timeDifference) . 'S'));
+                    } else {
+                        // Филиал позади сервера - добавляем разность
+                        $correctedDateTime->add(new \DateInterval('PT' . abs($timeDifference) . 'S'));
+                    }
+                    $bookingDateTime = $correctedDateTime->format('d.m.Y H:i:s');
+                    
+                    // Вычисляем длительность через DateTime объекты с часовым поясом филиала
+                    $startDateTime = \DateTime::createFromFormat('d.m.Y H:i:s', $dateFrom, new \DateTimeZone($branchTimezone));
+                    $endDateTime = \DateTime::createFromFormat('d.m.Y H:i:s', $dateTo, new \DateTimeZone($branchTimezone));
+                    $durationMinutes = ($endDateTime->getTimestamp() - $startDateTime->getTimestamp()) / 60;
+                    $bookingValue = "user|{$responsibleId}|{$bookingDateTime}|{$durationMinutes}|{$title}";
+                    
+                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                        "UPDATE_EVENT: Вычисление бронирования:\n" .
+                        "  dateFrom: $dateFrom\n" .
+                        "  dateTo: $dateTo\n" .
+                        "  startDateTime timestamp: {$startDateTime->getTimestamp()}\n" .
+                        "  endDateTime timestamp: {$endDateTime->getTimestamp()}\n" .
+                        "  durationMinutes: $durationMinutes\n" .
+                        "  EMPLOYEE_ID: {$existingEvent['EMPLOYEE_ID']}\n" .
+                        "  responsibleId: $responsibleId\n" .
+                        "  bookingDateTime: $bookingDateTime\n" .
+                        "  title: $title\n" .
+                        "  ФИНАЛЬНАЯ СТРОКА: $bookingValue\n", 
+                        FILE_APPEND | LOCK_EX);
+                    
+                    $bookingFieldCode = \Bitrix\Main\Config\Option::get('artmax.calendar', 'deal_booking_field', 'UF_CRM_CALENDAR_BOOKING');
+                    
+                    $deal = new \CCrmDeal(false);
+                    $updateFields = [
+                        $bookingFieldCode => [$bookingValue]
+                    ];
+                    $deal->Update($existingEvent['DEAL_ENTITY_ID'], $updateFields);
+                    
+                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                        "UPDATE_EVENT: Обновлено бронирование в сделке ID={$existingEvent['DEAL_ENTITY_ID']}\n", 
+                        FILE_APPEND | LOCK_EX);
+                }
+                
                 return ['success' => true];
             } else {
                 return ['success' => false, 'error' => 'Ошибка обновления события'];
@@ -1311,8 +1369,16 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                 $dealId = $dealDataArray['id'];
                 
                 // Проверяем, есть ли уже активность у события
+                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                    "SAVE_DEAL: Проверка активности. ACTIVITY_ID={$event['ACTIVITY_ID']}\n", 
+                    FILE_APPEND | LOCK_EX);
+                    
                 if (!empty($event['ACTIVITY_ID'])) {
                     // Обновляем существующую активность
+                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                        "SAVE_DEAL: Обновляем существующую активность ID={$event['ACTIVITY_ID']}\n", 
+                        FILE_APPEND | LOCK_EX);
+                        
                     $activityUpdated = $calendar->updateCrmActivity(
                         $event['ACTIVITY_ID'],
                         $event['TITLE'],
@@ -1325,6 +1391,10 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                         FILE_APPEND | LOCK_EX);
                 } else {
                     // Создаем новую активность
+                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                        "SAVE_DEAL: Создаем новую активность. DealID=$dealId, Title={$event['TITLE']}, DateFrom={$event['DATE_FROM']}, DateTo={$event['DATE_TO']}, EmployeeID={$event['EMPLOYEE_ID']}\n", 
+                        FILE_APPEND | LOCK_EX);
+                        
                     $activityId = $calendar->createCrmActivity(
                         $dealId,
                         $event['TITLE'],
@@ -1333,12 +1403,101 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                         $event['EMPLOYEE_ID'] ?? \CCrmSecurityHelper::GetCurrentUserID()
                     );
                     
+                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                        "SAVE_DEAL: createCrmActivity вернул activityId=$activityId\n", 
+                        FILE_APPEND | LOCK_EX);
+                    
                     if ($activityId) {
                         // Сохраняем ID активности
                         $calendar->saveEventActivityId($eventId, $activityId);
                         
                         file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
                             "SAVE_DEAL: Создана активность ID=$activityId для события ID=$eventId\n", 
+                            FILE_APPEND | LOCK_EX);
+                    } else {
+                        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                            "SAVE_DEAL ERROR: Не удалось создать активность!\n", 
+                            FILE_APPEND | LOCK_EX);
+                    }
+                }
+                
+                // Обновляем бронирование в сделке
+                if (!\CModule::IncludeModule('crm')) {
+                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                        "SAVE_DEAL: CRM модуль не подключен для обновления бронирования\n", 
+                        FILE_APPEND | LOCK_EX);
+                } else {
+                    // Формируем строку бронирования
+                    $responsibleId = $event['EMPLOYEE_ID'] ?? \CCrmSecurityHelper::GetCurrentUserID();
+                    
+                    // Получаем часовой пояс филиала
+                    $calendar = new \Artmax\Calendar\Calendar();
+                    $branchTimezone = $calendar->getBranchTimezone($event['BRANCH_ID']);
+                    
+                    // Получаем текущее время сервера и время филиала для вычисления разности
+                    $serverTime = new \DateTime('now');
+                    $branchTime = new \DateTime('now', new \DateTimeZone($branchTimezone));
+                    $timeDifference = $serverTime->getOffset() - $branchTime->getOffset();
+                    
+                    // Корректируем время с учетом разности
+                    $originalDateTime = \DateTime::createFromFormat('d.m.Y H:i:s', $event['DATE_FROM'], new \DateTimeZone($branchTimezone));
+                    $correctedDateTime = clone $originalDateTime;
+                    if ($timeDifference < 0) {
+                        // Филиал впереди сервера - вычитаем разность
+                        $correctedDateTime->sub(new \DateInterval('PT' . abs($timeDifference) . 'S'));
+                    } else {
+                        // Филиал позади сервера - добавляем разность
+                        $correctedDateTime->add(new \DateInterval('PT' . abs($timeDifference) . 'S'));
+                    }
+                    $bookingDateTime = $correctedDateTime->format('d.m.Y H:i:s');
+                    
+                    // Вычисляем длительность через DateTime объекты с часовым поясом филиала
+                    $startDateTime = \DateTime::createFromFormat('d.m.Y H:i:s', $event['DATE_FROM'], new \DateTimeZone($branchTimezone));
+                    $endDateTime = \DateTime::createFromFormat('d.m.Y H:i:s', $event['DATE_TO'], new \DateTimeZone($branchTimezone));
+                    $durationMinutes = ($endDateTime->getTimestamp() - $startDateTime->getTimestamp()) / 60;
+                    $serviceName = $event['TITLE'];
+                    $bookingValue = "user|{$responsibleId}|{$bookingDateTime}|{$durationMinutes}|{$serviceName}";
+                    
+                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                        "SAVE_DEAL: Вычисление бронирования:\n" .
+                        "  DATE_FROM: {$event['DATE_FROM']}\n" .
+                        "  DATE_TO: {$event['DATE_TO']}\n" .
+                        "  branchTimezone: $branchTimezone\n" .
+                        "  serverTime offset: {$serverTime->getOffset()} секунд\n" .
+                        "  branchTime offset: {$branchTime->getOffset()} секунд\n" .
+                        "  timeDifference: $timeDifference секунд\n" .
+                        "  originalDateTime: {$originalDateTime->format('d.m.Y H:i:s')}\n" .
+                        "  correctedDateTime: $bookingDateTime\n" .
+                        "  startDateTime timestamp: {$startDateTime->getTimestamp()}\n" .
+                        "  endDateTime timestamp: {$endDateTime->getTimestamp()}\n" .
+                        "  durationMinutes: $durationMinutes\n" .
+                        "  EMPLOYEE_ID: {$event['EMPLOYEE_ID']}\n" .
+                        "  responsibleId: $responsibleId\n" .
+                        "  serviceName: $serviceName\n" .
+                        "  ФИНАЛЬНАЯ СТРОКА: $bookingValue\n", 
+                        FILE_APPEND | LOCK_EX);
+                    
+                    // Получаем код поля бронирования из настроек модуля
+                    $bookingFieldCode = \Bitrix\Main\Config\Option::get('artmax.calendar', 'deal_booking_field', 'UF_CRM_CALENDAR_BOOKING');
+                    
+                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                        "SAVE_DEAL: Обновляем бронирование в сделке - Field: $bookingFieldCode, Value: $bookingValue\n", 
+                        FILE_APPEND | LOCK_EX);
+                    
+                    // Обновляем сделку
+                    $deal = new \CCrmDeal(false);
+                    $updateFields = [
+                        $bookingFieldCode => [$bookingValue]
+                    ];
+                    $updateResult = $deal->Update($dealId, $updateFields);
+                    
+                    if ($updateResult) {
+                        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                            "SAVE_DEAL: Бронирование успешно обновлено в сделке ID=$dealId\n", 
+                            FILE_APPEND | LOCK_EX);
+                    } else {
+                        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                            "SAVE_DEAL ERROR: Не удалось обновить бронирование в сделке\n", 
                             FILE_APPEND | LOCK_EX);
                     }
                 }
@@ -1535,6 +1694,63 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                 $dealTitle = 'Сделка для события #' . $eventId;
             }
 
+            $responsibleId = $event['EMPLOYEE_ID'] ?? \CCrmSecurityHelper::GetCurrentUserID();
+            
+            // Получаем часовой пояс филиала
+            $calendar = new \Artmax\Calendar\Calendar();
+            $branchTimezone = $calendar->getBranchTimezone($event['BRANCH_ID']);
+            
+            // Получаем текущее время сервера и время филиала для вычисления разности
+            $serverTime = new \DateTime('now');
+            $branchTime = new \DateTime('now', new \DateTimeZone($branchTimezone));
+            $timeDifference = $serverTime->getOffset() - $branchTime->getOffset();
+            
+            // Корректируем время с учетом разности
+            $originalDateTime = \DateTime::createFromFormat('d.m.Y H:i:s', $event['DATE_FROM'], new \DateTimeZone($branchTimezone));
+            $correctedDateTime = clone $originalDateTime;
+            if ($timeDifference < 0) {
+                // Филиал впереди сервера - вычитаем разность
+                $correctedDateTime->sub(new \DateInterval('PT' . abs($timeDifference) . 'S'));
+            } else {
+                // Филиал позади сервера - добавляем разность
+                $correctedDateTime->add(new \DateInterval('PT' . abs($timeDifference) . 'S'));
+            }
+            $bookingDateTime = $correctedDateTime->format('d.m.Y H:i:s');
+            
+            // Вычисляем длительность через DateTime объекты с часовым поясом филиала
+            $startDateTime = \DateTime::createFromFormat('d.m.Y H:i:s', $event['DATE_FROM'], new \DateTimeZone($branchTimezone));
+            $endDateTime = \DateTime::createFromFormat('d.m.Y H:i:s', $event['DATE_TO'], new \DateTimeZone($branchTimezone));
+            $durationMinutes = ($endDateTime->getTimestamp() - $startDateTime->getTimestamp()) / 60;
+            $serviceName = $event['TITLE'];
+            // Формат для Bitrix resourcebooking: user|ID|дата_время_начала|длительность_в_минутах|название
+            $bookingValue = "user|{$responsibleId}|{$bookingDateTime}|{$durationMinutes}|{$serviceName}";
+            
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "CREATE_DEAL: Вычисление бронирования:\n" .
+                "  DATE_FROM: {$event['DATE_FROM']}\n" .
+                "  DATE_TO: {$event['DATE_TO']}\n" .
+                "  branchTimezone: $branchTimezone\n" .
+                "  serverTime offset: {$serverTime->getOffset()} секунд\n" .
+                "  branchTime offset: {$branchTime->getOffset()} секунд\n" .
+                "  timeDifference: $timeDifference секунд\n" .
+                "  originalDateTime: {$originalDateTime->format('d.m.Y H:i:s')}\n" .
+                "  correctedDateTime: $bookingDateTime\n" .
+                "  startDateTime timestamp: {$startDateTime->getTimestamp()}\n" .
+                "  endDateTime timestamp: {$endDateTime->getTimestamp()}\n" .
+                "  durationMinutes: $durationMinutes\n" .
+                "  EMPLOYEE_ID: {$event['EMPLOYEE_ID']}\n" .
+                "  responsibleId: $responsibleId\n" .
+                "  serviceName: $serviceName\n" .
+                "  ФИНАЛЬНАЯ СТРОКА: $bookingValue\n", 
+                FILE_APPEND | LOCK_EX);
+            
+            // Получаем код поля бронирования из настроек модуля
+            $bookingFieldCode = \Bitrix\Main\Config\Option::get('artmax.calendar', 'deal_booking_field', 'UF_CRM_CALENDAR_BOOKING');
+            
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "CREATE_DEAL: Формируем бронирование - Field: $bookingFieldCode, Value: $bookingValue\n", 
+                FILE_APPEND | LOCK_EX);
+            
             // Создаем сделку
             $deal = new \CCrmDeal(true);
             $dealFields = [
@@ -1544,7 +1760,9 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                 'STAGE_ID' => 'NEW',
                 'OPPORTUNITY' => 0,
                 'CURRENCY_ID' => 'RUB',
-                'OPENED' => 'Y'
+                'OPENED' => 'Y',
+                // Добавляем бронирование
+                $bookingFieldCode => [$bookingValue]
             ];
 
             $dealId = $deal->Add($dealFields);
