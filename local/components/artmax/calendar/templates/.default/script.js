@@ -786,6 +786,10 @@
                     closeEditEventModal();
                     form.reset();
 
+                    // Получаем данные контакта из текущего события
+                    const contactName = window.currentEvent?.contactName || '';
+                    const contactPhone = window.currentEvent?.contactPhone || '';
+
                     // Обновляем событие в календаре
                     updateEventInCalendar({
                         id: eventId,
@@ -793,7 +797,9 @@
                         description: formData.get('description'),
                         dateFrom: formatLocalDateTime(startDateTime),
                         dateTo: formatLocalDateTime(endDateTime),
-                        eventColor: eventColor
+                        eventColor: eventColor,
+                        contactName: contactName,
+                        contactPhone: contactPhone
                     });
                 } else {
                     showNotification('Ошибка: ' + (data.error || 'Неизвестная ошибка'), 'error');
@@ -5978,7 +5984,14 @@
                 const titleElement = eventElement.querySelector('.event-title');
                 const timeElement = eventElement.querySelector('.event-time');
                 
-                if (titleElement) titleElement.textContent = eventData.title;
+                // Обновляем заголовок с учетом контакта
+                if (titleElement) {
+                    let titleText = eventData.title || '';
+                    if (eventData.contactName || eventData.contactPhone) {
+                        titleText = `${titleText} - ${eventData.contactName || ''} - ${eventData.contactPhone || ''}`.replace(/\s+-\s+-\s+/, ' - ').replace(/\s+-\s+$/, '');
+                    }
+                    titleElement.textContent = titleText;
+                }
                 if (timeElement) {
                     console.log('updateEventInCalendar: eventData.dateFrom =', eventData.dateFrom);
                     
@@ -6046,7 +6059,20 @@
                         });
                     }
                     
-                    timeElement.textContent = `${timeString} – ${endTimeString}`;
+                    // Обновляем только span с временем, сохраняя иконки
+                    let timeSpan = timeElement.querySelector('span');
+                    if (!timeSpan) {
+                        // Если span нет, создаем его
+                        timeSpan = document.createElement('span');
+                        // Сохраняем существующие иконки, если есть
+                        const iconsDiv = timeElement.querySelector('.event-icons');
+                        timeElement.textContent = ''; // Очищаем
+                        timeElement.appendChild(timeSpan);
+                        if (iconsDiv) {
+                            timeElement.appendChild(iconsDiv);
+                        }
+                    }
+                    timeSpan.textContent = `${timeString} – ${endTimeString}`;
                 }
                 
                 // Обновляем цвет события
