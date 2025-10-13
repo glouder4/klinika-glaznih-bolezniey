@@ -258,6 +258,81 @@ switch ($action) {
         try {
             $result = $calendarObj->updateEvent($eventId, $title, $description, $dateFrom, $dateTo, $eventColor, $branchId, $employeeId);
             if ($result) {
+                // Обновляем активность CRM если есть
+                if (!empty($event['ACTIVITY_ID'])) {
+                    $activityUpdated = $calendarObj->updateCrmActivity(
+                        $event['ACTIVITY_ID'],
+                        $title,
+                        $dateFrom,
+                        $dateTo
+                    );
+                    
+                    if ($activityUpdated) {
+                        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                            "UPDATE_EVENT: Обновлена активность CRM ID={$event['ACTIVITY_ID']}\n", 
+                            FILE_APPEND | LOCK_EX);
+                    }
+                }
+                
+                // Обновляем бронирование в сделке если есть
+                if (!empty($event['DEAL_ENTITY_ID']) && \CModule::IncludeModule('crm')) {
+                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                        "UPDATE_EVENT (ajax.php): Начинаем обновление бронирования для сделки ID={$event['DEAL_ENTITY_ID']}\n", 
+                        FILE_APPEND | LOCK_EX);
+                    
+                    $responsibleId = $event['EMPLOYEE_ID'] ?? $GLOBALS['USER']->GetID();
+                    $branchTimezone = $calendarObj->getBranchTimezone($event['BRANCH_ID']);
+                    
+                    // Преобразуем формат даты из Y-m-d H:i:s в d.m.Y H:i:s для бронирования
+                    $dateFromObj = \DateTime::createFromFormat('Y-m-d H:i:s', $dateFrom, new \DateTimeZone($branchTimezone));
+                    $dateToObj = \DateTime::createFromFormat('Y-m-d H:i:s', $dateTo, new \DateTimeZone($branchTimezone));
+                    
+                    if (!$dateFromObj || !$dateToObj) {
+                        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                            "UPDATE_EVENT (ajax.php): Ошибка парсинга дат. dateFrom=$dateFrom, dateTo=$dateTo\n", 
+                            FILE_APPEND | LOCK_EX);
+                        // Пробуем другой формат
+                        $dateFromObj = \DateTime::createFromFormat('d.m.Y H:i:s', $dateFrom, new \DateTimeZone($branchTimezone));
+                        $dateToObj = \DateTime::createFromFormat('d.m.Y H:i:s', $dateTo, new \DateTimeZone($branchTimezone));
+                    }
+                    
+                    if ($dateFromObj && $dateToObj) {
+                        // Используем исходное время как есть
+                        $bookingDateTime = $dateFromObj->format('d.m.Y H:i:s');
+                        
+                        // Вычисляем длительность
+                        $durationSeconds = $dateToObj->getTimestamp() - $dateFromObj->getTimestamp();
+                        $bookingValue = "user|{$responsibleId}|{$bookingDateTime}|{$durationSeconds}|{$title}";
+                        
+                        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                            "UPDATE_EVENT (ajax.php): Вычисление бронирования:\n" .
+                            "  dateFrom (вход): $dateFrom\n" .
+                            "  dateTo (вход): $dateTo\n" .
+                            "  branchTimezone: $branchTimezone\n" .
+                            "  bookingDateTime: $bookingDateTime\n" .
+                            "  startDateTime timestamp: {$dateFromObj->getTimestamp()}\n" .
+                            "  endDateTime timestamp: {$dateToObj->getTimestamp()}\n" .
+                            "  durationSeconds: $durationSeconds\n" .
+                            "  EMPLOYEE_ID: {$event['EMPLOYEE_ID']}\n" .
+                            "  responsibleId: $responsibleId\n" .
+                            "  title: $title\n" .
+                            "  ФИНАЛЬНАЯ СТРОКА: $bookingValue\n", 
+                            FILE_APPEND | LOCK_EX);
+                        
+                        $bookingFieldCode = \Bitrix\Main\Config\Option::get('artmax.calendar', 'deal_booking_field', 'UF_CRM_CALENDAR_BOOKING');
+                        
+                        $deal = new \CCrmDeal(false);
+                        $updateFields = [
+                            $bookingFieldCode => [$bookingValue]
+                        ];
+                        $deal->Update($event['DEAL_ENTITY_ID'], $updateFields);
+                        
+                        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                            "UPDATE_EVENT (ajax.php): Обновлено бронирование в сделке ID={$event['DEAL_ENTITY_ID']}\n", 
+                            FILE_APPEND | LOCK_EX);
+                    }
+                }
+                
                 die(json_encode(['success' => true]));
             } else {
                 die(json_encode(['success' => false, 'error' => 'Ошибка обновления события']));

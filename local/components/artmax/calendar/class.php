@@ -1069,8 +1069,17 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                     }
                 }
                 
+                // Логируем перед проверкой сделки
+                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                    "UPDATE_EVENT: Проверка наличия сделки. DEAL_ENTITY_ID={$existingEvent['DEAL_ENTITY_ID']}\n", 
+                    FILE_APPEND | LOCK_EX);
+                
                 // Если есть привязанная сделка, обновляем бронирование
                 if (!empty($existingEvent['DEAL_ENTITY_ID']) && \CModule::IncludeModule('crm')) {
+                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                        "UPDATE_EVENT: Условие выполнено, начинаем обновление бронирования\n", 
+                        FILE_APPEND | LOCK_EX);
+                    
                     $responsibleId = $existingEvent['EMPLOYEE_ID'] ?? $userId;
                     
                 // Получаем часовой пояс филиала
