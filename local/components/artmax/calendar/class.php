@@ -1012,6 +1012,17 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
         }
 
         try {
+            // Логируем входящие данные
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "UPDATE_EVENT: Входящие данные:\n" .
+                "  eventId: $eventId\n" .
+                "  title: $title\n" .
+                "  dateFrom: $dateFrom\n" .
+                "  dateTo: $dateTo\n" .
+                "  eventColor: $eventColor\n" .
+                "  branchId: $branchId\n", 
+                FILE_APPEND | LOCK_EX);
+            
             if (!CModule::IncludeModule('artmax.calendar')) {
                 return ['success' => false, 'error' => 'Модуль artmax.calendar не установлен'];
             }
@@ -1062,46 +1073,44 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                 if (!empty($existingEvent['DEAL_ENTITY_ID']) && \CModule::IncludeModule('crm')) {
                     $responsibleId = $existingEvent['EMPLOYEE_ID'] ?? $userId;
                     
-                    // Получаем часовой пояс филиала
-                    $calendar = new \Artmax\Calendar\Calendar();
-                    $branchTimezone = $calendar->getBranchTimezone($existingEvent['BRANCH_ID']);
-                    
-                    // Получаем текущее время сервера и время филиала для вычисления разности
-                    $serverTime = new \DateTime('now');
-                    $branchTime = new \DateTime('now', new \DateTimeZone($branchTimezone));
-                    $timeDifference = $serverTime->getOffset() - $branchTime->getOffset();
-                    
-                    // Корректируем время с учетом разности
-                    $originalDateTime = \DateTime::createFromFormat('d.m.Y H:i:s', $dateFrom, new \DateTimeZone($branchTimezone));
-                    $correctedDateTime = clone $originalDateTime;
-                    if ($timeDifference < 0) {
-                        // Филиал впереди сервера - вычитаем разность
-                        $correctedDateTime->sub(new \DateInterval('PT' . abs($timeDifference) . 'S'));
-                    } else {
-                        // Филиал позади сервера - добавляем разность
-                        $correctedDateTime->add(new \DateInterval('PT' . abs($timeDifference) . 'S'));
-                    }
-                    $bookingDateTime = $correctedDateTime->format('d.m.Y H:i:s');
-                    
-                    // Вычисляем длительность через DateTime объекты с часовым поясом филиала
-                    $startDateTime = \DateTime::createFromFormat('d.m.Y H:i:s', $dateFrom, new \DateTimeZone($branchTimezone));
-                    $endDateTime = \DateTime::createFromFormat('d.m.Y H:i:s', $dateTo, new \DateTimeZone($branchTimezone));
-                    $durationSeconds = $endDateTime->getTimestamp() - $startDateTime->getTimestamp();
-                    $bookingValue = "user|{$responsibleId}|{$bookingDateTime}|{$durationSeconds}|{$title}";
-                    
+                // Получаем часовой пояс филиала
+                $calendar = new \Artmax\Calendar\Calendar();
+                $branchTimezone = $calendar->getBranchTimezone($existingEvent['BRANCH_ID']);
+                
+                // Преобразуем формат даты из Y-m-d H:i:s в d.m.Y H:i:s для бронирования
+                $dateFromObj = \DateTime::createFromFormat('Y-m-d H:i:s', $dateFrom, new \DateTimeZone($branchTimezone));
+                $dateToObj = \DateTime::createFromFormat('Y-m-d H:i:s', $dateTo, new \DateTimeZone($branchTimezone));
+                
+                if (!$dateFromObj || !$dateToObj) {
                     file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                        "UPDATE_EVENT: Вычисление бронирования:\n" .
-                        "  dateFrom: $dateFrom\n" .
-                        "  dateTo: $dateTo\n" .
-                        "  startDateTime timestamp: {$startDateTime->getTimestamp()}\n" .
-                        "  endDateTime timestamp: {$endDateTime->getTimestamp()}\n" .
-                        "  durationSeconds: $durationSeconds\n" .
-                        "  EMPLOYEE_ID: {$existingEvent['EMPLOYEE_ID']}\n" .
-                        "  responsibleId: $responsibleId\n" .
-                        "  bookingDateTime: $bookingDateTime\n" .
-                        "  title: $title\n" .
-                        "  ФИНАЛЬНАЯ СТРОКА: $bookingValue\n", 
+                        "UPDATE_EVENT: Ошибка парсинга дат. dateFrom=$dateFrom, dateTo=$dateTo\n", 
                         FILE_APPEND | LOCK_EX);
+                    // Пробуем другой формат
+                    $dateFromObj = \DateTime::createFromFormat('d.m.Y H:i:s', $dateFrom, new \DateTimeZone($branchTimezone));
+                    $dateToObj = \DateTime::createFromFormat('d.m.Y H:i:s', $dateTo, new \DateTimeZone($branchTimezone));
+                }
+                
+                // Используем исходное время как есть
+                $bookingDateTime = $dateFromObj->format('d.m.Y H:i:s');
+                
+                // Вычисляем длительность
+                $durationSeconds = $dateToObj->getTimestamp() - $dateFromObj->getTimestamp();
+                $bookingValue = "user|{$responsibleId}|{$bookingDateTime}|{$durationSeconds}|{$title}";
+                
+                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                    "UPDATE_EVENT: Вычисление бронирования:\n" .
+                    "  dateFrom (вход): $dateFrom\n" .
+                    "  dateTo (вход): $dateTo\n" .
+                    "  branchTimezone: $branchTimezone\n" .
+                    "  bookingDateTime: $bookingDateTime\n" .
+                    "  startDateTime timestamp: {$dateFromObj->getTimestamp()}\n" .
+                    "  endDateTime timestamp: {$dateToObj->getTimestamp()}\n" .
+                    "  durationSeconds: $durationSeconds\n" .
+                    "  EMPLOYEE_ID: {$existingEvent['EMPLOYEE_ID']}\n" .
+                    "  responsibleId: $responsibleId\n" .
+                    "  title: $title\n" .
+                    "  ФИНАЛЬНАЯ СТРОКА: $bookingValue\n", 
+                    FILE_APPEND | LOCK_EX);
                     
                     $bookingFieldCode = \Bitrix\Main\Config\Option::get('artmax.calendar', 'deal_booking_field', 'UF_CRM_CALENDAR_BOOKING');
                     
@@ -1427,55 +1436,37 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                         "SAVE_DEAL: CRM модуль не подключен для обновления бронирования\n", 
                         FILE_APPEND | LOCK_EX);
                 } else {
-                    // Формируем строку бронирования
-                    $responsibleId = $event['EMPLOYEE_ID'] ?? \CCrmSecurityHelper::GetCurrentUserID();
-                    
-                    // Получаем часовой пояс филиала
-                    $calendar = new \Artmax\Calendar\Calendar();
-                    $branchTimezone = $calendar->getBranchTimezone($event['BRANCH_ID']);
-                    
-                    // Получаем текущее время сервера и время филиала для вычисления разности
-                    $serverTime = new \DateTime('now');
-                    $branchTime = new \DateTime('now', new \DateTimeZone($branchTimezone));
-                    $timeDifference = $serverTime->getOffset() - $branchTime->getOffset();
-                    
-                    // Корректируем время с учетом разности
-                    $originalDateTime = \DateTime::createFromFormat('d.m.Y H:i:s', $event['DATE_FROM'], new \DateTimeZone($branchTimezone));
-                    $correctedDateTime = clone $originalDateTime;
-                    if ($timeDifference < 0) {
-                        // Филиал впереди сервера - вычитаем разность
-                        $correctedDateTime->sub(new \DateInterval('PT' . abs($timeDifference) . 'S'));
-                    } else {
-                        // Филиал позади сервера - добавляем разность
-                        $correctedDateTime->add(new \DateInterval('PT' . abs($timeDifference) . 'S'));
-                    }
-                    $bookingDateTime = $correctedDateTime->format('d.m.Y H:i:s');
-                    
-            // Вычисляем длительность через DateTime объекты с часовым поясом филиала
-            $startDateTime = \DateTime::createFromFormat('d.m.Y H:i:s', $event['DATE_FROM'], new \DateTimeZone($branchTimezone));
-            $endDateTime = \DateTime::createFromFormat('d.m.Y H:i:s', $event['DATE_TO'], new \DateTimeZone($branchTimezone));
-            $durationSeconds = $endDateTime->getTimestamp() - $startDateTime->getTimestamp();
-            $serviceName = $event['TITLE'];
-            $bookingValue = "user|{$responsibleId}|{$bookingDateTime}|{$durationSeconds}|{$serviceName}";
-                    
-                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                        "SAVE_DEAL: Вычисление бронирования:\n" .
-                        "  DATE_FROM: {$event['DATE_FROM']}\n" .
-                        "  DATE_TO: {$event['DATE_TO']}\n" .
-                        "  branchTimezone: $branchTimezone\n" .
-                        "  serverTime offset: {$serverTime->getOffset()} секунд\n" .
-                        "  branchTime offset: {$branchTime->getOffset()} секунд\n" .
-                        "  timeDifference: $timeDifference секунд\n" .
-                        "  originalDateTime: {$originalDateTime->format('d.m.Y H:i:s')}\n" .
-                        "  correctedDateTime: $bookingDateTime\n" .
-                        "  startDateTime timestamp: {$startDateTime->getTimestamp()}\n" .
-                        "  endDateTime timestamp: {$endDateTime->getTimestamp()}\n" .
-                        "  durationSeconds: $durationSeconds\n" .
-                        "  EMPLOYEE_ID: {$event['EMPLOYEE_ID']}\n" .
-                        "  responsibleId: $responsibleId\n" .
-                        "  serviceName: $serviceName\n" .
-                        "  ФИНАЛЬНАЯ СТРОКА: $bookingValue\n", 
-                        FILE_APPEND | LOCK_EX);
+                // Формируем строку бронирования
+                $responsibleId = $event['EMPLOYEE_ID'] ?? \CCrmSecurityHelper::GetCurrentUserID();
+                
+                // Получаем часовой пояс филиала
+                $calendar = new \Artmax\Calendar\Calendar();
+                $branchTimezone = $calendar->getBranchTimezone($event['BRANCH_ID']);
+                
+                // Используем исходное время как есть
+                $bookingDateTime = $event['DATE_FROM'];
+                
+                // Вычисляем длительность через DateTime объекты с часовым поясом филиала
+                $startDateTime = \DateTime::createFromFormat('d.m.Y H:i:s', $event['DATE_FROM'], new \DateTimeZone($branchTimezone));
+                $endDateTime = \DateTime::createFromFormat('d.m.Y H:i:s', $event['DATE_TO'], new \DateTimeZone($branchTimezone));
+                $durationSeconds = $endDateTime->getTimestamp() - $startDateTime->getTimestamp();
+                $serviceName = $event['TITLE'];
+                $bookingValue = "user|{$responsibleId}|{$bookingDateTime}|{$durationSeconds}|{$serviceName}";
+                
+                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                    "SAVE_DEAL: Вычисление бронирования:\n" .
+                    "  DATE_FROM: {$event['DATE_FROM']}\n" .
+                    "  DATE_TO: {$event['DATE_TO']}\n" .
+                    "  branchTimezone: $branchTimezone\n" .
+                    "  bookingDateTime: $bookingDateTime\n" .
+                    "  startDateTime timestamp: {$startDateTime->getTimestamp()}\n" .
+                    "  endDateTime timestamp: {$endDateTime->getTimestamp()}\n" .
+                    "  durationSeconds: $durationSeconds\n" .
+                    "  EMPLOYEE_ID: {$event['EMPLOYEE_ID']}\n" .
+                    "  responsibleId: $responsibleId\n" .
+                    "  serviceName: $serviceName\n" .
+                    "  ФИНАЛЬНАЯ СТРОКА: $bookingValue\n", 
+                    FILE_APPEND | LOCK_EX);
                     
                     // Получаем код поля бронирования из настроек модуля
                     $bookingFieldCode = \Bitrix\Main\Config\Option::get('artmax.calendar', 'deal_booking_field', 'UF_CRM_CALENDAR_BOOKING');
@@ -1700,22 +1691,8 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
             $calendar = new \Artmax\Calendar\Calendar();
             $branchTimezone = $calendar->getBranchTimezone($event['BRANCH_ID']);
             
-            // Получаем текущее время сервера и время филиала для вычисления разности
-            $serverTime = new \DateTime('now');
-            $branchTime = new \DateTime('now', new \DateTimeZone($branchTimezone));
-            $timeDifference = $serverTime->getOffset() - $branchTime->getOffset();
-            
-            // Корректируем время с учетом разности
-            $originalDateTime = \DateTime::createFromFormat('d.m.Y H:i:s', $event['DATE_FROM'], new \DateTimeZone($branchTimezone));
-            $correctedDateTime = clone $originalDateTime;
-            if ($timeDifference < 0) {
-                // Филиал впереди сервера - вычитаем разность
-                $correctedDateTime->sub(new \DateInterval('PT' . abs($timeDifference) . 'S'));
-            } else {
-                // Филиал позади сервера - добавляем разность
-                $correctedDateTime->add(new \DateInterval('PT' . abs($timeDifference) . 'S'));
-            }
-            $bookingDateTime = $correctedDateTime->format('d.m.Y H:i:s');
+            // Используем исходное время как есть
+            $bookingDateTime = $event['DATE_FROM'];
             
             // Вычисляем длительность через DateTime объекты с часовым поясом филиала
             $startDateTime = \DateTime::createFromFormat('d.m.Y H:i:s', $event['DATE_FROM'], new \DateTimeZone($branchTimezone));
@@ -1730,11 +1707,7 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                 "  DATE_FROM: {$event['DATE_FROM']}\n" .
                 "  DATE_TO: {$event['DATE_TO']}\n" .
                 "  branchTimezone: $branchTimezone\n" .
-                "  serverTime offset: {$serverTime->getOffset()} секунд\n" .
-                "  branchTime offset: {$branchTime->getOffset()} секунд\n" .
-                "  timeDifference: $timeDifference секунд\n" .
-                "  originalDateTime: {$originalDateTime->format('d.m.Y H:i:s')}\n" .
-                "  correctedDateTime: $bookingDateTime\n" .
+                "  bookingDateTime: $bookingDateTime\n" .
                 "  startDateTime timestamp: {$startDateTime->getTimestamp()}\n" .
                 "  endDateTime timestamp: {$endDateTime->getTimestamp()}\n" .
                 "  durationSeconds: $durationSeconds\n" .
