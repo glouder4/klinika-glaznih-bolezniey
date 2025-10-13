@@ -1086,8 +1086,8 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                     // Вычисляем длительность через DateTime объекты с часовым поясом филиала
                     $startDateTime = \DateTime::createFromFormat('d.m.Y H:i:s', $dateFrom, new \DateTimeZone($branchTimezone));
                     $endDateTime = \DateTime::createFromFormat('d.m.Y H:i:s', $dateTo, new \DateTimeZone($branchTimezone));
-                    $durationMinutes = ($endDateTime->getTimestamp() - $startDateTime->getTimestamp()) / 60;
-                    $bookingValue = "user|{$responsibleId}|{$bookingDateTime}|{$durationMinutes}|{$title}";
+                    $durationSeconds = $endDateTime->getTimestamp() - $startDateTime->getTimestamp();
+                    $bookingValue = "user|{$responsibleId}|{$bookingDateTime}|{$durationSeconds}|{$title}";
                     
                     file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
                         "UPDATE_EVENT: Вычисление бронирования:\n" .
@@ -1095,7 +1095,7 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                         "  dateTo: $dateTo\n" .
                         "  startDateTime timestamp: {$startDateTime->getTimestamp()}\n" .
                         "  endDateTime timestamp: {$endDateTime->getTimestamp()}\n" .
-                        "  durationMinutes: $durationMinutes\n" .
+                        "  durationSeconds: $durationSeconds\n" .
                         "  EMPLOYEE_ID: {$existingEvent['EMPLOYEE_ID']}\n" .
                         "  responsibleId: $responsibleId\n" .
                         "  bookingDateTime: $bookingDateTime\n" .
@@ -1451,12 +1451,12 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                     }
                     $bookingDateTime = $correctedDateTime->format('d.m.Y H:i:s');
                     
-                    // Вычисляем длительность через DateTime объекты с часовым поясом филиала
-                    $startDateTime = \DateTime::createFromFormat('d.m.Y H:i:s', $event['DATE_FROM'], new \DateTimeZone($branchTimezone));
-                    $endDateTime = \DateTime::createFromFormat('d.m.Y H:i:s', $event['DATE_TO'], new \DateTimeZone($branchTimezone));
-                    $durationMinutes = ($endDateTime->getTimestamp() - $startDateTime->getTimestamp()) / 60;
-                    $serviceName = $event['TITLE'];
-                    $bookingValue = "user|{$responsibleId}|{$bookingDateTime}|{$durationMinutes}|{$serviceName}";
+            // Вычисляем длительность через DateTime объекты с часовым поясом филиала
+            $startDateTime = \DateTime::createFromFormat('d.m.Y H:i:s', $event['DATE_FROM'], new \DateTimeZone($branchTimezone));
+            $endDateTime = \DateTime::createFromFormat('d.m.Y H:i:s', $event['DATE_TO'], new \DateTimeZone($branchTimezone));
+            $durationSeconds = $endDateTime->getTimestamp() - $startDateTime->getTimestamp();
+            $serviceName = $event['TITLE'];
+            $bookingValue = "user|{$responsibleId}|{$bookingDateTime}|{$durationSeconds}|{$serviceName}";
                     
                     file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
                         "SAVE_DEAL: Вычисление бронирования:\n" .
@@ -1470,7 +1470,7 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                         "  correctedDateTime: $bookingDateTime\n" .
                         "  startDateTime timestamp: {$startDateTime->getTimestamp()}\n" .
                         "  endDateTime timestamp: {$endDateTime->getTimestamp()}\n" .
-                        "  durationMinutes: $durationMinutes\n" .
+                        "  durationSeconds: $durationSeconds\n" .
                         "  EMPLOYEE_ID: {$event['EMPLOYEE_ID']}\n" .
                         "  responsibleId: $responsibleId\n" .
                         "  serviceName: $serviceName\n" .
@@ -1720,10 +1720,10 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
             // Вычисляем длительность через DateTime объекты с часовым поясом филиала
             $startDateTime = \DateTime::createFromFormat('d.m.Y H:i:s', $event['DATE_FROM'], new \DateTimeZone($branchTimezone));
             $endDateTime = \DateTime::createFromFormat('d.m.Y H:i:s', $event['DATE_TO'], new \DateTimeZone($branchTimezone));
-            $durationMinutes = ($endDateTime->getTimestamp() - $startDateTime->getTimestamp()) / 60;
+            $durationSeconds = $endDateTime->getTimestamp() - $startDateTime->getTimestamp();
             $serviceName = $event['TITLE'];
-            // Формат для Bitrix resourcebooking: user|ID|дата_время_начала|длительность_в_минутах|название
-            $bookingValue = "user|{$responsibleId}|{$bookingDateTime}|{$durationMinutes}|{$serviceName}";
+            // Формат для Bitrix resourcebooking: user|ID|дата_время_начала|длительность_в_секундах|название
+            $bookingValue = "user|{$responsibleId}|{$bookingDateTime}|{$durationSeconds}|{$serviceName}";
             
             file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
                 "CREATE_DEAL: Вычисление бронирования:\n" .
@@ -1737,7 +1737,7 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                 "  correctedDateTime: $bookingDateTime\n" .
                 "  startDateTime timestamp: {$startDateTime->getTimestamp()}\n" .
                 "  endDateTime timestamp: {$endDateTime->getTimestamp()}\n" .
-                "  durationMinutes: $durationMinutes\n" .
+                "  durationSeconds: $durationSeconds\n" .
                 "  EMPLOYEE_ID: {$event['EMPLOYEE_ID']}\n" .
                 "  responsibleId: $responsibleId\n" .
                 "  serviceName: $serviceName\n" .
