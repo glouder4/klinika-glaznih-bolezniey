@@ -1012,7 +1012,7 @@ class Calendar
     /**
      * Получает расписание врача для переноса записи (только времена событий БЕЗ контактов/сделок)
      */
-    public function getDoctorScheduleForMove($date, $employeeId, $excludeEventId = null)
+    public function getDoctorScheduleForMove($date, $employeeId, $excludeEventId = null, $branchId = null)
     {
         // Получаем все события врача на эту дату БЕЗ контактов и сделок
         $dateFrom = $date . ' 00:00:00';
@@ -1032,6 +1032,11 @@ class Calendar
               AND STATUS != 'cancelled'
               AND (CONTACT_ENTITY_ID IS NULL OR CONTACT_ENTITY_ID = 0)
               AND (DEAL_ENTITY_ID IS NULL OR DEAL_ENTITY_ID = 0)";
+        
+        // Фильтруем по филиалу, если он указан
+        if ($branchId) {
+            $sql .= " AND BRANCH_ID = " . (int)$branchId;
+        }
         
         if ($excludeEventId) {
             $sql .= " AND ID != " . (int)$excludeEventId;
@@ -1090,8 +1095,12 @@ class Calendar
             $result = $this->connection->query($sql);
             $targetEvent = $result->fetch();
 
-            // Начинаем транзакцию
-            $this->connection->startTransaction();
+            // Начинаем транзакцию (Bitrix method)
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "MOVE_EVENT: Начинаем транзакцию\n", 
+                FILE_APPEND | LOCK_EX);
+                
+            $this->connection->query("START TRANSACTION");
 
             if ($targetEvent) {
                 // Если на новом месте есть событие - обмениваемся местами
@@ -1175,14 +1184,54 @@ class Calendar
                 $this->connection->query($updateMovingSql);
             }
 
+            // Обновляем бронирование для перенесенных событий
+            $this->updateBookingAfterMove($eventId, $newDateFrom, $newDateTo, $employeeId, $branchId);
+            
+            // Если был обмен местами, обновляем бронирование для события на старом месте
+            if ($targetEvent) {
+                $this->updateBookingAfterMove($targetEvent['ID'], $oldDateFrom, $oldDateTo, $oldEmployeeId, $oldBranchId);
+            }
+
             // Подтверждаем транзакцию
-            $this->connection->commitTransaction();
-            return true;
+            $this->connection->query("COMMIT");
+            
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "MOVE_EVENT: Транзакция успешно завершена\n", 
+                FILE_APPEND | LOCK_EX);
+            
+            // Возвращаем информацию о затронутых событиях
+            $result = [
+                'success' => true,
+                'movedEventId' => (int)$eventId,
+                'affectedEvents' => [(int)$eventId]
+            ];
+            
+            // Если был обмен местами, добавляем ID целевого события
+            if ($targetEvent) {
+                $result['targetEventId'] = (int)$targetEvent['ID'];
+                $result['affectedEvents'][] = (int)$targetEvent['ID'];
+                
+                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                    "MOVE_EVENT: Обмен местами - затронуты события: " . implode(', ', $result['affectedEvents']) . "\n", 
+                    FILE_APPEND | LOCK_EX);
+            } else {
+                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                    "MOVE_EVENT: Простой перенос - затронуто событие: " . $eventId . "\n", 
+                    FILE_APPEND | LOCK_EX);
+            }
+                
+            return $result;
 
         } catch (\Exception $e) {
             // Откатываем транзакцию в случае ошибки
-            $this->connection->rollbackTransaction();
-            error_log('Ошибка переноса события: ' . $e->getMessage());
+            $this->connection->query("ROLLBACK");
+            
+            $errorMessage = 'Ошибка переноса события: ' . $e->getMessage();
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "MOVE_EVENT ERROR: $errorMessage\n", 
+                FILE_APPEND | LOCK_EX);
+                
+            error_log($errorMessage);
             return false;
         }
     }
@@ -1412,6 +1461,107 @@ class Calendar
             return true;
         } catch (\Exception $e) {
             error_log('Ошибка сохранения ACTIVITY_ID: ' . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Обновляет бронирование в CRM после переноса события
+     */
+    private function updateBookingAfterMove($eventId, $newDateFrom, $newDateTo, $employeeId = null, $branchId = null)
+    {
+        try {
+            // Получаем актуальные данные события
+            $event = $this->getEvent($eventId);
+            if (!$event) {
+                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                    "UPDATE_BOOKING_AFTER_MOVE: Событие не найдено ID=$eventId\n", 
+                    FILE_APPEND | LOCK_EX);
+                return false;
+            }
+
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "UPDATE_BOOKING_AFTER_MOVE: Начинаем обновление для события ID=$eventId\n" .
+                "  - newDateFrom: $newDateFrom\n" .
+                "  - newDateTo: $newDateTo\n" .
+                "  - DEAL_ENTITY_ID: {$event['DEAL_ENTITY_ID']}\n" .
+                "  - ACTIVITY_ID: {$event['ACTIVITY_ID']}\n", 
+                FILE_APPEND | LOCK_EX);
+
+            // Обновляем CRM активность если есть
+            if (!empty($event['ACTIVITY_ID'])) {
+                $activityUpdated = $this->updateCrmActivity(
+                    $event['ACTIVITY_ID'],
+                    $event['TITLE'],
+                    $newDateFrom,
+                    $newDateTo
+                );
+                
+                if ($activityUpdated) {
+                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                        "UPDATE_BOOKING_AFTER_MOVE: Обновлена активность CRM ID={$event['ACTIVITY_ID']}\n", 
+                        FILE_APPEND | LOCK_EX);
+                }
+            }
+
+            // Обновляем бронирование в сделке если есть
+            if (!empty($event['DEAL_ENTITY_ID']) && \CModule::IncludeModule('crm')) {
+                
+                $responsibleId = $employeeId ?: $event['EMPLOYEE_ID'] ?: \CCrmSecurityHelper::GetCurrentUserID();
+                $finalBranchId = $branchId ?: $event['BRANCH_ID'];
+                
+                // Получаем часовой пояс филиала
+                $branchTimezone = $this->getBranchTimezone($finalBranchId);
+                
+                // Преобразуем формат даты из Y-m-d H:i:s в d.m.Y H:i:s для бронирования
+                $dateFromObj = \DateTime::createFromFormat('Y-m-d H:i:s', $newDateFrom, new \DateTimeZone($branchTimezone));
+                $dateToObj = \DateTime::createFromFormat('Y-m-d H:i:s', $newDateTo, new \DateTimeZone($branchTimezone));
+                
+                if (!$dateFromObj || !$dateToObj) {
+                    // Пробуем другой формат
+                    $dateFromObj = \DateTime::createFromFormat('d.m.Y H:i:s', $newDateFrom, new \DateTimeZone($branchTimezone));
+                    $dateToObj = \DateTime::createFromFormat('d.m.Y H:i:s', $newDateTo, new \DateTimeZone($branchTimezone));
+                }
+                
+                if ($dateFromObj && $dateToObj) {
+                    // Используем исходное время как есть
+                    $bookingDateTime = $dateFromObj->format('d.m.Y H:i:s');
+                    
+                    // Вычисляем длительность
+                    $durationSeconds = $dateToObj->getTimestamp() - $dateFromObj->getTimestamp();
+                    $bookingValue = "user|{$responsibleId}|{$bookingDateTime}|{$durationSeconds}|{$event['TITLE']}";
+                    
+                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                        "UPDATE_BOOKING_AFTER_MOVE: Вычисление бронирования:\n" .
+                        "  - newDateFrom: $newDateFrom\n" .
+                        "  - newDateTo: $newDateTo\n" .
+                        "  - branchTimezone: $branchTimezone\n" .
+                        "  - bookingDateTime: $bookingDateTime\n" .
+                        "  - durationSeconds: $durationSeconds\n" .
+                        "  - responsibleId: $responsibleId\n" .
+                        "  - ФИНАЛЬНАЯ СТРОКА: $bookingValue\n", 
+                        FILE_APPEND | LOCK_EX);
+                    
+                    $bookingFieldCode = \Bitrix\Main\Config\Option::get('artmax.calendar', 'deal_booking_field', 'UF_CRM_CALENDAR_BOOKING');
+                    
+                    $deal = new \CCrmDeal(false);
+                    $updateFields = [
+                        $bookingFieldCode => [$bookingValue]
+                    ];
+                    $deal->Update($event['DEAL_ENTITY_ID'], $updateFields);
+                    
+                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                        "UPDATE_BOOKING_AFTER_MOVE: Обновлено бронирование в сделке ID={$event['DEAL_ENTITY_ID']}\n", 
+                        FILE_APPEND | LOCK_EX);
+                }
+            }
+
+            return true;
+
+        } catch (\Exception $e) {
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "UPDATE_BOOKING_AFTER_MOVE ERROR: " . $e->getMessage() . "\n", 
+                FILE_APPEND | LOCK_EX);
             return false;
         }
     }

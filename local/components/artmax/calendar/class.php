@@ -995,6 +995,41 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                 return ['success' => false, 'error' => 'Нет прав на просмотр'];
             }
 
+            // Загружаем данные контакта для события
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "GET_EVENT_ACTION: Загружаем контакт для события ID=$eventId\n", 
+                FILE_APPEND | LOCK_EX);
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "GET_EVENT_ACTION: CONTACT_ENTITY_ID = " . ($event['CONTACT_ENTITY_ID'] ?? 'null') . "\n", 
+                FILE_APPEND | LOCK_EX);
+            
+            if (!empty($event['CONTACT_ENTITY_ID'])) {
+                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                    "GET_EVENT_ACTION: Вызываем getContactFromCRM для ID=" . $event['CONTACT_ENTITY_ID'] . "\n", 
+                    FILE_APPEND | LOCK_EX);
+                    
+                $contactData = $this->getContactFromCRM($event['CONTACT_ENTITY_ID']);
+                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                    "GET_EVENT_ACTION: getContactFromCRM результат: " . print_r($contactData, true) . "\n", 
+                    FILE_APPEND | LOCK_EX);
+                    
+                if ($contactData) {
+                    $event['CONTACT_NAME'] = $contactData['name'] ?? '';
+                    $event['CONTACT_PHONE'] = $contactData['phone'] ?? '';
+                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                        "GET_EVENT_ACTION: Установлены CONTACT_NAME='" . $event['CONTACT_NAME'] . "', CONTACT_PHONE='" . $event['CONTACT_PHONE'] . "'\n", 
+                        FILE_APPEND | LOCK_EX);
+                } else {
+                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                        "GET_EVENT_ACTION: getContactFromCRM вернул null\n", 
+                        FILE_APPEND | LOCK_EX);
+                }
+            } else {
+                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                    "GET_EVENT_ACTION: CONTACT_ENTITY_ID пустой, контакт не загружается\n", 
+                    FILE_APPEND | LOCK_EX);
+            }
+
             return ['success' => true, 'event' => $event];
         } catch (\Exception $e) {
             return ['success' => false, 'error' => $e->getMessage()];
@@ -2366,10 +2401,15 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
             );
             
             file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "MOVE_EVENT_ACTION: moveEvent result: " . ($result ? 'true' : 'false') . "\n", 
+                "MOVE_EVENT_ACTION: moveEvent result: " . print_r($result, true) . "\n", 
                 FILE_APPEND | LOCK_EX);
 
-            if ($result) {
+            // Проверяем новый формат ответа от moveEvent
+            if (is_array($result) && !empty($result['success'])) {
+                // Возвращаем полный результат с информацией о затронутых событиях
+                return $result;
+            } elseif ($result === true) {
+                // Обратная совместимость для старого формата
                 return ['success' => true];
             } else {
                 return ['success' => false, 'error' => 'Ошибка переноса события'];

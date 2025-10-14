@@ -438,6 +438,7 @@ switch ($action) {
         $date = $_POST['date'] ?? '';
         $employeeId = $_POST['employeeId'] ?? null;
         $excludeEventId = $_POST['excludeEventId'] ?? null;
+        $branchId = $_POST['branchId'] ?? null;
 
         if (!$date || !$employeeId) {
             http_response_code(400);
@@ -445,7 +446,7 @@ switch ($action) {
         }
 
         try {
-            $availableTimes = $calendarObj->getDoctorScheduleForMove($date, $employeeId, $excludeEventId);
+            $availableTimes = $calendarObj->getDoctorScheduleForMove($date, $employeeId, $excludeEventId, $branchId);
             die(json_encode(['success' => true, 'availableTimes' => $availableTimes]));
         } catch (Exception $e) {
             die(json_encode(['success' => false, 'error' => $e->getMessage()]));
@@ -458,6 +459,22 @@ switch ($action) {
         $employeeId = isset($_POST['employeeId']) ? (int)$_POST['employeeId'] : null;
         $newDateFrom = $_POST['dateFrom'] ?? '';
         $newDateTo = $_POST['dateTo'] ?? '';
+
+        // Логируем входящие параметры
+        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+            "MOVE_EVENT_ACTION: Parameters:\n" .
+            "  - eventId: $eventId\n" .
+            "  - dateFrom: $newDateFrom\n" .
+            "  - dateTo: $newDateTo\n" .
+            "  - employeeId: $employeeId\n" .
+            "  - branchId: $branchId\n\n", 
+            FILE_APPEND | LOCK_EX);
+
+        // Проверяем на NaN в dateTo
+        if (strpos($newDateTo, 'NaN') !== false) {
+            http_response_code(400);
+            die(json_encode(['success' => false, 'error' => 'Неправильный формат даты окончания']));
+        }
 
         if (!$eventId || !$newDateFrom || !$newDateTo) {
             http_response_code(400);
@@ -476,7 +493,8 @@ switch ($action) {
 
             $result = $component->moveEventAction($params);
             if (!empty($result['success'])) {
-                die(json_encode(['success' => true]));
+                // Передаем полный результат с информацией о затронутых событиях
+                die(json_encode($result));
             } else {
                 $error = $result['error'] ?? 'Ошибка переноса записи';
                 die(json_encode(['success' => false, 'error' => $error]));
@@ -584,97 +602,15 @@ switch ($action) {
         }
 
         try {
-            $event = $calendarObj->getEvent($eventId);
+            // Используем компонент для получения события с контактом
+            $component = new ArtmaxCalendarComponent();
+            $result = $component->getEventAction($eventId);
+            
             file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-                "AJAX: getEvent result: " . json_encode($event) . "\n",
+                "AJAX: getEventAction result: " . json_encode($result) . "\n",
                 FILE_APPEND | LOCK_EX);
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-                "AJAX: DATE_FROM type: " . gettype($event['DATE_FROM'] ?? null) . "\n",
-                FILE_APPEND | LOCK_EX);
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-                "AJAX: DATE_TO type: " . gettype($event['DATE_TO'] ?? null) . "\n",
-                FILE_APPEND | LOCK_EX);
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-                "AJAX: DATE_FROM value: " . print_r($event['DATE_FROM'] ?? null, true) . "\n",
-                FILE_APPEND | LOCK_EX);
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-                "AJAX: DATE_TO value: " . print_r($event['DATE_TO'] ?? null, true) . "\n",
-                FILE_APPEND | LOCK_EX);
-
-            if ($event) {
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-                    "AJAX: Event found, returning success\n",
-                    FILE_APPEND | LOCK_EX);
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-                    "AJAX: Final event data before JSON: " . print_r($event, true) . "\n",
-                    FILE_APPEND | LOCK_EX);
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-                    "AJAX: Final DATE_FROM type: " . gettype($event['DATE_FROM'] ?? null) . "\n",
-                    FILE_APPEND | LOCK_EX);
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-                    "AJAX: Final DATE_TO type: " . gettype($event['DATE_TO'] ?? null) . "\n",
-                    FILE_APPEND | LOCK_EX);
-                $jsonResult = json_encode(['success' => true, 'event' => $event]);
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-                    "AJAX: JSON result: " . $jsonResult . "\n",
-                    FILE_APPEND | LOCK_EX);
-                if (json_last_error() !== JSON_ERROR_NONE) {
-                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-                        "AJAX: JSON error: " . json_last_error_msg() . "\n",
-                        FILE_APPEND | LOCK_EX);
-                }
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-                    "AJAX: JSON length: " . strlen($jsonResult) . "\n",
-                    FILE_APPEND | LOCK_EX);
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-                    "AJAX: JSON first 500 chars: " . substr($jsonResult, 0, 500) . "\n",
-                    FILE_APPEND | LOCK_EX);
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-                    "AJAX: JSON last 500 chars: " . substr($jsonResult, -500) . "\n",
-                    FILE_APPEND | LOCK_EX);
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-                    "AJAX: JSON contains DATE_FROM: " . (strpos($jsonResult, 'DATE_FROM') !== false ? 'YES' : 'NO') . "\n",
-                    FILE_APPEND | LOCK_EX);
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-                    "AJAX: JSON contains DATE_TO: " . (strpos($jsonResult, 'DATE_TO') !== false ? 'YES' : 'NO') . "\n",
-                    FILE_APPEND | LOCK_EX);
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-                    "AJAX: JSON contains empty objects: " . (strpos($jsonResult, '{}') !== false ? 'YES' : 'NO') . "\n",
-                    FILE_APPEND | LOCK_EX);
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-                    "AJAX: JSON contains quotes around DATE_FROM: " . (strpos($jsonResult, '"DATE_FROM"') !== false ? 'YES' : 'NO') . "\n",
-                    FILE_APPEND | LOCK_EX);
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-                    "AJAX: JSON contains quotes around DATE_TO: " . (strpos($jsonResult, '"DATE_TO"') !== false ? 'YES' : 'NO') . "\n",
-                    FILE_APPEND | LOCK_EX);
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-                    "AJAX: JSON contains quotes around DATE_FROM value: " . (strpos($jsonResult, '"DATE_FROM":') !== false ? 'YES' : 'NO') . "\n",
-                    FILE_APPEND | LOCK_EX);
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-                    "AJAX: JSON contains quotes around DATE_TO value: " . (strpos($jsonResult, '"DATE_TO":') !== false ? 'YES' : 'NO') . "\n",
-                    FILE_APPEND | LOCK_EX);
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-                    "AJAX: JSON contains quotes around DATE_FROM value: " . (strpos($jsonResult, '"DATE_FROM":') !== false ? 'YES' : 'NO') . "\n",
-                    FILE_APPEND | LOCK_EX);
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-                    "AJAX: JSON contains quotes around DATE_TO value: " . (strpos($jsonResult, '"DATE_TO":') !== false ? 'YES' : 'NO') . "\n",
-                    FILE_APPEND | LOCK_EX);
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-                    "AJAX: JSON contains quotes around DATE_FROM value: " . (strpos($jsonResult, '"DATE_FROM":') !== false ? 'YES' : 'NO') . "\n",
-                    FILE_APPEND | LOCK_EX);
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-                    "AJAX: JSON contains quotes around DATE_TO value: " . (strpos($jsonResult, '"DATE_TO":') !== false ? 'YES' : 'NO') . "\n",
-                    FILE_APPEND | LOCK_EX);
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-                    "AJAX: JSON contains quotes around DATE_FROM value: " . (strpos($jsonResult, '"DATE_FROM":') !== false ? 'YES' : 'NO') . "\n",
-                    FILE_APPEND | LOCK_EX);
-                die($jsonResult);
-            } else {
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-                    "AJAX: Event not found\n",
-                    FILE_APPEND | LOCK_EX);
-                die(json_encode(['success' => false, 'error' => 'Событие не найдено']));
-            }
+            
+            die(json_encode($result));
         } catch (Exception $e) {
             file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
                 "AJAX: Exception: " . $e->getMessage() . "\n",

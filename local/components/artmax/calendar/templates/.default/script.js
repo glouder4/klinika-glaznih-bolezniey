@@ -5632,15 +5632,12 @@
         eventElement.innerHTML = `
             <div class="event-content">
                 <div class="event-title">${eventTitle}</div>
-                <div class="event-time">
-                    ${timeString} – ${endTimeString}
-                    <div class="event-icons">
+                <div class="event-time"><span>${timeString} – ${endTimeString}</span><div class="event-icons">
                         <span class="event-icon contact-icon ${eventData.contactEntityId ? 'active' : ''}" title="Контакт">👤</span>
-                        <span class="event-icon deal-icon" title="Сделка">💼</span>
-                        <span class="event-icon visit-icon" title="Визит">🏥</span>
-                        <span class="event-icon confirmation-icon" title="Подтверждение">✅</span>
-                    </div>
-                </div>
+                        <span class="event-icon deal-icon ${getDealIconClass(eventData.dealEntityId)}" title="Сделка">💼</span>
+                        <span class="event-icon visit-icon ${getVisitIconClass(eventData.visitStatus)}" title="Визит">🏥</span>
+                        <span class="event-icon confirmation-icon ${getConfirmationIconClass(eventData.confirmationStatus)}" title="Подтверждение">✅</span>
+                    </div></div>
             </div>
             <div class="event-arrow">▼</div>
         `;
@@ -5661,6 +5658,9 @@
         
         // Добавляем событие в ячейку календаря
         calendarDay.appendChild(eventElement);
+        
+        // Сортируем события в дне сразу после добавления
+        sortEventsInDay(calendarDay);
         
         // Анимация появления с мерцанием
         eventElement.style.opacity = '0';
@@ -5836,6 +5836,13 @@
                 eventsByDate[dateKey].forEach(event => {
                     const eventElement = createEventElement(event);
                     calendarDay.appendChild(eventElement);
+                });
+                
+                // Сортируем события в дне после добавления всех событий
+                sortEventsInDay(calendarDay);
+                
+                eventsByDate[dateKey].forEach((event, index) => {
+                    const eventElement = calendarDay.querySelectorAll('.calendar-event')[index];
                     
                     // Анимация появления
                     eventElement.style.opacity = '0';
@@ -5890,9 +5897,20 @@
             
             // Получаем новую дату из eventData.dateFrom
             let newDateKey;
-            if (typeof eventData.dateFrom === 'string' && eventData.dateFrom.includes(' ')) {
-                // Если дата в формате "2025-08-04 12:00:00"
-                newDateKey = eventData.dateFrom.split(' ')[0];
+            if (typeof eventData.dateFrom === 'string') {
+                // Проверяем, если дата в российском формате "14.10.2025 09:00:00"
+                if (eventData.dateFrom.match(/^\d{1,2}\.\d{1,2}\.\d{4}\s+\d{1,2}:\d{1,2}:\d{1,2}$/)) {
+                    const [datePart] = eventData.dateFrom.split(' ');
+                    const [day, month, year] = datePart.split('.');
+                    newDateKey = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+                    console.log('updateEventInCalendar: Российский формат преобразован:', eventData.dateFrom, '->', newDateKey);
+                } else if (eventData.dateFrom.includes(' ')) {
+                    // Если дата в формате "2025-08-04 12:00:00"
+                    newDateKey = eventData.dateFrom.split(' ')[0];
+                } else {
+                    // Если дата в ISO формате, извлекаем дату без конвертации
+                    newDateKey = eventData.dateFrom.split('T')[0];
+                }
             } else {
                 // Если дата в ISO формате, извлекаем дату без конвертации
                 newDateKey = eventData.dateFrom.split('T')[0];
@@ -5921,7 +5939,7 @@
                         // Удаляем событие со старой позиции
                         eventElement.remove();
                         
-                        // Создаем новое событие на новой позиции
+                        // Создаем новое событие на новой позиции с полными данными
                         const newEventElement = createEventElement({
                             ID: eventId,
                             TITLE: eventData.title,
@@ -5930,11 +5948,20 @@
                             DATE_TO: eventData.dateTo,
                             EVENT_COLOR: eventData.eventColor || '#3498db',
                             STATUS: currentStatus,
-                            TIME_IS_CHANGED: isTimeChanged
+                            TIME_IS_CHANGED: isTimeChanged,
+                            CONTACT_NAME: eventData.contactName || '',
+                            CONTACT_PHONE: eventData.contactPhone || '',
+                            CONTACT_ENTITY_ID: eventData.contactEntityId || null,
+                            DEAL_ENTITY_ID: eventData.dealEntityId || null,
+                            VISIT_STATUS: eventData.visitStatus || 'not_specified',
+                            CONFIRMATION_STATUS: eventData.confirmationStatus || 'pending'
                         });
                         
                         // Добавляем событие в новую ячейку
                         newCalendarDay.appendChild(newEventElement);
+                        
+                        // Сортируем события в новом дне сразу после добавления
+                        sortEventsInDay(newCalendarDay);
                         
                         // Анимация появления на новой позиции
                         newEventElement.style.opacity = '0';
@@ -5987,13 +6014,15 @@
                 // Обновляем заголовок с учетом контакта
                 if (titleElement) {
                     let titleText = eventData.title || '';
-                    if (eventData.contactName || eventData.contactPhone) {
-                        titleText = `${titleText} - ${eventData.contactName || ''} - ${eventData.contactPhone || ''}`.replace(/\s+-\s+-\s+/, ' - ').replace(/\s+-\s+$/, '');
+                    if (eventData.contactName) {
+                        titleText += ' - ' + eventData.contactName;
+                    }
+                    if (eventData.contactPhone) {
+                        titleText += ' - ' + eventData.contactPhone;
                     }
                     titleElement.textContent = titleText;
                 }
                 if (timeElement) {
-                    console.log('updateEventInCalendar: eventData.dateFrom =', eventData.dateFrom);
                     
                     // Форматируем время начала, избегая проблем с часовыми поясами
                     let timeString;
@@ -6126,13 +6155,35 @@
             const startTimeA = timeA.split('–')[0]?.trim() || '';
             const startTimeB = timeB.split('–')[0]?.trim() || '';
             
-            // Сравниваем время в формате HH:MM
-            return startTimeA.localeCompare(startTimeB);
+            // Преобразуем время в минуты для правильного сравнения
+            const parseTimeToMinutes = (timeStr) => {
+                const [hours, minutes] = timeStr.split(':').map(Number);
+                return (hours || 0) * 60 + (minutes || 0);
+            };
+            
+            const minutesA = parseTimeToMinutes(startTimeA);
+            const minutesB = parseTimeToMinutes(startTimeB);
+            
+            // Сортируем по возрастанию времени (раньше время идет первым)
+            return minutesA - minutesB;
         });
-        
         // Переставляем события в отсортированном порядке
         events.forEach(event => {
             dayElement.appendChild(event);
+        });
+    }
+
+    /**
+     * Сортирует события по времени во всех днях календаря
+     */
+    function sortAllEventsInCalendar() {
+        const dayElements = document.querySelectorAll('.calendar-day[data-date]');
+        
+        dayElements.forEach(dayElement => {
+            const events = dayElement.querySelectorAll('.calendar-event');
+            if (events.length > 1) {
+                sortEventsInDay(dayElement);
+            }
         });
     }
 
@@ -6238,6 +6289,43 @@
             console.error('Ошибка при очистке событий:', error);
             showNotification('Ошибка при очистке событий', 'error');
         });
+    }
+
+    /**
+     * Получает CSS класс для иконки визита
+     */
+    function getVisitIconClass(visitStatus) {
+        switch (visitStatus) {
+            case 'client_came':
+                return 'active came';
+            case 'client_did_not_come':
+                return 'active did-not-come';
+            case 'not_specified':
+            default:
+                return '';
+        }
+    }
+
+    /**
+     * Получает CSS класс для иконки подтверждения
+     */
+    function getConfirmationIconClass(confirmationStatus) {
+        switch (confirmationStatus) {
+            case 'confirmed':
+                return 'active confirmed';
+            case 'not_confirmed':
+                return 'active not-confirmed';
+            case 'pending':
+            default:
+                return '';
+        }
+    }
+
+    /**
+     * Получает CSS класс для иконки сделки
+     */
+    function getDealIconClass(dealEntityId) {
+        return dealEntityId ? 'active' : '';
     }
 
     /**
@@ -6352,15 +6440,12 @@
         eventElement.innerHTML = `
             <div class="event-content">
                 <div class="event-title">${eventTitle}</div>
-                <div class="event-time">
-                    ${timeString} – ${endTimeString}
-                    <div class="event-icons">
+                <div class="event-time"><span>${timeString} – ${endTimeString}</span><div class="event-icons">
                         <span class="event-icon contact-icon ${event.CONTACT_ENTITY_ID ? 'active' : ''}" title="Контакт">👤</span>
-                        <span class="event-icon deal-icon" title="Сделка">💼</span>
+                        <span class="event-icon deal-icon ${getDealIconClass(event.DEAL_ENTITY_ID)}" title="Сделка">💼</span>
                         <span class="event-icon visit-icon ${getVisitIconClass(event.VISIT_STATUS)}" title="Визит">🏥</span>
                         <span class="event-icon confirmation-icon ${getConfirmationIconClass(event.CONFIRMATION_STATUS)}" title="Подтверждение">✅</span>
-                    </div>
-                </div>
+                    </div></div>
             </div>
             <div class="event-arrow">▼</div>
         `;
@@ -6936,8 +7021,27 @@
     }
 
     // Функция загрузки расписания врача для переноса
-    function loadDoctorScheduleForMove(employeeId, date) {
+    function loadDoctorScheduleForMove(employeeId, date, branchId = null) {
+        // Если branchId не передан, получаем его из селектора
+        if (!branchId) {
+            const branchSelect = document.getElementById('move-event-branch');
+            branchId = branchSelect ? branchSelect.value : null;
+        }
+        
         const csrfToken = getCSRFToken();
+        const postData = {
+            action: 'getDoctorScheduleForMove',
+            employeeId: employeeId,
+            date: date,
+            excludeEventId: window.currentEventId,
+            sessid: csrfToken
+        };
+        
+        // Добавляем branchId только если он есть
+        if (branchId) {
+            postData.branchId = branchId;
+        }
+        
         fetch('/local/components/artmax/calendar/ajax.php', {
             method: 'POST',
             headers: {
@@ -6945,13 +7049,7 @@
                 'X-Requested-With': 'XMLHttpRequest',
                 'X-Bitrix-Csrf-Token': csrfToken
             },
-            body: new URLSearchParams({
-                action: 'getDoctorScheduleForMove',
-                employeeId: employeeId,
-                date: date,
-                excludeEventId: window.currentEventId,
-                sessid: csrfToken
-            })
+            body: new URLSearchParams(postData)
         })
         .then(response => response.json())
         .then(data => {
@@ -7098,13 +7196,24 @@
         .then(data => {
             if (data.success) {
                 const event = data.event;
+                console.log('moveEvent: исходное событие:', event);
+                console.log('moveEvent: DATE_FROM:', event.DATE_FROM);
+                console.log('moveEvent: DATE_TO:', event.DATE_TO);
+                
                 const duration = getEventDuration(event.DATE_FROM, event.DATE_TO);
+                console.log('moveEvent: длительность в минутах:', duration);
                 
                 // Вычисляем новое время окончания
                 const startTime = new Date(newDateTime);
+                console.log('moveEvent: новое время начала:', startTime);
+                console.log('moveEvent: startTime isValid:', !isNaN(startTime.getTime()));
+                
                 const endTime = new Date(startTime.getTime() + duration * 60 * 1000);
+                console.log('moveEvent: новое время окончания:', endTime);
+                console.log('moveEvent: endTime isValid:', !isNaN(endTime.getTime()));
                 
                 const newEndDateTime = formatLocalDateTime(endTime);
+                console.log('moveEvent: форматированное время окончания:', newEndDateTime);
                 
                 // Переносим событие с обменом местами
                 return fetch('/local/components/artmax/calendar/ajax.php', {
@@ -7134,22 +7243,127 @@
                 showNotification('Запись успешно перенесена', 'success');
                 closeMoveEventModal();
                 closeEventSidePanel();
-                refreshCalendarEvents();
+                
+                console.log('moveEvent: результат переноса:', data);
+                
+                // Получаем список всех затронутых событий
+                const affectedEventIds = data.affectedEvents || [parseInt(eventId)];
+                console.log('moveEvent: затронутые события:', affectedEventIds);
+                
+                // Получаем обновленные данные для всех затронутых событий
+                const fetchPromises = affectedEventIds.map(id => 
+                    fetch('/local/components/artmax/calendar/ajax.php', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'X-Bitrix-Csrf-Token': csrfToken
+                        },
+                        body: new URLSearchParams({
+                            action: 'getEvent',
+                            eventId: id,
+                            sessid: csrfToken
+                        })
+                    }).then(response => response.json())
+                );
+                
+                return Promise.all(fetchPromises);
             } else {
-                showNotification('Ошибка переноса записи: ' + (data.error || 'Неизвестная ошибка'), 'error');
+                throw new Error('Ошибка переноса записи: ' + (data.error || 'Неизвестная ошибка'));
             }
+        })
+        .then(responses => {
+            console.log('moveEvent: получили данные о затронутых событиях:', responses);
+            
+            // Обновляем все затронутые события в календаре
+            responses.forEach(response => {
+                if (response.success && response.event) {
+                    const updatedEvent = response.event;
+                    
+                    
+                    updateEventInCalendar({
+                        id: updatedEvent.ID,
+                        title: updatedEvent.TITLE,
+                        description: updatedEvent.DESCRIPTION || '',
+                        dateFrom: updatedEvent.DATE_FROM,
+                        dateTo: updatedEvent.DATE_TO,
+                        eventColor: updatedEvent.EVENT_COLOR || '#3498db',
+                        contactName: updatedEvent.CONTACT_NAME || '',
+                        contactPhone: updatedEvent.CONTACT_PHONE || '',
+                        contactEntityId: updatedEvent.CONTACT_ENTITY_ID || null,
+                        dealEntityId: updatedEvent.DEAL_ENTITY_ID || null,
+                        visitStatus: updatedEvent.VISIT_STATUS || 'not_specified',
+                        confirmationStatus: updatedEvent.CONFIRMATION_STATUS || 'pending'
+                    });
+                }
+            });
+            
+            // После обновления всех событий сортируем их по времени
+            sortAllEventsInCalendar();
         })
         .catch(error => {
             console.error('Ошибка при переносе записи:', error);
-            showNotification('Ошибка соединения с сервером', 'error');
+            console.warn('Fallback: перезагружаем весь календарь из-за ошибки');
+            
+            // Fallback: если что-то пошло не так, перезагружаем весь календарь
+            refreshCalendarEvents();
+            showNotification('Ошибка при обновлении событий, календарь перезагружен', 'warning');
         });
     }
 
     // Вспомогательная функция для получения длительности события в минутах
     function getEventDuration(dateFrom, dateTo) {
-        const start = new Date(dateFrom);
-        const end = new Date(dateTo);
-        return Math.round((end - start) / (1000 * 60));
+        // Преобразуем российский формат даты в стандартный для парсинга
+        const convertRussianDate = (russianDate) => {
+            if (!russianDate || typeof russianDate !== 'string') {
+                console.error('Invalid date format:', russianDate);
+                return null;
+            }
+            
+            // Формат: "13.10.2025 09:00:00" -> "2025-10-13 09:00:00"
+            const parts = russianDate.split(' ');
+            if (parts.length !== 2) {
+                console.error('Invalid date format, expected "DD.MM.YYYY HH:MM:SS":', russianDate);
+                return null;
+            }
+            
+            const [datePart, timePart] = parts;
+            const [day, month, year] = datePart.split('.');
+            
+            if (!day || !month || !year) {
+                console.error('Invalid date part:', datePart);
+                return null;
+            }
+            
+            return `${year}-${month}-${day} ${timePart}`;
+        };
+        
+        const standardDateFrom = convertRussianDate(dateFrom);
+        const standardDateTo = convertRussianDate(dateTo);
+        
+        console.log('getEventDuration: исходные даты:', { dateFrom, dateTo });
+        console.log('getEventDuration: конвертированные даты:', { standardDateFrom, standardDateTo });
+        
+        if (!standardDateFrom || !standardDateTo) {
+            console.error('Failed to convert dates');
+            return 60; // Возвращаем 1 час по умолчанию
+        }
+        
+        const start = new Date(standardDateFrom);
+        const end = new Date(standardDateTo);
+        
+        console.log('getEventDuration: объекты дат:', { start, end });
+        console.log('getEventDuration: даты валидны:', !isNaN(start.getTime()), !isNaN(end.getTime()));
+        
+        if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+            console.error('Invalid dates after conversion');
+            return 60; // Возвращаем 1 час по умолчанию
+        }
+        
+        const duration = Math.round((end - start) / (1000 * 60));
+        console.log('getEventDuration: длительность в минутах:', duration);
+        
+        return duration;
     }
 
     // Вспомогательная функция для форматирования даты и времени
