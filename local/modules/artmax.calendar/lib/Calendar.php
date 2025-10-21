@@ -481,7 +481,14 @@ class Calendar
                 UPDATED_AT = NOW()
             WHERE ID = " . (int)$eventId;
         
-        return $this->connection->query($sql);
+        $result = $this->connection->query($sql);
+        
+        // Если запись отменена, переводим сделку в "Проиграна"
+        if ($result && $status === 'cancelled') {
+            $this->updateDealStatusOnCancel($eventId);
+        }
+        
+        return $result;
     }
 
     /**
@@ -917,7 +924,7 @@ class Calendar
             return false;
         }
     }
-
+    
     /**
      * Обновить статус визита события
      */
@@ -928,11 +935,100 @@ class Calendar
         
         try {
             $result = $this->connection->query($sql);
+            
+            // Если клиент пришел, обновляем привязанную сделку на "Завершена успешно"
+            if ($visitStatus === 'client_came') {
+                $this->updateDealStatusOnVisit($eventId);
+            }
+            
+            // Если клиент не пришел, обновляем привязанную сделку на "Проиграна"
+            if ($visitStatus === 'client_did_not_come') {
+                $this->updateDealStatusOnCancel($eventId);
+            }
+            
             return true;
         } catch (\Exception $e) {
             $errorMessage = 'Ошибка обновления статуса визита события: ' . $e->getMessage();
             error_log($errorMessage);
             return false;
+        }
+    }
+    
+    /**
+     * Обновить статус сделки при подтверждении визита (клиент пришел)
+     * @param int $eventId ID события
+     */
+    private function updateDealStatusOnVisit($eventId)
+    {
+        // Получаем данные события
+        $event = $this->getEvent($eventId);
+        
+        if (!$event || empty($event['DEAL_ENTITY_ID']) || !\CModule::IncludeModule('crm')) {
+            return;
+        }
+        
+        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+            "UPDATE_VISIT_STATUS: Начинаем обновление сделки ID={$event['DEAL_ENTITY_ID']} на WON\n", 
+            FILE_APPEND | LOCK_EX);
+        
+        $dealId = (int)$event['DEAL_ENTITY_ID'];
+        $deal = new \CCrmDeal(false);
+        
+        // Обновляем статус сделки на "Завершена успешно"
+        $updateFields = [
+            'STAGE_ID' => 'WON',
+        ];
+        
+        $dealUpdateResult = $deal->Update($dealId, $updateFields);
+        
+        if ($dealUpdateResult) {
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "UPDATE_VISIT_STATUS: Сделка ID={$dealId} переведена в статус 'Завершена успешно' (WON)\n", 
+                FILE_APPEND | LOCK_EX);
+        } else {
+            $dealError = $deal->LAST_ERROR;
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "UPDATE_VISIT_STATUS: Ошибка обновления сделки ID={$dealId}: {$dealError}\n", 
+                FILE_APPEND | LOCK_EX);
+        }
+    }
+    
+    /**
+     * Обновить статус сделки при отмене записи или когда клиент не пришел
+     * @param int $eventId ID события
+     */
+    private function updateDealStatusOnCancel($eventId)
+    {
+        // Получаем данные события
+        $event = $this->getEvent($eventId);
+        
+        if (!$event || empty($event['DEAL_ENTITY_ID']) || !\CModule::IncludeModule('crm')) {
+            return;
+        }
+        
+        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+            "UPDATE_DEAL_ON_CANCEL: Начинаем обновление сделки ID={$event['DEAL_ENTITY_ID']} на LOSE\n", 
+            FILE_APPEND | LOCK_EX);
+        
+        $dealId = (int)$event['DEAL_ENTITY_ID'];
+        $deal = new \CCrmDeal(false);
+        
+        // Обновляем статус сделки на "Проиграна"
+        $updateFields = [
+            'STAGE_ID' => 'LOSE',
+        ];
+        
+        $dealUpdateResult = $deal->Update($dealId, $updateFields);
+        
+        if ($dealUpdateResult) {
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "UPDATE_DEAL_ON_CANCEL: Сделка ID={$dealId} переведена в статус 'Проиграна' (LOSE)\n", 
+                FILE_APPEND | LOCK_EX);
+        } else {
+            $dealError = $deal->LAST_ERROR;
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "UPDATE_DEAL_ON_CANCEL: Ошибка обновления сделки ID={$dealId}: {$dealError}\n", 
+                FILE_APPEND | LOCK_EX);
         }
     }
 
