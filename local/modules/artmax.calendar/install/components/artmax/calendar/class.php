@@ -12,12 +12,22 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
 
     public function executeComponent()
     {
+        // Подключаем необходимые скрипты и стили
+        $this->includeAssets();
+
+        
         // Проверяем, является ли это AJAX запросом
         if ($this->isAjaxRequest()) {
             $this->handleAjaxRequest();
             // Принудительно завершаем выполнение для AJAX запросов
             die();
         } else {
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "\n=== NOT AJAX - NORMAL PAGE LOAD ===\n", 
+                FILE_APPEND | LOCK_EX);
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "Time: " . date('Y-m-d H:i:s') . "\n", 
+                FILE_APPEND | LOCK_EX);
         }
 
         // Проверяем существование модуля
@@ -30,6 +40,10 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
         $branchId = (int)($this->arParams['BRANCH_ID'] ?? 1);
         $eventsCount = (int)($this->arParams['EVENTS_COUNT'] ?? 20);
         $showForm = $this->arParams['SHOW_FORM'] === 'Y';
+        
+        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+            "Branch ID: " . $branchId . "\n", 
+            FILE_APPEND | LOCK_EX);
 
         try {
             // Получаем информацию о филиале
@@ -69,7 +83,48 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
             $dateFrom = $startDate->format('Y-m-d');
             $dateTo = $endDate->format('Y-m-d');
             
-            $events = $calendarObj->getEventsByBranch($branchId, $dateFrom, $dateTo, null, null); // Убираем ограничение для статической загрузки
+            // Определяем employeeId для фильтрации
+            // Администраторы видят все события, обычные пользователи (врачи) видят только свои записи
+            $employeeId = null;
+            global $USER;
+            if ($USER && $USER->IsAuthorized() && !$USER->IsAdmin()) {
+                // Для обычного пользователя показываем только записи к нему как к врачу
+                $employeeId = $USER->GetID();
+            }
+            
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "\n=== STATIC LOAD USER CHECK ===\n", 
+                FILE_APPEND | LOCK_EX);
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "Current user ID: " . ($USER ? $USER->GetID() : 'none') . "\n", 
+                FILE_APPEND | LOCK_EX);
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "IsAuthorized: " . ($USER && $USER->IsAuthorized() ? 'yes' : 'no') . "\n", 
+                FILE_APPEND | LOCK_EX);
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "IsAdmin: " . ($USER && $USER->IsAdmin() ? 'yes' : 'no') . "\n", 
+                FILE_APPEND | LOCK_EX);
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "Filter employeeId: " . ($employeeId ?? 'null') . "\n", 
+                FILE_APPEND | LOCK_EX);
+            
+            $events = $calendarObj->getEventsByBranch($branchId, $dateFrom, $dateTo, null, null, $employeeId);
+            
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "Events loaded: " . count($events) . "\n", 
+                FILE_APPEND | LOCK_EX);
+            
+            // Загружаем данные контактов для каждого события
+            foreach ($events as &$event) {
+                if (!empty($event['CONTACT_ENTITY_ID'])) {
+                    $contactData = $this->getContactFromCRM($event['CONTACT_ENTITY_ID']);
+                    if ($contactData) {
+                        $event['CONTACT_NAME'] = $contactData['name'] ?? '';
+                        $event['CONTACT_PHONE'] = $contactData['phone'] ?? '';
+                    }
+                }
+            }
+            unset($event); // Разрываем ссылку после foreach
             
             // Отладочная информация
             error_log("=== STATIC LOAD START ===");
@@ -100,14 +155,16 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
         }
 
         // Формируем данные для шаблона
+        global $USER;
         $this->arResult = [
             'BRANCH' => $branch,
             'EVENTS' => $events,
             'EVENTS_BY_DATE' => $eventsByDate,
             'ALL_BRANCHES' => $allBranches,
             'SHOW_FORM' => $showForm,
-            'CURRENT_USER_ID' => $GLOBALS['USER'] ? $GLOBALS['USER']->GetID() : 0,
-            'CAN_ADD_EVENTS' => $GLOBALS['USER'] ? $GLOBALS['USER']->IsAuthorized() : false,
+            'CURRENT_USER_ID' => $USER ? $USER->GetID() : 0,
+            'IS_ADMIN' => $USER && $USER->IsAdmin(),
+            'CAN_ADD_EVENTS' => $USER ? $USER->IsAuthorized() : false,
         ];
 
         // Подключаем шаблон
@@ -257,8 +314,8 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
      */
     public function addEventAction($title, $description, $dateFrom, $dateTo, $branchId, $eventColor = '#3498db')
     {
-        
-        if (!$GLOBALS['USER'] || !$GLOBALS['USER']->IsAuthorized()) {
+        global $USER;
+        if (!$USER || !$USER->IsAuthorized()) {
             return ['success' => false, 'error' => 'Необходима авторизация'];
         }
 
@@ -269,11 +326,11 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
             }
             
             $calendarObj = new \Artmax\Calendar\Calendar();
-            $userId = $GLOBALS['USER']->GetID();
+            $userId = $USER->GetID();
 
-            // Проверяем доступность времени для врача
-            if (!$calendarObj->isTimeAvailableForDoctor($dateFrom, $dateTo, $employeeId)) {
-                return ['success' => false, 'error' => 'Время уже занято для выбранного врача'];
+            // Проверяем доступность времени для врача в конкретном филиале
+            if (!$calendarObj->isTimeAvailableForDoctor($dateFrom, $dateTo, $employeeId, null, $branchId)) {
+                return ['success' => false, 'error' => 'Время уже занято для выбранного врача в этом филиале'];
             }
             
             $eventId = $calendarObj->addEvent($title, $description, $dateFrom, $dateTo, $userId, $branchId, $eventColor);
@@ -293,7 +350,8 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
      */
     public function deleteEventAction($eventId)
     {
-        if (!$GLOBALS['USER'] || !$GLOBALS['USER']->IsAuthorized()) {
+        global $USER;
+        if (!$USER || !$USER->IsAuthorized()) {
             return ['success' => false, 'error' => 'Необходима авторизация'];
         }
 
@@ -310,7 +368,7 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
             }
 
             // Проверяем права на удаление (только автор события)
-            if ($event['USER_ID'] != $GLOBALS['USER']->GetID()) {
+            if ($event['USER_ID'] != $USER->GetID()) {
                 return ['success' => false, 'error' => 'Нет прав на удаление'];
             }
 
@@ -336,8 +394,31 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                 return ['success' => false, 'error' => 'Модуль artmax.calendar не установлен'];
             }
             
+            // Определяем employeeId для фильтрации
+            // Администраторы видят все события, обычные пользователи (врачи) видят только свои записи
+            $employeeId = null;
+            global $USER;
+            if ($USER && $USER->IsAuthorized() && !$USER->IsAdmin()) {
+                // Для обычного пользователя показываем только записи к нему как к врачу
+                $employeeId = $USER->GetID();
+            }
+            
+            error_log("AJAX getEventsAction: Current user ID=" . ($USER ? $USER->GetID() : 'none') . ", IsAdmin=" . ($USER && $USER->IsAdmin() ? 'yes' : 'no') . ", Filter employeeId=" . ($employeeId ?? 'null'));
+            
             $calendarObj = new \Artmax\Calendar\Calendar();
-            $events = $calendarObj->getEventsByBranch($branchId, $dateFrom, $dateTo);
+            $events = $calendarObj->getEventsByBranch($branchId, $dateFrom, $dateTo, null, null, $employeeId);
+            
+            // Загружаем данные контактов для каждого события
+            foreach ($events as &$event) {
+                if (!empty($event['CONTACT_ENTITY_ID'])) {
+                    $contactData = $this->getContactFromCRM($event['CONTACT_ENTITY_ID']);
+                    if ($contactData) {
+                        $event['CONTACT_NAME'] = $contactData['name'] ?? '';
+                        $event['CONTACT_PHONE'] = $contactData['phone'] ?? '';
+                    }
+                }
+            }
+            unset($event); // Разрываем ссылку после foreach
 
             return ['success' => true, 'events' => $events];
         } catch (\Exception $e) {
@@ -347,10 +428,65 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
 
     /**
      * Добавление расписания
+     * 
+     * @param array $params - Массив параметров:
+     *   - title (string) - Название события
+     *   - date (string) - Дата события (YYYY-MM-DD)
+     *   - time (string) - Время события (HH:MM)
+     *   - employee_id (int|null) - ID врача
+     *   - branch_id (int) - ID филиала (по умолчанию 1)
+     *   - repeat (bool) - Повторяющееся ли событие
+     *   - frequency (string|null) - Частота повторения (daily, weekly, monthly)
+     *   - weekdays (array) - Дни недели для еженедельного повторения
+     *   - repeat_end (string) - Тип окончания повторения (never, count, date)
+     *   - repeat_count (int|null) - Количество повторений
+     *   - repeat_end_date (string|null) - Дата окончания повторений (YYYY-MM-DD)
+     *   - event_color (string) - Цвет события (hex, например #3498db)
+     *   - exclude_weekends (bool) - Исключать ли выходные дни
+     *   - exclude_holidays (bool) - Исключать ли праздничные дни
+     *   - include_end_date (bool) - Включать ли конечную дату в расписание
+     * 
+     * ПРИМЕР ПРАВИЛЬНОГО ВЫЗОВА:
+     * $component->addScheduleAction([
+     *     'title' => 'Название',
+     *     'date' => '2025-10-14',
+     *     'time' => '15:30',
+     *     'employee_id' => 1,
+     *     'branch_id' => 2,
+     *     'repeat' => true,
+     *     'frequency' => 'daily',
+     *     'weekdays' => [],
+     *     'repeat_end' => 'date',
+     *     'repeat_count' => null,
+     *     'repeat_end_date' => '2025-10-21',
+     *     'event_color' => '#f39c12',
+     *     'exclude_weekends' => false,
+     *     'exclude_holidays' => false,
+     *     'include_end_date' => false
+     * ]);
      */
-    public function addScheduleAction($title, $date, $time, $employeeId = null, $repeat = false, $frequency = null, $weekdays = [], $repeatEnd = 'never', $repeatCount = null, $repeatEndDate = null, $eventColor = '#3498db')
+    public function addScheduleAction($params)
     {
-        if (!$GLOBALS['USER'] || !$GLOBALS['USER']->IsAuthorized()) {
+        global $USER;
+        // Извлекаем параметры из массива с значениями по умолчанию
+        $title = $params['title'] ?? '';
+        $date = $params['date'] ?? '';
+        $time = $params['time'] ?? '';
+        $employeeId = $params['employee_id'] ?? null;
+        $branchId = $params['branch_id'] ?? 1;
+        $repeat = $params['repeat'] ?? false;
+        $frequency = $params['frequency'] ?? null;
+        $weekdays = $params['weekdays'] ?? [];
+        $repeatEnd = $params['repeat_end'] ?? 'never';
+        $repeatCount = $params['repeat_count'] ?? null;
+        $repeatEndDate = $params['repeat_end_date'] ?? null;
+        $eventColor = $params['event_color'] ?? '#3498db';
+        $excludeWeekends = $params['exclude_weekends'] ?? false;
+        $excludeHolidays = $params['exclude_holidays'] ?? false;
+        $includeEndDate = $params['include_end_date'] ?? true;
+
+        
+        if (!$USER || !$USER->IsAuthorized()) {
             return ['success' => false, 'error' => 'Необходима авторизация'];
         }
 
@@ -360,7 +496,7 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
             }
             
             $calendarObj = new \Artmax\Calendar\Calendar();
-            $userId = $GLOBALS['USER']->GetID();
+            $userId = $USER->GetID();
             
             // Формируем дату и время
             $dateTime = $date . ' ' . $time;
@@ -373,12 +509,26 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
             
             // Если событие повторяемое, создаем все события (включая первое)
             if ($repeat && $frequency) {
-                // Логируем параметры для отладки
-                error_log("addScheduleAction: date = $date, time = $time, dateFrom = " . $dateFrom->format('Y-m-d H:i:s'));
-                
-                error_log("addScheduleAction: Calling createRecurringEvents with frequency = $frequency, weekdays = " . implode(',', $weekdays));
-                $recurringResult = $this->createRecurringEvents(null, $frequency, $weekdays, $repeatEnd, $repeatCount, $repeatEndDate, $eventColor, $employeeId, $dateFrom->format('Y-m-d H:i:s'), $title, $dateFrom->format('Y-m-d H:i:s'), $dateTo->format('Y-m-d H:i:s'), $userId);
-                error_log("addScheduleAction: createRecurringEvents returned: " . json_encode($recurringResult));
+                // Вызываем createRecurringEvents с массивом параметров
+                $recurringResult = $this->createRecurringEvents([
+                    'original_event_id' => null,
+                    'frequency' => $frequency,
+                    'weekdays' => $weekdays,
+                    'repeat_end' => $repeatEnd,
+                    'repeat_count' => $repeatCount,
+                    'repeat_end_date' => $repeatEndDate,
+                    'event_color' => $eventColor,
+                    'employee_id' => $employeeId,
+                    'branch_id' => $branchId,
+                    'schedule_start_date' => $dateFrom->format('Y-m-d H:i:s'),
+                    'title' => $title,
+                    'date_from' => $dateFrom->format('Y-m-d H:i:s'),
+                    'date_to' => $dateTo->format('Y-m-d H:i:s'),
+                    'user_id' => $userId,
+                    'exclude_weekends' => $excludeWeekends,
+                    'exclude_holidays' => $excludeHolidays,
+                    'include_end_date' => $includeEndDate
+                ]);
                 if ($recurringResult && $recurringResult['count'] > 0) {
                     $eventsCreated = $recurringResult['count'];
                     
@@ -386,7 +536,7 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                     foreach ($recurringResult['ids'] as $eventId) {
                         $event = $calendarObj->getEvent($eventId);
                         if ($event) {
-                            $event['EVENT_COLOR'] = $eventColor;
+                            $event['EVENT_COLOR'] = (is_string($eventColor)) ? $eventColor : '#3498db';
                             // Конвертируем даты в стандартный формат
                             $event['DATE_FROM'] = $this->convertRussianDateToStandard($event['DATE_FROM']);
                             $event['DATE_TO'] = $this->convertRussianDateToStandard($event['DATE_TO']);
@@ -396,13 +546,13 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                 }
             } else {
                 // Если событие не повторяемое, создаем только одно событие
-                if ($calendarObj->isTimeAvailableForDoctor($dateFrom->format('Y-m-d H:i:s'), $dateTo->format('Y-m-d H:i:s'), $employeeId)) {
-                    $eventId = $calendarObj->addEvent($title, '', $dateFrom->format('Y-m-d H:i:s'), $dateTo->format('Y-m-d H:i:s'), $userId, 1, $eventColor, $employeeId);
+                if ($calendarObj->isTimeAvailableForDoctor($dateFrom->format('Y-m-d H:i:s'), $dateTo->format('Y-m-d H:i:s'), $employeeId, null, $branchId)) {
+                    $eventId = $calendarObj->addEvent($title, '', $dateFrom->format('Y-m-d H:i:s'), $dateTo->format('Y-m-d H:i:s'), $userId, $branchId, $eventColor, $employeeId);
                     if ($eventId) {
                         $eventsCreated = 1;
                         $event = $calendarObj->getEvent($eventId);
                         if ($event) {
-                            $event['EVENT_COLOR'] = $eventColor;
+                            $event['EVENT_COLOR'] = (is_string($eventColor)) ? $eventColor : '#3498db';
                             // Конвертируем даты в стандартный формат
                             $event['DATE_FROM'] = $this->convertRussianDateToStandard($event['DATE_FROM']);
                             $event['DATE_TO'] = $this->convertRussianDateToStandard($event['DATE_TO']);
@@ -412,13 +562,9 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                 }
             }
 
-            // Логируем результат
-            error_log("addScheduleAction: eventsCreated = $eventsCreated, createdEvents count = " . count($createdEvents));
-            error_log("addScheduleAction: result = " . json_encode($result));
             
             // Возвращаем результат
             if ($eventsCreated > 0) {
-                error_log("addScheduleAction: Returning success with $eventsCreated events");
                 return [
                     'success' => true, 
                     'eventId' => $mainEventId, 
@@ -426,25 +572,59 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                     'events' => $createdEvents
                 ];
             } else {
-                error_log("addScheduleAction: Returning error - no events created");
                 return [
                     'success' => false, 
                     'error' => 'Все выбранные времена заняты, расписание не создано'
                 ];
             }
         } catch (\Exception $e) {
-            error_log("addScheduleAction error: " . $e->getMessage());
             return ['success' => false, 'error' => 'Ошибка создания расписания: ' . $e->getMessage()];
         }
     }
 
     /**
      * Создание повторяющихся событий
+     * 
+     * @param array $params - Массив параметров:
+     *   - original_event_id (int|null) - ID оригинального события
+     *   - frequency (string) - Частота повторения (daily, weekly, monthly)
+     *   - weekdays (array) - Дни недели для еженедельного повторения
+     *   - repeat_end (string) - Тип окончания повторения (never, count, date)
+     *   - repeat_count (int|null) - Количество повторений
+     *   - repeat_end_date (string|null) - Дата окончания повторений (YYYY-MM-DD)
+     *   - event_color (string) - Цвет события (hex, например #3498db)
+     *   - employee_id (int|null) - ID врача
+     *   - schedule_start_date (string|null) - Дата начала расписания (YYYY-MM-DD HH:MM:SS)
+     *   - title (string|null) - Название события
+     *   - date_from (string|null) - Дата начала события (YYYY-MM-DD HH:MM:SS)
+     *   - date_to (string|null) - Дата окончания события (YYYY-MM-DD HH:MM:SS)
+     *   - user_id (int|null) - ID пользователя
+     *   - exclude_weekends (bool) - Исключать ли выходные дни
+     *   - exclude_holidays (bool) - Исключать ли праздничные дни
+     *   - include_end_date (bool) - Включать ли конечную дату в расписание
      */
-    private function createRecurringEvents($originalEventId, $frequency, $weekdays = [], $repeatEnd = 'never', $repeatCount = null, $repeatEndDate = null, $eventColor = '#3498db', $employeeId = null, $scheduleStartDate = null, $title = null, $dateFrom = null, $dateTo = null, $userId = null)
+    private function createRecurringEvents($params)
     {
+        // Извлекаем параметры из массива с значениями по умолчанию
+        $originalEventId = $params['original_event_id'] ?? null;
+        $frequency = $params['frequency'] ?? 'daily';
+        $weekdays = $params['weekdays'] ?? [];
+        $repeatEnd = $params['repeat_end'] ?? 'never';
+        $repeatCount = $params['repeat_count'] ?? null;
+        $repeatEndDate = $params['repeat_end_date'] ?? null;
+        $eventColor = $params['event_color'] ?? '#3498db';
+        $employeeId = $params['employee_id'] ?? null;
+        $branchId = $params['branch_id'] ?? 1;
+        $scheduleStartDate = $params['schedule_start_date'] ?? null;
+        $title = $params['title'] ?? '';
+        $dateFrom = $params['date_from'] ?? null;
+        $dateTo = $params['date_to'] ?? null;
+        $userId = $params['user_id'] ?? null;
+        $excludeWeekends = $params['exclude_weekends'] ?? false;
+        $excludeHolidays = $params['exclude_holidays'] ?? false;
+        $includeEndDate = $params['include_end_date'] ?? true;
+
         try {
-            error_log("createRecurringEvents: Starting with frequency = $frequency, weekdays = " . implode(',', $weekdays));
             if (!CModule::IncludeModule('artmax.calendar')) {
                 return ['count' => 0, 'ids' => []];
             }
@@ -476,7 +656,37 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
             
             // Для еженедельного расписания с выбранными днями недели
             if ($frequency === 'weekly' && !empty($weekdays)) {
-                if ($repeatCount && $repeatCount > 0) {
+                // Определяем базовую дату начала
+                $startDate = $scheduleStartDate ? new \DateTime($scheduleStartDate) : $eventDateFrom;
+                $endDate = null;
+                
+                if ($repeatEnd === 'date' && $repeatEndDate) {
+                    // Если указана конечная дата, рассчитываем количество недель до неё
+                    $endDate = new \DateTime($repeatEndDate);
+                    
+                    // Находим понедельник недели, в которой находится startDate
+                    $startDayOfWeek = $startDate->format('N'); // 1 = понедельник, 7 = воскресенье
+                    $startMondayOffset = $startDayOfWeek - 1;
+                    $startMonday = clone $startDate;
+                    $startMonday->sub(new \DateInterval('P' . $startMondayOffset . 'D'));
+                    
+                    // Находим понедельник недели, в которой находится endDate
+                    $endDayOfWeek = $endDate->format('N');
+                    $endMondayOffset = $endDayOfWeek - 1;
+                    $endMonday = clone $endDate;
+                    $endMonday->sub(new \DateInterval('P' . $endMondayOffset . 'D'));
+                    
+                    // Считаем количество недель между понедельниками
+                    $weeksDiff = $startMonday->diff($endMonday)->days / 7;
+                    
+                    // Если конечная дата попадает на выбранный день недели в своей неделе,
+                    // то нужно включить эту неделю, даже если includeEndDate=false
+                    $endDateDayOfWeek = $endDate->format('N');
+                    $includeEndWeek = in_array($endDateDayOfWeek, $weekdays);
+                    
+                    $maxWeeks = $weeksDiff + ($includeEndDate || $includeEndWeek ? 1 : 0);
+                    $maxEvents = $maxWeeks * count($weekdays);
+                } elseif ($repeatCount && $repeatCount > 0) {
                     // Для еженедельного повторения используем количество недель
                     $maxWeeks = $repeatCount;
                     $maxEvents = $repeatCount * count($weekdays);
@@ -486,7 +696,31 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                     $maxEvents = 100 * count($weekdays); // Максимум 100 событий для бесконечного повторения
                 }
             } else {
-                if ($repeatCount && $repeatCount > 0) {
+                if ($repeatEnd === 'date' && $repeatEndDate) {
+                    // Если указана конечная дата, рассчитываем количество событий по датам
+                    $startDate = $scheduleStartDate ? new \DateTime($scheduleStartDate) : $eventDateFrom;
+                    $endDate = new \DateTime($repeatEndDate);
+                    $daysDiff = $startDate->diff($endDate)->days;
+                    
+                    // Рассчитываем максимальное количество событий в зависимости от частоты
+                    switch ($frequency) {
+                        case 'daily':
+                            $maxEvents = $daysDiff + ($includeEndDate ? 1 : 0); // +1 если включаем конечную дату
+                            break;
+                        case 'weekly':
+                            $maxEvents = ceil($daysDiff / 7) + ($includeEndDate ? 1 : 0);
+                            break;
+                        case 'monthly':
+                            $maxEvents = $startDate->diff($endDate)->m + ($includeEndDate ? 1 : 0);
+                            break;
+                        default:
+                            $maxEvents = $daysDiff + ($includeEndDate ? 1 : 0);
+                    }
+                    
+                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                        "createRecurringEvents: Рассчитанный maxEvents = $maxEvents для frequency = $frequency\n", 
+                        FILE_APPEND | LOCK_EX);
+                } elseif ($repeatCount && $repeatCount > 0) {
                     // Если указано количество повторений, используем его
                     $maxEvents = $repeatCount;
                 } else {
@@ -498,7 +732,9 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
             $endDate = ($repeatEnd === 'date' && $repeatEndDate) ? new \DateTime($repeatEndDate) : null;
             
             // Логируем параметры для отладки
-            error_log("createRecurringEvents: repeatEnd = $repeatEnd, repeatCount = $repeatCount, maxEvents = $maxEvents");
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "createRecurringEvents: repeatEnd = $repeatEnd, repeatCount = $repeatCount, maxEvents = $maxEvents\n", 
+                FILE_APPEND | LOCK_EX);
 
             if ($frequency === 'weekly' && !empty($weekdays)) {
                 // Специальная обработка для еженедельного повторения с выбранными днями недели
@@ -507,16 +743,24 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                 $weekNumber = 0;
                 
                 // Логируем параметры для отладки
-                error_log("createRecurringEvents: maxWeeks = $maxWeeks, maxEvents = $maxEvents, weekdays = " . implode(',', $weekdays));
-                error_log("createRecurringEvents: startDate = " . $startDate->format('Y-m-d H:i:s'));
-                error_log("createRecurringEvents: eventDateFrom = " . $eventDateFrom->format('Y-m-d H:i:s'));
+                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                    "createRecurringEvents: maxWeeks = $maxWeeks, maxEvents = $maxEvents, weekdays = " . implode(',', $weekdays) . "\n", 
+                    FILE_APPEND | LOCK_EX);
+                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                    "createRecurringEvents: startDate = " . $startDate->format('Y-m-d H:i:s') . "\n", 
+                    FILE_APPEND | LOCK_EX);
+                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                    "createRecurringEvents: eventDateFrom = " . $eventDateFrom->format('Y-m-d H:i:s') . "\n", 
+                    FILE_APPEND | LOCK_EX);
                 
                 // Используем количество недель из параметров
                 $weekNumber = 0; // Начинаем с недели 0 (первая неделя - та, на которую приходится дата начала)
 
                 while ($weekNumber < $maxWeeks) {
                     // Логируем текущую неделю
-                    error_log("createRecurringEvents: weekNumber = $weekNumber, eventsCreated = $eventsCreated, currentDate = " . $currentDate->format('Y-m-d'));
+                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                        "createRecurringEvents: weekNumber = $weekNumber, eventsCreated = $eventsCreated, currentDate = " . $currentDate->format('Y-m-d') . "\n", 
+                        FILE_APPEND | LOCK_EX);
                     
                     // Находим понедельник недели, в которой находится currentDate
                     $dayOfWeek = $currentDate->format('N'); // 1 = понедельник, 7 = воскресенье
@@ -525,7 +769,9 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                     $weekStart->sub(new \DateInterval('P' . $mondayOffset . 'D'));
                     
                     // Логируем начало недели
-                    error_log("createRecurringEvents: weekStart = " . $weekStart->format('Y-m-d') . " (Monday of week containing " . $currentDate->format('Y-m-d') . ")");
+                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                        "createRecurringEvents: weekStart = " . $weekStart->format('Y-m-d') . " (Monday of week containing " . $currentDate->format('Y-m-d') . ")\n", 
+                        FILE_APPEND | LOCK_EX);
                     
                     // Создаем события для каждого выбранного дня недели в текущей неделе
                     foreach ($weekdays as $weekday) {
@@ -533,14 +779,28 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                         $eventDate->add(new \DateInterval('P' . ($weekday - 1) . 'D'));
                         
                         // Логируем проверяемую дату
-                        error_log("createRecurringEvents: Checking weekday $weekday, eventDate = " . $eventDate->format('Y-m-d') . ", startDate = " . $startDate->format('Y-m-d'));
+                        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                            "createRecurringEvents: Checking weekday $weekday, eventDate = " . $eventDate->format('Y-m-d') . ", startDate = " . $startDate->format('Y-m-d') . "\n", 
+                            FILE_APPEND | LOCK_EX);
                         
                         // Проверяем, что дата события не раньше даты начала расписания
                         if ($eventDate >= $startDate) {
-                            error_log("createRecurringEvents: Date " . $eventDate->format('Y-m-d') . " >= startDate " . $startDate->format('Y-m-d') . " - proceeding with event creation");
+                            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                                "createRecurringEvents: Date " . $eventDate->format('Y-m-d') . " >= startDate " . $startDate->format('Y-m-d') . " - proceeding with event creation\n", 
+                                FILE_APPEND | LOCK_EX);
                             // Проверяем ограничение по дате
-                            if ($endDate && $eventDate > $endDate) {
-                                break 2; // Выходим из обоих циклов
+                            if ($endDate) {
+                                if ($includeEndDate) {
+                                    // Если включаем конечную дату, проверяем что не превышаем её
+                                    if ($eventDate->format('Y-m-d') > $endDate->format('Y-m-d')) {
+                                        break 2; // Выходим из обоих циклов
+                                    }
+                                } else {
+                                    // Если не включаем конечную дату, проверяем что строго меньше её
+                                    if ($eventDate->format('Y-m-d') >= $endDate->format('Y-m-d')) {
+                                        break 2; // Выходим из обоих циклов
+                                    }
+                                }
                             }
                             
                             // Дополнительная проверка по количеству событий (защита от переполнения)
@@ -551,18 +811,28 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                             $eventDateTo = clone $eventDate;
                             $eventDateTo->add($duration);
                             
+                            // Проверяем исключения выходных и праздников
+                            if ($excludeWeekends && $this->isWeekend($eventDate)) {
+                                continue; // Пропускаем выходные
+                            }
+                            
+                            if ($excludeHolidays && $this->isHoliday($eventDate)) {
+                                continue; // Пропускаем праздники
+                            }
                             
                             // Проверяем доступность времени для события
-                            if ($calendarObj->isTimeAvailableForDoctor($eventDate->format('Y-m-d H:i:s'), $eventDateTo->format('Y-m-d H:i:s'), $employeeId)) {
+                            if ($calendarObj->isTimeAvailableForDoctor($eventDate->format('Y-m-d H:i:s'), $eventDateTo->format('Y-m-d H:i:s'), $employeeId, null, $branchId)) {
                                 // Создаем событие
-                                error_log("createRecurringEvents: Creating event for date " . $eventDate->format('Y-m-d H:i:s'));
+                                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                                    "createRecurringEvents: Creating event for date " . $eventDate->format('Y-m-d H:i:s') . "\n", 
+                                    FILE_APPEND | LOCK_EX);
                                 $recurringEventId = $calendarObj->addEvent(
                                     $title,
                                     '', // Описание пустое для расписания
                                     $eventDate->format('Y-m-d H:i:s'),
                                     $eventDateTo->format('Y-m-d H:i:s'),
                                     $userId,
-                                    1,
+                                    $branchId,
                                     $eventColor,
                                     $employeeId
                                 );
@@ -570,14 +840,20 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                                 if ($recurringEventId) {
                                     $eventsCreated++;
                                     $createdEventIds[] = $recurringEventId;
-                                    error_log("createRecurringEvents: Event created with ID $recurringEventId, total events: $eventsCreated");
+                                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                                        "createRecurringEvents: Event created with ID $recurringEventId, total events: $eventsCreated\n", 
+                                        FILE_APPEND | LOCK_EX);
                                 }
                             } else {
-                                error_log("createRecurringEvents: Time not available for " . $eventDate->format('Y-m-d H:i:s'));
+                                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                                    "createRecurringEvents: Time not available for " . $eventDate->format('Y-m-d H:i:s') . "\n", 
+                                    FILE_APPEND | LOCK_EX);
                             }
                             // Если время занято, просто пропускаем этот день
                         } else {
-                            error_log("createRecurringEvents: Date " . $eventDate->format('Y-m-d') . " < startDate " . $startDate->format('Y-m-d') . " - skipping this date");
+                            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                                "createRecurringEvents: Date " . $eventDate->format('Y-m-d') . " < startDate " . $startDate->format('Y-m-d') . " - skipping this date\n", 
+                                FILE_APPEND | LOCK_EX);
                         }
                     }
                     
@@ -592,9 +868,14 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                 }
             } else {
                 // Обычная обработка для других типов повторений
-                for ($i = 1; $i <= $maxEvents; $i++) {
-                    $newDateFrom = clone $dateFrom;
-                    $newDateTo = clone $dateTo;
+                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                    "createRecurringEvents: Начинаем цикл создания событий, maxEvents = $maxEvents, frequency = $frequency\n", 
+                    FILE_APPEND | LOCK_EX);
+                $i = 0;
+                $eventsCreated = 0;
+                while ($eventsCreated < $maxEvents) {
+                    $newDateFrom = clone $eventDateFrom;
+                    $newDateTo = clone $eventDateTo;
 
                     // Вычисляем следующую дату в зависимости от частоты
                     switch ($frequency) {
@@ -614,14 +895,48 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                             break;
                     }
 
+                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                        "createRecurringEvents: Итерация $i, дата события: " . $newDateFrom->format('Y-m-d') . "\n", 
+                        FILE_APPEND | LOCK_EX);
+
                     // Проверяем ограничение по дате
-                    if ($endDate && $newDateFrom > $endDate) {
-                        break;
+                    if ($endDate) {
+                        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                            "createRecurringEvents: Проверяем ограничение по дате, endDate = " . $endDate->format('Y-m-d') . ", includeEndDate = " . ($includeEndDate ? 'true' : 'false') . "\n", 
+                            FILE_APPEND | LOCK_EX);
+                        if ($includeEndDate) {
+                            // Если включаем конечную дату, проверяем что не превышаем её
+                            if ($newDateFrom->format('Y-m-d') > $endDate->format('Y-m-d')) {
+                                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                                    "createRecurringEvents: Дата события " . $newDateFrom->format('Y-m-d') . " превышает конечную дату " . $endDate->format('Y-m-d') . " - прерываем цикл\n", 
+                                    FILE_APPEND | LOCK_EX);
+                                break;
+                            }
+                        } else {
+                            // Если не включаем конечную дату, проверяем что строго меньше её
+                            if ($newDateFrom->format('Y-m-d') >= $endDate->format('Y-m-d')) {
+                                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                                    "createRecurringEvents: Дата события " . $newDateFrom->format('Y-m-d') . " больше или равна конечной дате " . $endDate->format('Y-m-d') . " - прерываем цикл\n", 
+                                    FILE_APPEND | LOCK_EX);
+                                break;
+                            }
+                        }
                     }
 
                     
+                    // Проверяем исключения выходных и праздников
+                    if ($excludeWeekends && $this->isWeekend($newDateFrom)) {
+                        $i++;
+                        continue; // Пропускаем выходные
+                    }
+                    
+                    if ($excludeHolidays && $this->isHoliday($newDateFrom)) {
+                        $i++;
+                        continue; // Пропускаем праздники
+                    }
+                    
                     // Проверяем доступность времени для повторяющегося события
-                    if ($calendarObj->isTimeAvailableForDoctor($newDateFrom->format('Y-m-d H:i:s'), $newDateTo->format('Y-m-d H:i:s'), $employeeId)) {
+                    if ($calendarObj->isTimeAvailableForDoctor($newDateFrom->format('Y-m-d H:i:s'), $newDateTo->format('Y-m-d H:i:s'), $employeeId, null, $branchId)) {
                         // Создаем событие
                         $recurringEventId = $calendarObj->addEvent(
                             $title,
@@ -629,9 +944,9 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                             $newDateFrom->format('Y-m-d H:i:s'),
                             $newDateTo->format('Y-m-d H:i:s'),
                             $userId,
-                            1,
-                            $eventColor,
-                            $employeeId
+                            $branchId, // branchId
+                            $eventColor, // eventColor
+                            $employeeId // employeeId
                         );
 
                         if ($recurringEventId) {
@@ -640,6 +955,7 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                         }
                     }
                     // Если время занято, просто пропускаем этот день
+                    $i++;
                 }
             }
 
@@ -654,7 +970,8 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
      */
     public function getEventAction($eventId)
     {
-        if (!$GLOBALS['USER'] || !$GLOBALS['USER']->IsAuthorized()) {
+        global $USER;
+        if (!$USER || !$USER->IsAuthorized()) {
             return ['success' => false, 'error' => 'Необходима авторизация'];
         }
 
@@ -670,9 +987,47 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                 return ['success' => false, 'error' => 'Событие не найдено'];
             }
 
-            // Проверяем права на просмотр (только автор события)
-            if ($event['USER_ID'] != $GLOBALS['USER']->GetID()) {
+            // Проверяем права на просмотр
+            // Админы видят всё, создатель события видит, врач события видит
+            if (!$USER->IsAdmin() && 
+                $event['USER_ID'] != $USER->GetID() && 
+                $event['EMPLOYEE_ID'] != $USER->GetID()) {
                 return ['success' => false, 'error' => 'Нет прав на просмотр'];
+            }
+
+            // Загружаем данные контакта для события
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "GET_EVENT_ACTION: Загружаем контакт для события ID=$eventId\n", 
+                FILE_APPEND | LOCK_EX);
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "GET_EVENT_ACTION: CONTACT_ENTITY_ID = " . ($event['CONTACT_ENTITY_ID'] ?? 'null') . "\n", 
+                FILE_APPEND | LOCK_EX);
+            
+            if (!empty($event['CONTACT_ENTITY_ID'])) {
+                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                    "GET_EVENT_ACTION: Вызываем getContactFromCRM для ID=" . $event['CONTACT_ENTITY_ID'] . "\n", 
+                    FILE_APPEND | LOCK_EX);
+                    
+                $contactData = $this->getContactFromCRM($event['CONTACT_ENTITY_ID']);
+                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                    "GET_EVENT_ACTION: getContactFromCRM результат: " . print_r($contactData, true) . "\n", 
+                    FILE_APPEND | LOCK_EX);
+                    
+                if ($contactData) {
+                    $event['CONTACT_NAME'] = $contactData['name'] ?? '';
+                    $event['CONTACT_PHONE'] = $contactData['phone'] ?? '';
+                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                        "GET_EVENT_ACTION: Установлены CONTACT_NAME='" . $event['CONTACT_NAME'] . "', CONTACT_PHONE='" . $event['CONTACT_PHONE'] . "'\n", 
+                        FILE_APPEND | LOCK_EX);
+                } else {
+                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                        "GET_EVENT_ACTION: getContactFromCRM вернул null\n", 
+                        FILE_APPEND | LOCK_EX);
+                }
+            } else {
+                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                    "GET_EVENT_ACTION: CONTACT_ENTITY_ID пустой, контакт не загружается\n", 
+                    FILE_APPEND | LOCK_EX);
             }
 
             return ['success' => true, 'event' => $event];
@@ -686,17 +1041,29 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
      */
     public function updateEventAction($eventId, $title, $description, $dateFrom, $dateTo, $eventColor, $branchId)
     {
-        if (!$GLOBALS['USER'] || !$GLOBALS['USER']->IsAuthorized()) {
+        global $USER;
+        if (!$USER || !$USER->IsAuthorized()) {
             return ['success' => false, 'error' => 'Необходима авторизация'];
         }
 
         try {
+            // Логируем входящие данные
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "UPDATE_EVENT: Входящие данные:\n" .
+                "  eventId: $eventId\n" .
+                "  title: $title\n" .
+                "  dateFrom: $dateFrom\n" .
+                "  dateTo: $dateTo\n" .
+                "  eventColor: $eventColor\n" .
+                "  branchId: $branchId\n", 
+                FILE_APPEND | LOCK_EX);
+            
             if (!CModule::IncludeModule('artmax.calendar')) {
                 return ['success' => false, 'error' => 'Модуль artmax.calendar не установлен'];
             }
             
             $calendarObj = new \Artmax\Calendar\Calendar();
-            $userId = $GLOBALS['USER']->GetID();
+            $userId = $USER->GetID();
 
             // Получаем существующее событие для проверки прав
             $existingEvent = $calendarObj->getEvent($eventId);
@@ -709,15 +1076,99 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                 return ['success' => false, 'error' => 'Нет прав на редактирование'];
             }
 
-            // Проверяем доступность времени для врача (исключая текущее событие)
-            if (!$calendarObj->isTimeAvailableForDoctor($dateFrom, $dateTo, $employeeId, $eventId)) {
-                return ['success' => false, 'error' => 'Время уже занято для выбранного врача'];
+            // Получаем employeeId из существующего события
+            $employeeId = $existingEvent['EMPLOYEE_ID'] ?? null;
+
+            // Проверяем доступность времени для врача в конкретном филиале (исключая текущее событие)
+            if ($employeeId && !$calendarObj->isTimeAvailableForDoctor($dateFrom, $dateTo, $employeeId, $eventId, $existingEvent['BRANCH_ID'])) {
+                return ['success' => false, 'error' => 'Время уже занято для выбранного врача в этом филиале'];
             }
 
             // Обновляем событие
             $result = $calendarObj->updateEvent($eventId, $title, $description, $dateFrom, $dateTo, $eventColor, $branchId);
 
             if ($result) {
+                // Если есть привязанная активность CRM, обновляем её
+                if (!empty($existingEvent['ACTIVITY_ID'])) {
+                    $activityUpdated = $calendarObj->updateCrmActivity(
+                        $existingEvent['ACTIVITY_ID'],
+                        $title,
+                        $dateFrom,
+                        $dateTo
+                    );
+                    
+                    if ($activityUpdated) {
+                        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                            "UPDATE_EVENT: Обновлена активность CRM ID={$existingEvent['ACTIVITY_ID']}\n", 
+                            FILE_APPEND | LOCK_EX);
+                    }
+                }
+                
+                // Логируем перед проверкой сделки
+                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                    "UPDATE_EVENT: Проверка наличия сделки. DEAL_ENTITY_ID={$existingEvent['DEAL_ENTITY_ID']}\n", 
+                    FILE_APPEND | LOCK_EX);
+                
+                // Если есть привязанная сделка, обновляем бронирование
+                if (!empty($existingEvent['DEAL_ENTITY_ID']) && \CModule::IncludeModule('crm')) {
+                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                        "UPDATE_EVENT: Условие выполнено, начинаем обновление бронирования\n", 
+                        FILE_APPEND | LOCK_EX);
+                    
+                    $responsibleId = $existingEvent['EMPLOYEE_ID'] ?? $userId;
+                    
+                // Получаем часовой пояс филиала
+                $calendar = new \Artmax\Calendar\Calendar();
+                $branchTimezone = $calendar->getBranchTimezone($existingEvent['BRANCH_ID']);
+                
+                // Преобразуем формат даты из Y-m-d H:i:s в d.m.Y H:i:s для бронирования
+                $dateFromObj = \DateTime::createFromFormat('Y-m-d H:i:s', $dateFrom, new \DateTimeZone($branchTimezone));
+                $dateToObj = \DateTime::createFromFormat('Y-m-d H:i:s', $dateTo, new \DateTimeZone($branchTimezone));
+                
+                if (!$dateFromObj || !$dateToObj) {
+                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                        "UPDATE_EVENT: Ошибка парсинга дат. dateFrom=$dateFrom, dateTo=$dateTo\n", 
+                        FILE_APPEND | LOCK_EX);
+                    // Пробуем другой формат
+                    $dateFromObj = \DateTime::createFromFormat('d.m.Y H:i:s', $dateFrom, new \DateTimeZone($branchTimezone));
+                    $dateToObj = \DateTime::createFromFormat('d.m.Y H:i:s', $dateTo, new \DateTimeZone($branchTimezone));
+                }
+                
+                // Используем исходное время как есть
+                $bookingDateTime = $dateFromObj->format('d.m.Y H:i:s');
+                
+                // Вычисляем длительность
+                $durationSeconds = $dateToObj->getTimestamp() - $dateFromObj->getTimestamp();
+                $bookingValue = "user|{$responsibleId}|{$bookingDateTime}|{$durationSeconds}|{$title}";
+                
+                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                    "UPDATE_EVENT: Вычисление бронирования:\n" .
+                    "  dateFrom (вход): $dateFrom\n" .
+                    "  dateTo (вход): $dateTo\n" .
+                    "  branchTimezone: $branchTimezone\n" .
+                    "  bookingDateTime: $bookingDateTime\n" .
+                    "  startDateTime timestamp: {$dateFromObj->getTimestamp()}\n" .
+                    "  endDateTime timestamp: {$dateToObj->getTimestamp()}\n" .
+                    "  durationSeconds: $durationSeconds\n" .
+                    "  EMPLOYEE_ID: {$existingEvent['EMPLOYEE_ID']}\n" .
+                    "  responsibleId: $responsibleId\n" .
+                    "  title: $title\n" .
+                    "  ФИНАЛЬНАЯ СТРОКА: $bookingValue\n", 
+                    FILE_APPEND | LOCK_EX);
+                    
+                    $bookingFieldCode = \Bitrix\Main\Config\Option::get('artmax.calendar', 'deal_booking_field', 'UF_CRM_CALENDAR_BOOKING');
+                    
+                    $deal = new \CCrmDeal(false);
+                    $updateFields = [
+                        $bookingFieldCode => [$bookingValue]
+                    ];
+                    $deal->Update($existingEvent['DEAL_ENTITY_ID'], $updateFields);
+                    
+                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                        "UPDATE_EVENT: Обновлено бронирование в сделке ID={$existingEvent['DEAL_ENTITY_ID']}\n", 
+                        FILE_APPEND | LOCK_EX);
+                }
+                
                 return ['success' => true];
             } else {
                 return ['success' => false, 'error' => 'Ошибка обновления события'];
@@ -767,7 +1218,8 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
      */
     public function searchClientsAction($query, $type = 'contact')
     {
-        if (!$GLOBALS['USER'] || !$GLOBALS['USER']->IsAuthorized()) {
+        global $USER;
+        if (!$USER || !$USER->IsAuthorized()) {
             return ['success' => false, 'error' => 'Необходима авторизация'];
         }
 
@@ -932,7 +1384,8 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
      */
     public function saveEventDealAction($eventId, $dealData)
     {
-        if (!$GLOBALS['USER'] || !$GLOBALS['USER']->IsAuthorized()) {
+        global $USER;
+        if (!$USER || !$USER->IsAuthorized()) {
             return ['success' => false, 'error' => 'Необходима авторизация'];
         }
 
@@ -951,7 +1404,7 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
             }
 
             // Проверяем права на редактирование события
-            if ($event['USER_ID'] != $GLOBALS['USER']->GetID()) {
+            if ($event['USER_ID'] != $USER->GetID()) {
                 return ['success' => false, 'error' => 'Нет прав на редактирование события'];
             }
 
@@ -965,7 +1418,126 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
             $result = $calendar->updateEventDeal($eventId, $dealDataArray['id']);
 
             if ($result) {
-                return ['success' => true, 'message' => 'Сделка сохранена'];
+                // Создаем или обновляем активность в сделке
+                $dealId = $dealDataArray['id'];
+                
+                // Проверяем, есть ли уже активность у события
+                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                    "SAVE_DEAL: Проверка активности. ACTIVITY_ID={$event['ACTIVITY_ID']}\n", 
+                    FILE_APPEND | LOCK_EX);
+                    
+                if (!empty($event['ACTIVITY_ID'])) {
+                    // Обновляем существующую активность
+                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                        "SAVE_DEAL: Обновляем существующую активность ID={$event['ACTIVITY_ID']}\n", 
+                        FILE_APPEND | LOCK_EX);
+                        
+                    $activityUpdated = $calendar->updateCrmActivity(
+                        $event['ACTIVITY_ID'],
+                        $event['TITLE'],
+                        $event['DATE_FROM'],
+                        $event['DATE_TO']
+                    );
+                    
+                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                        "SAVE_DEAL: Обновлена активность ID={$event['ACTIVITY_ID']}\n", 
+                        FILE_APPEND | LOCK_EX);
+                } else {
+                    // Создаем новую активность
+                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                        "SAVE_DEAL: Создаем новую активность. DealID=$dealId, Title={$event['TITLE']}, DateFrom={$event['DATE_FROM']}, DateTo={$event['DATE_TO']}, EmployeeID={$event['EMPLOYEE_ID']}\n", 
+                        FILE_APPEND | LOCK_EX);
+                        
+                    $activityId = $calendar->createCrmActivity(
+                        $dealId,
+                        $event['TITLE'],
+                        $event['DATE_FROM'],
+                        $event['DATE_TO'],
+                        $event['EMPLOYEE_ID'] ?? \CCrmSecurityHelper::GetCurrentUserID()
+                    );
+                    
+                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                        "SAVE_DEAL: createCrmActivity вернул activityId=$activityId\n", 
+                        FILE_APPEND | LOCK_EX);
+                    
+                    if ($activityId) {
+                        // Сохраняем ID активности
+                        $calendar->saveEventActivityId($eventId, $activityId);
+                        
+                        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                            "SAVE_DEAL: Создана активность ID=$activityId для события ID=$eventId\n", 
+                            FILE_APPEND | LOCK_EX);
+                    } else {
+                        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                            "SAVE_DEAL ERROR: Не удалось создать активность!\n", 
+                            FILE_APPEND | LOCK_EX);
+                    }
+                }
+                
+                // Обновляем бронирование в сделке
+                if (!\CModule::IncludeModule('crm')) {
+                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                        "SAVE_DEAL: CRM модуль не подключен для обновления бронирования\n", 
+                        FILE_APPEND | LOCK_EX);
+                } else {
+                // Формируем строку бронирования
+                $responsibleId = $event['EMPLOYEE_ID'] ?? \CCrmSecurityHelper::GetCurrentUserID();
+                
+                // Получаем часовой пояс филиала
+                $calendar = new \Artmax\Calendar\Calendar();
+                $branchTimezone = $calendar->getBranchTimezone($event['BRANCH_ID']);
+                
+                // Используем исходное время как есть
+                $bookingDateTime = $event['DATE_FROM'];
+                
+                // Вычисляем длительность через DateTime объекты с часовым поясом филиала
+                $startDateTime = \DateTime::createFromFormat('d.m.Y H:i:s', $event['DATE_FROM'], new \DateTimeZone($branchTimezone));
+                $endDateTime = \DateTime::createFromFormat('d.m.Y H:i:s', $event['DATE_TO'], new \DateTimeZone($branchTimezone));
+                $durationSeconds = $endDateTime->getTimestamp() - $startDateTime->getTimestamp();
+                $serviceName = $event['TITLE'];
+                $bookingValue = "user|{$responsibleId}|{$bookingDateTime}|{$durationSeconds}|{$serviceName}";
+                
+                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                    "SAVE_DEAL: Вычисление бронирования:\n" .
+                    "  DATE_FROM: {$event['DATE_FROM']}\n" .
+                    "  DATE_TO: {$event['DATE_TO']}\n" .
+                    "  branchTimezone: $branchTimezone\n" .
+                    "  bookingDateTime: $bookingDateTime\n" .
+                    "  startDateTime timestamp: {$startDateTime->getTimestamp()}\n" .
+                    "  endDateTime timestamp: {$endDateTime->getTimestamp()}\n" .
+                    "  durationSeconds: $durationSeconds\n" .
+                    "  EMPLOYEE_ID: {$event['EMPLOYEE_ID']}\n" .
+                    "  responsibleId: $responsibleId\n" .
+                    "  serviceName: $serviceName\n" .
+                    "  ФИНАЛЬНАЯ СТРОКА: $bookingValue\n", 
+                    FILE_APPEND | LOCK_EX);
+                    
+                    // Получаем код поля бронирования из настроек модуля
+                    $bookingFieldCode = \Bitrix\Main\Config\Option::get('artmax.calendar', 'deal_booking_field', 'UF_CRM_CALENDAR_BOOKING');
+                    
+                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                        "SAVE_DEAL: Обновляем бронирование в сделке - Field: $bookingFieldCode, Value: $bookingValue\n", 
+                        FILE_APPEND | LOCK_EX);
+                    
+                    // Обновляем сделку
+                    $deal = new \CCrmDeal(false);
+                    $updateFields = [
+                        $bookingFieldCode => [$bookingValue]
+                    ];
+                    $updateResult = $deal->Update($dealId, $updateFields);
+                    
+                    if ($updateResult) {
+                        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                            "SAVE_DEAL: Бронирование успешно обновлено в сделке ID=$dealId\n", 
+                            FILE_APPEND | LOCK_EX);
+                    } else {
+                        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                            "SAVE_DEAL ERROR: Не удалось обновить бронирование в сделке\n", 
+                            FILE_APPEND | LOCK_EX);
+                    }
+                }
+                
+                return ['success' => true, 'message' => 'Сделка сохранена и бронирование синхронизировано'];
             } else {
                 return ['success' => false, 'error' => 'Ошибка сохранения сделки'];
             }
@@ -980,7 +1552,8 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
      */
     public function getEventContactsAction($eventId)
     {
-        if (!$GLOBALS['USER'] || !$GLOBALS['USER']->IsAuthorized()) {
+        global $USER;
+        if (!$USER || !$USER->IsAuthorized()) {
             return ['success' => false, 'error' => 'Необходима авторизация'];
         }
 
@@ -994,19 +1567,55 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
             $calendar = new \Artmax\Calendar\Calendar();
             $event = $calendar->getEvent($eventId);
             
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "\n=== getEventContactsAction ===\n", 
+                FILE_APPEND | LOCK_EX);
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "eventId: " . $eventId . "\n", 
+                FILE_APPEND | LOCK_EX);
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "event found: " . ($event ? 'yes' : 'no') . "\n", 
+                FILE_APPEND | LOCK_EX);
+            
             if (!$event) {
                 return ['success' => false, 'error' => 'Событие не найдено'];
             }
+            
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "event USER_ID: " . ($event['USER_ID'] ?? 'null') . "\n", 
+                FILE_APPEND | LOCK_EX);
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "event EMPLOYEE_ID: " . ($event['EMPLOYEE_ID'] ?? 'null') . "\n", 
+                FILE_APPEND | LOCK_EX);
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "current USER ID: " . $USER->GetID() . "\n", 
+                FILE_APPEND | LOCK_EX);
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "IsAdmin: " . ($USER->IsAdmin() ? 'yes' : 'no') . "\n", 
+                FILE_APPEND | LOCK_EX);
 
             $contact = null;
             if (!empty($event['CONTACT_ENTITY_ID'])) {
                 // Получаем данные контакта из CRM
                 $contact = $this->getContactFromCRM($event['CONTACT_ENTITY_ID']);
+                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                    "CONTACT_ENTITY_ID: " . $event['CONTACT_ENTITY_ID'] . "\n", 
+                    FILE_APPEND | LOCK_EX);
+                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                    "contact found: " . ($contact ? 'yes' : 'no') . "\n", 
+                    FILE_APPEND | LOCK_EX);
+            } else {
+                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                    "CONTACT_ENTITY_ID: empty\n", 
+                    FILE_APPEND | LOCK_EX);
             }
 
             return ['success' => true, 'contact' => $contact];
 
         } catch (\Exception $e) {
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "ERROR: " . $e->getMessage() . "\n", 
+                FILE_APPEND | LOCK_EX);
             return ['success' => false, 'error' => $e->getMessage()];
         }
     }
@@ -1016,7 +1625,8 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
      */
     public function getEventDealsAction($eventId)
     {
-        if (!$GLOBALS['USER'] || !$GLOBALS['USER']->IsAuthorized()) {
+        global $USER;
+        if (!$USER || !$USER->IsAuthorized()) {
             return ['success' => false, 'error' => 'Необходима авторизация'];
         }
 
@@ -1030,19 +1640,52 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
             $calendar = new \Artmax\Calendar\Calendar();
             $event = $calendar->getEvent($eventId);
             
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "\n=== getEventDealsAction ===\n", 
+                FILE_APPEND | LOCK_EX);
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "eventId: " . $eventId . "\n", 
+                FILE_APPEND | LOCK_EX);
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "event found: " . ($event ? 'yes' : 'no') . "\n", 
+                FILE_APPEND | LOCK_EX);
+            
             if (!$event) {
                 return ['success' => false, 'error' => 'Событие не найдено'];
             }
+            
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "event USER_ID: " . ($event['USER_ID'] ?? 'null') . "\n", 
+                FILE_APPEND | LOCK_EX);
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "event EMPLOYEE_ID: " . ($event['EMPLOYEE_ID'] ?? 'null') . "\n", 
+                FILE_APPEND | LOCK_EX);
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "current USER ID: " . $USER->GetID() . "\n", 
+                FILE_APPEND | LOCK_EX);
 
             $deal = null;
             if (!empty($event['DEAL_ENTITY_ID'])) {
                 // Получаем данные сделки из CRM
                 $deal = $this->getDealFromCRM($event['DEAL_ENTITY_ID']);
+                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                    "DEAL_ENTITY_ID: " . $event['DEAL_ENTITY_ID'] . "\n", 
+                    FILE_APPEND | LOCK_EX);
+                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                    "deal found: " . ($deal ? 'yes' : 'no') . "\n", 
+                    FILE_APPEND | LOCK_EX);
+            } else {
+                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                    "DEAL_ENTITY_ID: empty\n", 
+                    FILE_APPEND | LOCK_EX);
             }
 
             return ['success' => true, 'deal' => $deal];
 
         } catch (\Exception $e) {
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "ERROR: " . $e->getMessage() . "\n", 
+                FILE_APPEND | LOCK_EX);
             return ['success' => false, 'error' => $e->getMessage()];
         }
     }
@@ -1052,7 +1695,8 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
      */
     public function createDealForEventAction($eventId, $contactId)
     {
-        if (!$GLOBALS['USER'] || !$GLOBALS['USER']->IsAuthorized()) {
+        global $USER;
+        if (!$USER || !$USER->IsAuthorized()) {
             return ['success' => false, 'error' => 'Необходима авторизация'];
         }
 
@@ -1085,6 +1729,45 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                 $dealTitle = 'Сделка для события #' . $eventId;
             }
 
+            $responsibleId = $event['EMPLOYEE_ID'] ?? \CCrmSecurityHelper::GetCurrentUserID();
+            
+            // Получаем часовой пояс филиала
+            $calendar = new \Artmax\Calendar\Calendar();
+            $branchTimezone = $calendar->getBranchTimezone($event['BRANCH_ID']);
+            
+            // Используем исходное время как есть
+            $bookingDateTime = $event['DATE_FROM'];
+            
+            // Вычисляем длительность через DateTime объекты с часовым поясом филиала
+            $startDateTime = \DateTime::createFromFormat('d.m.Y H:i:s', $event['DATE_FROM'], new \DateTimeZone($branchTimezone));
+            $endDateTime = \DateTime::createFromFormat('d.m.Y H:i:s', $event['DATE_TO'], new \DateTimeZone($branchTimezone));
+            $durationSeconds = $endDateTime->getTimestamp() - $startDateTime->getTimestamp();
+            $serviceName = $event['TITLE'];
+            // Формат для Bitrix resourcebooking: user|ID|дата_время_начала|длительность_в_секундах|название
+            $bookingValue = "user|{$responsibleId}|{$bookingDateTime}|{$durationSeconds}|{$serviceName}";
+            
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "CREATE_DEAL: Вычисление бронирования:\n" .
+                "  DATE_FROM: {$event['DATE_FROM']}\n" .
+                "  DATE_TO: {$event['DATE_TO']}\n" .
+                "  branchTimezone: $branchTimezone\n" .
+                "  bookingDateTime: $bookingDateTime\n" .
+                "  startDateTime timestamp: {$startDateTime->getTimestamp()}\n" .
+                "  endDateTime timestamp: {$endDateTime->getTimestamp()}\n" .
+                "  durationSeconds: $durationSeconds\n" .
+                "  EMPLOYEE_ID: {$event['EMPLOYEE_ID']}\n" .
+                "  responsibleId: $responsibleId\n" .
+                "  serviceName: $serviceName\n" .
+                "  ФИНАЛЬНАЯ СТРОКА: $bookingValue\n", 
+                FILE_APPEND | LOCK_EX);
+            
+            // Получаем код поля бронирования из настроек модуля
+            $bookingFieldCode = \Bitrix\Main\Config\Option::get('artmax.calendar', 'deal_booking_field', 'UF_CRM_CALENDAR_BOOKING');
+            
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "CREATE_DEAL: Формируем бронирование - Field: $bookingFieldCode, Value: $bookingValue\n", 
+                FILE_APPEND | LOCK_EX);
+            
             // Создаем сделку
             $deal = new \CCrmDeal(true);
             $dealFields = [
@@ -1094,7 +1777,9 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                 'STAGE_ID' => 'NEW',
                 'OPPORTUNITY' => 0,
                 'CURRENCY_ID' => 'RUB',
-                'OPENED' => 'Y'
+                'OPENED' => 'Y',
+                // Добавляем бронирование
+                $bookingFieldCode => [$bookingValue]
             ];
 
             $dealId = $deal->Add($dealFields);
@@ -1103,9 +1788,28 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                 // Привязываем сделку к событию
                 $calendar->updateEventDeal($eventId, $dealId);
                 
+                // Создаем активность (бронирование) в сделке с датой и временем события
+                $activityId = $calendar->createCrmActivity(
+                    $dealId, 
+                    $event['TITLE'], 
+                    $event['DATE_FROM'], 
+                    $event['DATE_TO'],
+                    $event['EMPLOYEE_ID'] ?? $USER->GetID()
+                );
+                
+                if ($activityId) {
+                    // Сохраняем ID активности к событию
+                    $calendar->saveEventActivityId($eventId, $activityId);
+                    
+                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                        "CREATE_DEAL: Создана активность ID=$activityId для события ID=$eventId\n", 
+                        FILE_APPEND | LOCK_EX);
+                }
+                
                 return [
                     'success' => true, 
                     'dealId' => $dealId,
+                    'activityId' => $activityId ?? null,
                     'message' => 'Сделка успешно создана и привязана к событию'
                 ];
             } else {
@@ -1122,7 +1826,8 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
      */
     public function createContactAction($contactData)
     {
-        if (!$GLOBALS['USER'] || !$GLOBALS['USER']->IsAuthorized()) {
+        global $USER;
+        if (!$USER || !$USER->IsAuthorized()) {
             return ['success' => false, 'error' => 'Необходима авторизация'];
         }
 
@@ -1207,7 +1912,8 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
      */
     public function saveEventContactAction($eventId, $contactId, $contactData)
     {
-        if (!$GLOBALS['USER'] || !$GLOBALS['USER']->IsAuthorized()) {
+        global $USER;
+        if (!$USER || !$USER->IsAuthorized()) {
             return ['success' => false, 'error' => 'Необходима авторизация'];
         }
 
@@ -1240,7 +1946,8 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
      */
     public function getEventDataAction($eventId)
     {
-        if (!$GLOBALS['USER'] || !$GLOBALS['USER']->IsAuthorized()) {
+        global $USER;
+        if (!$USER || !$USER->IsAuthorized()) {
             return ['success' => false, 'error' => 'Необходима авторизация'];
         }
 
@@ -1270,7 +1977,8 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
      */
     public function saveEventNoteAction($eventId, $noteText)
     {
-        if (!$GLOBALS['USER'] || !$GLOBALS['USER']->IsAuthorized()) {
+        global $USER;
+        if (!$USER || !$USER->IsAuthorized()) {
             return ['success' => false, 'error' => 'Необходима авторизация'];
         }
 
@@ -1302,7 +2010,8 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
      */
     public function getEmployeesAction()
     {
-        if (!$GLOBALS['USER'] || !$GLOBALS['USER']->IsAuthorized()) {
+        global $USER;
+        if (!$USER || !$USER->IsAuthorized()) {
             return ['success' => false, 'error' => 'Необходима авторизация'];
         }
 
@@ -1352,7 +2061,8 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
      */
     public function searchEmployeesAction($query)
     {
-        if (!$GLOBALS['USER'] || !$GLOBALS['USER']->IsAuthorized()) {
+        global $USER;
+        if (!$USER || !$USER->IsAuthorized()) {
             return ['success' => false, 'error' => 'Необходима авторизация'];
         }
 
@@ -1466,7 +2176,8 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
      */
     public function saveBranchSettingsAction($branchId, $timezoneName, $employeeIds, $branchName = null)
     {
-        if (!$GLOBALS['USER'] || !$GLOBALS['USER']->IsAuthorized()) {
+        global $USER;
+        if (!$USER || !$USER->IsAuthorized()) {
             return ['success' => false, 'error' => 'Необходима авторизация'];
         }
 
@@ -1522,7 +2233,8 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
      */
     public function getBranchesAction()
     {
-        if (!$GLOBALS['USER'] || !$GLOBALS['USER']->IsAuthorized()) {
+        global $USER;
+        if (!$USER || !$USER->IsAuthorized()) {
             return ['success' => false, 'error' => 'Необходима авторизация'];
         }
 
@@ -1548,7 +2260,8 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
      */
     public function addBranchAction($name, $address = '', $phone = '', $email = '')
     {
-        if (!$GLOBALS['USER'] || !$GLOBALS['USER']->IsAuthorized()) {
+        global $USER;
+        if (!$USER || !$USER->IsAuthorized()) {
             return ['success' => false, 'error' => 'Необходима авторизация'];
         }
 
@@ -1592,7 +2305,8 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
      */
     public function getBranchEmployeesAction($branchId)
     {
-        if (!$GLOBALS['USER'] || !$GLOBALS['USER']->IsAuthorized()) {
+        global $USER;
+        if (!$USER || !$USER->IsAuthorized()) {
             return ['success' => false, 'error' => 'Необходима авторизация'];
         }
 
@@ -1615,10 +2329,18 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
 
     /**
      * Перенос события
+     * @param array $params {
+     *   @type int    $event_id
+     *   @type int    $branch_id
+     *   @type int    $employee_id
+     *   @type string $date_from  YYYY-MM-DD HH:MM:SS
+     *   @type string $date_to    YYYY-MM-DD HH:MM:SS
+     * }
      */
-    public function moveEventAction($eventId, $branchId, $employeeId, $dateFrom, $dateTo)
+    public function moveEventAction($params)
     {
-        if (!$GLOBALS['USER'] || !$GLOBALS['USER']->IsAuthorized()) {
+        global $USER;
+        if (!$USER || !$USER->IsAuthorized()) {
             return ['success' => false, 'error' => 'Необходима авторизация'];
         }
 
@@ -1629,6 +2351,12 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
 
             $calendar = new \Artmax\Calendar\Calendar();
             
+            $eventId = (int)($params['event_id'] ?? 0);
+            $branchId = isset($params['branch_id']) ? (int)$params['branch_id'] : null;
+            $employeeId = isset($params['employee_id']) ? (int)$params['employee_id'] : null;
+            $dateFrom = $params['date_from'] ?? '';
+            $dateTo = $params['date_to'] ?? '';
+            
             // Получаем текущее событие
             $event = $calendar->getEvent($eventId);
             if (!$event) {
@@ -1636,19 +2364,52 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
             }
 
             // Проверяем права на перенос (только автор события)
-            if ($event['USER_ID'] != $GLOBALS['USER']->GetID()) {
+            if ($event['USER_ID'] != $USER->GetID()) {
                 return ['success' => false, 'error' => 'Нет прав на перенос события'];
             }
 
-            // Проверяем доступность времени для нового врача
-            if (!$calendar->isTimeAvailableForDoctor($dateFrom, $dateTo, $employeeId)) {
-                return ['success' => false, 'error' => 'Время уже занято для выбранного врача'];
-            }
+            // При переносе с обменом местами не проверяем конфликты заранее - 
+            // метод moveEvent сам обрабатывает обмен местами между событиями
 
-            // Обновляем событие
-            $result = $calendar->updateEvent($eventId, $event['TITLE'], $event['DESCRIPTION'], $dateFrom, $dateTo, $event['EVENT_COLOR'], $branchId, $employeeId);
+            // Логируем параметры для отладки
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "MOVE_EVENT_ACTION: Parameters:\n", 
+                FILE_APPEND | LOCK_EX);
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "  - eventId: " . $eventId . "\n", 
+                FILE_APPEND | LOCK_EX);
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "  - dateFrom: " . $dateFrom . "\n", 
+                FILE_APPEND | LOCK_EX);
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "  - dateTo: " . $dateTo . "\n", 
+                FILE_APPEND | LOCK_EX);
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "  - employeeId: " . ($employeeId ?? (int)$event['EMPLOYEE_ID']) . "\n", 
+                FILE_APPEND | LOCK_EX);
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "  - branchId: " . ($branchId ?? (int)$event['BRANCH_ID']) . "\n", 
+                FILE_APPEND | LOCK_EX);
+            
+            // Используем специальный метод moveEvent для переноса с обменом местами
+            $result = $calendar->moveEvent(
+                $eventId,
+                $dateFrom,
+                $dateTo,
+                $employeeId ?? (int)$event['EMPLOYEE_ID'],
+                $branchId ?? (int)$event['BRANCH_ID']
+            );
+            
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "MOVE_EVENT_ACTION: moveEvent result: " . print_r($result, true) . "\n", 
+                FILE_APPEND | LOCK_EX);
 
-            if ($result) {
+            // Проверяем новый формат ответа от moveEvent
+            if (is_array($result) && !empty($result['success'])) {
+                // Возвращаем полный результат с информацией о затронутых событиях
+                return $result;
+            } elseif ($result === true) {
+                // Обратная совместимость для старого формата
                 return ['success' => true];
             } else {
                 return ['success' => false, 'error' => 'Ошибка переноса события'];
@@ -1663,18 +2424,35 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
      */
     public function getContactFromCRM($contactId)
     {
+        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+            "getContactFromCRM called with contactId: " . $contactId . "\n", 
+            FILE_APPEND | LOCK_EX);
+            
         if (!CModule::IncludeModule('crm')) {
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "CRM module not included\n", 
+                FILE_APPEND | LOCK_EX);
             return null;
         }
 
         try {
-            // Получаем контакт с дополнительными полями
+            // Используем GetListEx с проверкой прав для текущего пользователя
             $arSelect = [
                 'ID', 'NAME', 'LAST_NAME', 'SECOND_NAME', 
                 'EMAIL', 'PHONE', 'COMPANY_TITLE', 'POST', 'ADDRESS'
             ];
             
-            $contact = \CCrmContact::GetByID($contactId, $arSelect);
+            $arFilter = [
+                'ID' => $contactId,
+                'CHECK_PERMISSIONS' => 'N' // Отключаем проверку прав
+            ];
+            
+            $dbContact = \CCrmContact::GetListEx([], $arFilter, false, false, $arSelect);
+            $contact = $dbContact ? $dbContact->Fetch() : null;
+            
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "CCrmContact::GetListEx result: " . ($contact ? 'found' : 'null') . "\n", 
+                FILE_APPEND | LOCK_EX);
             if ($contact) {
                 // Получаем телефоны из мультиполей
                 $phones = [];
@@ -1713,7 +2491,7 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                 }
                 
                 // Формируем полное имя
-                $fullName = trim($contact['NAME'] . ' ' . $contact['LAST_NAME'] . ' ' . $contact['SECOND_NAME']);
+                $fullName = trim($contact['LAST_NAME'] .' '.$contact['NAME'] .  ' ' . $contact['SECOND_NAME']);
                 if (empty($fullName)) {
                     $fullName = 'Контакт #' . $contact['ID'];
                 }
@@ -1727,9 +2505,15 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                 ];
             }
         } catch (\Exception $e) {
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "Exception in getContactFromCRM: " . $e->getMessage() . "\n", 
+                FILE_APPEND | LOCK_EX);
             error_log('Ошибка получения контакта из CRM: ' . $e->getMessage());
         }
 
+        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+            "getContactFromCRM returning null\n", 
+            FILE_APPEND | LOCK_EX);
         return null;
     }
     
@@ -1738,12 +2522,30 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
      */
     private function getDealFromCRM($dealId)
     {
+        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+            "getDealFromCRM called with dealId: " . $dealId . "\n", 
+            FILE_APPEND | LOCK_EX);
+            
         if (!CModule::IncludeModule('crm')) {
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "CRM module not included for deal\n", 
+                FILE_APPEND | LOCK_EX);
             return null;
         }
 
         try {
-            $deal = \CCrmDeal::GetByID($dealId);
+            // Используем GetListEx с отключенной проверкой прав
+            $arFilter = [
+                'ID' => $dealId,
+                'CHECK_PERMISSIONS' => 'N' // Отключаем проверку прав
+            ];
+            
+            $dbDeal = \CCrmDeal::GetListEx([], $arFilter, false, false, ['ID', 'TITLE', 'OPPORTUNITY', 'CURRENCY_ID', 'STAGE_ID', 'COMPANY_TITLE']);
+            $deal = $dbDeal ? $dbDeal->Fetch() : null;
+            
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "CCrmDeal::GetListEx result: " . ($deal ? 'found' : 'null') . "\n", 
+                FILE_APPEND | LOCK_EX);
             if ($deal) {
                 return [
                     'id' => $deal['ID'],
@@ -1755,9 +2557,15 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                 ];
             }
         } catch (\Exception $e) {
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "Exception in getDealFromCRM: " . $e->getMessage() . "\n", 
+                FILE_APPEND | LOCK_EX);
             error_log('Ошибка получения сделки из CRM: ' . $e->getMessage());
         }
 
+        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+            "getDealFromCRM returning null\n", 
+            FILE_APPEND | LOCK_EX);
         return null;
     }
     
@@ -1914,6 +2722,35 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
         
         return $ufFields;
     }
+    
+    /**
+     * Проверка, является ли дата выходным днем
+     */
+    private function isWeekend($date) {
+        $dayOfWeek = $date->format('N'); // 1 = понедельник, 7 = воскресенье
+        return $dayOfWeek == 6 || $dayOfWeek == 7; // Суббота или воскресенье
+    }
+    
+    /**
+     * Проверка, является ли дата праздничным днем
+     * Пока возвращает false, можно расширить логику для конкретных праздников
+     */
+    private function isHoliday($date) {
+        // Список праздничных дней (можно расширить)
+        $holidays = [
+            '01-01', // Новый год
+            '01-07', // Рождество
+            '02-23', // День защитника отечества
+            '03-08', // Международный женский день
+            '05-01', // Праздник весны и труда
+            '05-09', // День Победы
+            '06-12', // День России
+            '11-04', // День народного единства
+        ];
+        
+        $dateString = $date->format('m-d');
+        return in_array($dateString, $holidays);
+    }
 
     /**
      * Конвертирует дату из российского формата (день.месяц.год) в стандартный (год-месяц-день)
@@ -1952,5 +2789,19 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
 
         // Если ничего не получилось, возвращаем исходную строку
         return $dateString;
+    }
+
+    /**
+     * Подключает необходимые скрипты и стили
+     */
+    private function includeAssets()
+    {
+        global $APPLICATION;
+        
+        // Подключаем основной скрипт календаря с версионированием для обхода кэша
+        $APPLICATION->AddHeadScript($this->getPath() . '/templates/.default/script.js?v=' . time());
+        
+        // Подключаем стили с версионированием для обхода кэша
+        $APPLICATION->SetAdditionalCSS($this->getPath() . '/templates/.default/style.css?v=' . time());
     }
 }

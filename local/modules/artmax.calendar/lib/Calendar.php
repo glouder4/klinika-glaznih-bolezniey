@@ -299,7 +299,7 @@ class Calendar
      * Назначить врача событию
      */
     public function assignDoctor($eventId, $employeeId)
-    {
+    { 
         $sql = "
             UPDATE artmax_calendar_events 
             SET EMPLOYEE_ID = " . ($employeeId ? (int)$employeeId : 'NULL') . ",
@@ -914,6 +914,15 @@ class Calendar
             file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
                 "Query executed successfully\n", 
                 FILE_APPEND | LOCK_EX);
+            
+            // Обновляем поле подтверждения в сделке
+            $this->updateDealConfirmationField($eventId, $confirmationStatus);
+            
+            // Если запись подтверждена, переводим сделку в статус "В работе"
+            if ($confirmationStatus === 'confirmed') {
+                $this->updateDealStatusOnConfirmation($eventId);
+            }
+            
             return true;
         } catch (\Exception $e) {
             $errorMessage = 'Ошибка обновления статуса подтверждения события: ' . $e->getMessage();
@@ -935,6 +944,9 @@ class Calendar
         
         try {
             $result = $this->connection->query($sql);
+            
+            // Обновляем поле визита в сделке
+            $this->updateDealVisitField($eventId, $visitStatus);
             
             // Если клиент пришел, обновляем привязанную сделку на "Завершена успешно"
             if ($visitStatus === 'client_came') {
@@ -1028,6 +1040,149 @@ class Calendar
             $dealError = $deal->LAST_ERROR;
             file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
                 "UPDATE_DEAL_ON_CANCEL: Ошибка обновления сделки ID={$dealId}: {$dealError}\n", 
+                FILE_APPEND | LOCK_EX);
+        }
+    }
+
+    /**
+     * Обновить статус сделки при подтверждении записи
+     * @param int $eventId ID события
+     */
+    private function updateDealStatusOnConfirmation($eventId)
+    {
+        // Получаем данные события
+        $event = $this->getEvent($eventId);
+        
+        if (!$event || empty($event['DEAL_ENTITY_ID']) || !\CModule::IncludeModule('crm')) {
+            return;
+        }
+        
+        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+            "UPDATE_CONFIRMATION_STATUS: Начинаем обновление сделки ID={$event['DEAL_ENTITY_ID']} на EXECUTING\n", 
+            FILE_APPEND | LOCK_EX);
+        
+        $dealId = (int)$event['DEAL_ENTITY_ID'];
+        $deal = new \CCrmDeal(false);
+        
+        // Обновляем статус сделки на "В работе"
+        $updateFields = [
+            'STAGE_ID' => 'EXECUTING',
+        ];
+        
+        $dealUpdateResult = $deal->Update($dealId, $updateFields);
+        
+        if ($dealUpdateResult) {
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "UPDATE_CONFIRMATION_STATUS: Сделка ID={$dealId} переведена в статус 'В работе' (EXECUTING)\n", 
+                FILE_APPEND | LOCK_EX);
+        } else {
+            $dealError = $deal->LAST_ERROR;
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "UPDATE_CONFIRMATION_STATUS: Ошибка обновления сделки ID={$dealId}: {$dealError}\n", 
+                FILE_APPEND | LOCK_EX);
+        }
+    }
+    
+    /**
+     * Обновить поле "Подтверждение" в сделке
+     * @param int $eventId ID события
+     * @param string $confirmationStatus Статус подтверждения (pending, confirmed, not_confirmed)
+     */
+    private function updateDealConfirmationField($eventId, $confirmationStatus)
+    {
+        // Получаем данные события
+        $event = $this->getEvent($eventId);
+        
+        if (!$event || empty($event['DEAL_ENTITY_ID']) || !\CModule::IncludeModule('crm')) {
+            return;
+        }
+        
+        $dealId = (int)$event['DEAL_ENTITY_ID'];
+        $fieldCode = \Bitrix\Main\Config\Option::get('artmax.calendar', 'deal_confirmation_field', 'UF_CRM_CALENDAR_CONFIRM');
+        
+        // Получаем ID значения списка по XML_ID
+        $enumValue = \CUserFieldEnum::GetList(
+            [],
+            [
+                'USER_FIELD_NAME' => $fieldCode,
+                'XML_ID' => $confirmationStatus
+            ]
+        )->Fetch();
+        
+        if (!$enumValue) {
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "UPDATE_DEAL_CONFIRMATION_FIELD: Не найдено значение для XML_ID={$confirmationStatus}\n", 
+                FILE_APPEND | LOCK_EX);
+            return;
+        }
+        
+        $deal = new \CCrmDeal(false);
+        $updateFields = [
+            $fieldCode => $enumValue['ID']
+        ];
+        
+        $dealUpdateResult = $deal->Update($dealId, $updateFields);
+        
+        if ($dealUpdateResult) {
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "UPDATE_DEAL_CONFIRMATION_FIELD: Сделка ID={$dealId} обновлена. Подтверждение={$confirmationStatus}\n", 
+                FILE_APPEND | LOCK_EX);
+        } else {
+            $dealError = $deal->LAST_ERROR;
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "UPDATE_DEAL_CONFIRMATION_FIELD: Ошибка обновления сделки ID={$dealId}: {$dealError}\n", 
+                FILE_APPEND | LOCK_EX);
+        }
+    }
+    
+    /**
+     * Обновить поле "Визит" в сделке
+     * @param int $eventId ID события
+     * @param string $visitStatus Статус визита (not_specified, client_came, client_did_not_come)
+     */
+    private function updateDealVisitField($eventId, $visitStatus)
+    {
+        // Получаем данные события
+        $event = $this->getEvent($eventId);
+        
+        if (!$event || empty($event['DEAL_ENTITY_ID']) || !\CModule::IncludeModule('crm')) {
+            return;
+        }
+        
+        $dealId = (int)$event['DEAL_ENTITY_ID'];
+        $fieldCode = \Bitrix\Main\Config\Option::get('artmax.calendar', 'deal_visit_field', 'UF_CRM_CALENDAR_VISIT');
+        
+        // Получаем ID значения списка по XML_ID
+        $enumValue = \CUserFieldEnum::GetList(
+            [],
+            [
+                'USER_FIELD_NAME' => $fieldCode,
+                'XML_ID' => $visitStatus
+            ]
+        )->Fetch();
+        
+        if (!$enumValue) {
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "UPDATE_DEAL_VISIT_FIELD: Не найдено значение для XML_ID={$visitStatus}\n", 
+                FILE_APPEND | LOCK_EX);
+            return;
+        }
+        
+        $deal = new \CCrmDeal(false);
+        $updateFields = [
+            $fieldCode => $enumValue['ID']
+        ];
+        
+        $dealUpdateResult = $deal->Update($dealId, $updateFields);
+        
+        if ($dealUpdateResult) {
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "UPDATE_DEAL_VISIT_FIELD: Сделка ID={$dealId} обновлена. Визит={$visitStatus}\n", 
+                FILE_APPEND | LOCK_EX);
+        } else {
+            $dealError = $deal->LAST_ERROR;
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "UPDATE_DEAL_VISIT_FIELD: Ошибка обновления сделки ID={$dealId}: {$dealError}\n", 
                 FILE_APPEND | LOCK_EX);
         }
     }

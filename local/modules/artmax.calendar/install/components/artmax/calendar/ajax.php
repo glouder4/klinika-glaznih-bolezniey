@@ -135,35 +135,12 @@ switch ($action) {
 
         $userId = $GLOBALS['USER']->GetID();
 
-        // Логируем полученные данные
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-            "=== AJAX ADD_EVENT DEBUG ===\n",
-            FILE_APPEND | LOCK_EX);
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-            "AJAX: Received data:\n",
-            FILE_APPEND | LOCK_EX);
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-            "  - title: {$title}\n",
-            FILE_APPEND | LOCK_EX);
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-            "  - dateFrom: {$dateFrom}\n",
-            FILE_APPEND | LOCK_EX);
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-            "  - dateTo: {$dateTo}\n",
-            FILE_APPEND | LOCK_EX);
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-            "  - eventColor: {$eventColor}\n",
-            FILE_APPEND | LOCK_EX);
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-            "=== END AJAX ADD_EVENT DEBUG ===\n",
-            FILE_APPEND | LOCK_EX);
-
         // Сохраняем время как есть, без конвертации в UTC
         // Это позволит избежать проблем с часовыми поясами
 
-        // Проверяем доступность времени для врача
-        if (!$calendarObj->isTimeAvailableForDoctor($dateFrom, $dateTo, $employeeId)) {
-            die(json_encode(['success' => false, 'error' => 'Время уже занято для выбранного врача']));
+        // Проверяем доступность времени для врача в конкретном филиале
+        if (!$calendarObj->isTimeAvailableForDoctor($dateFrom, $dateTo, $employeeId, null, $branchId)) {
+            die(json_encode(['success' => false, 'error' => 'Время уже занято для выбранного врача в этом филиале']));
         }
 
         // Добавляем событие с цветом (без конвертации в UTC)
@@ -202,6 +179,26 @@ switch ($action) {
         } else {
             die(json_encode(['success' => false, 'error' => 'Ошибка удаления события']));
         }
+        break;
+
+    case 'clearAllEvents':
+        // Получаем все события текущего пользователя
+        $events = $calendarObj->getEventsByUser($GLOBALS['USER']->GetID());
+        $deletedCount = 0;
+        
+        if ($events) {
+            foreach ($events as $event) {
+                if ($calendarObj->deleteEvent($event['ID'])) {
+                    $deletedCount++;
+                }
+            }
+        }
+        
+        die(json_encode([
+            'success' => true, 
+            'deletedCount' => $deletedCount,
+            'message' => "Удалено $deletedCount событий"
+        ]));
         break;
 
     case 'updateEvent':
@@ -253,14 +250,89 @@ switch ($action) {
                 "UPDATE_EVENT_DEBUG: Checking conflicts with doctorToCheck=" . $doctorToCheck . "\n", 
                 FILE_APPEND | LOCK_EX);
             
-            if (!$calendarObj->isTimeAvailableForDoctor($dateFrom, $dateTo, $doctorToCheck, $eventId)) {
-                die(json_encode(['success' => false, 'error' => 'Время уже занято для выбранного врача']));
+            if (!$calendarObj->isTimeAvailableForDoctor($dateFrom, $dateTo, $doctorToCheck, $eventId, $branchId)) {
+                die(json_encode(['success' => false, 'error' => 'Время уже занято для выбранного врача в этом филиале']));
             }
         }
 
         try {
             $result = $calendarObj->updateEvent($eventId, $title, $description, $dateFrom, $dateTo, $eventColor, $branchId, $employeeId);
             if ($result) {
+                // Обновляем активность CRM если есть
+                if (!empty($event['ACTIVITY_ID'])) {
+                    $activityUpdated = $calendarObj->updateCrmActivity(
+                        $event['ACTIVITY_ID'],
+                        $title,
+                        $dateFrom,
+                        $dateTo
+                    );
+                    
+                    if ($activityUpdated) {
+                        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                            "UPDATE_EVENT: Обновлена активность CRM ID={$event['ACTIVITY_ID']}\n", 
+                            FILE_APPEND | LOCK_EX);
+                    }
+                }
+                
+                // Обновляем бронирование в сделке если есть
+                if (!empty($event['DEAL_ENTITY_ID']) && \CModule::IncludeModule('crm')) {
+                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                        "UPDATE_EVENT (ajax.php): Начинаем обновление бронирования для сделки ID={$event['DEAL_ENTITY_ID']}\n", 
+                        FILE_APPEND | LOCK_EX);
+                    
+                    $responsibleId = $event['EMPLOYEE_ID'] ?? $GLOBALS['USER']->GetID();
+                    $branchTimezone = $calendarObj->getBranchTimezone($event['BRANCH_ID']);
+                    
+                    // Преобразуем формат даты из Y-m-d H:i:s в d.m.Y H:i:s для бронирования
+                    $dateFromObj = \DateTime::createFromFormat('Y-m-d H:i:s', $dateFrom, new \DateTimeZone($branchTimezone));
+                    $dateToObj = \DateTime::createFromFormat('Y-m-d H:i:s', $dateTo, new \DateTimeZone($branchTimezone));
+                    
+                    if (!$dateFromObj || !$dateToObj) {
+                        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                            "UPDATE_EVENT (ajax.php): Ошибка парсинга дат. dateFrom=$dateFrom, dateTo=$dateTo\n", 
+                            FILE_APPEND | LOCK_EX);
+                        // Пробуем другой формат
+                        $dateFromObj = \DateTime::createFromFormat('d.m.Y H:i:s', $dateFrom, new \DateTimeZone($branchTimezone));
+                        $dateToObj = \DateTime::createFromFormat('d.m.Y H:i:s', $dateTo, new \DateTimeZone($branchTimezone));
+                    }
+                    
+                    if ($dateFromObj && $dateToObj) {
+                        // Используем исходное время как есть
+                        $bookingDateTime = $dateFromObj->format('d.m.Y H:i:s');
+                        
+                        // Вычисляем длительность
+                        $durationSeconds = $dateToObj->getTimestamp() - $dateFromObj->getTimestamp();
+                        $bookingValue = "user|{$responsibleId}|{$bookingDateTime}|{$durationSeconds}|{$title}";
+                        
+                        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                            "UPDATE_EVENT (ajax.php): Вычисление бронирования:\n" .
+                            "  dateFrom (вход): $dateFrom\n" .
+                            "  dateTo (вход): $dateTo\n" .
+                            "  branchTimezone: $branchTimezone\n" .
+                            "  bookingDateTime: $bookingDateTime\n" .
+                            "  startDateTime timestamp: {$dateFromObj->getTimestamp()}\n" .
+                            "  endDateTime timestamp: {$dateToObj->getTimestamp()}\n" .
+                            "  durationSeconds: $durationSeconds\n" .
+                            "  EMPLOYEE_ID: {$event['EMPLOYEE_ID']}\n" .
+                            "  responsibleId: $responsibleId\n" .
+                            "  title: $title\n" .
+                            "  ФИНАЛЬНАЯ СТРОКА: $bookingValue\n", 
+                            FILE_APPEND | LOCK_EX);
+                        
+                        $bookingFieldCode = \Bitrix\Main\Config\Option::get('artmax.calendar', 'deal_booking_field', 'UF_CRM_CALENDAR_BOOKING');
+                        
+                        $deal = new \CCrmDeal(false);
+                        $updateFields = [
+                            $bookingFieldCode => [$bookingValue]
+                        ];
+                        $deal->Update($event['DEAL_ENTITY_ID'], $updateFields);
+                        
+                        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                            "UPDATE_EVENT (ajax.php): Обновлено бронирование в сделке ID={$event['DEAL_ENTITY_ID']}\n", 
+                            FILE_APPEND | LOCK_EX);
+                    }
+                }
+                
                 die(json_encode(['success' => true]));
             } else {
                 die(json_encode(['success' => false, 'error' => 'Ошибка обновления события']));
@@ -325,6 +397,7 @@ switch ($action) {
         $dateTo = $_POST['dateTo'] ?? '';
         $employeeId = $_POST['employeeId'] ?? null;
         $excludeEventId = $_POST['excludeEventId'] ?? null;
+        $branchId = $_POST['branchId'] ?? null;
 
         if (!$dateFrom || !$dateTo) {
             http_response_code(400);
@@ -336,7 +409,7 @@ switch ($action) {
             $convertedDateFrom = convertRussianDateToStandard($dateFrom);
             $convertedDateTo = convertRussianDateToStandard($dateTo);
             
-            $available = $calendarObj->isTimeAvailableForDoctor($convertedDateFrom, $convertedDateTo, $employeeId, $excludeEventId);
+            $available = $calendarObj->isTimeAvailableForDoctor($convertedDateFrom, $convertedDateTo, $employeeId, $excludeEventId, $branchId);
             die(json_encode(['success' => true, 'available' => $available]));
         } catch (Exception $e) {
             die(json_encode(['success' => false, 'error' => $e->getMessage()]));
@@ -365,6 +438,7 @@ switch ($action) {
         $date = $_POST['date'] ?? '';
         $employeeId = $_POST['employeeId'] ?? null;
         $excludeEventId = $_POST['excludeEventId'] ?? null;
+        $branchId = $_POST['branchId'] ?? null;
 
         if (!$date || !$employeeId) {
             http_response_code(400);
@@ -372,7 +446,7 @@ switch ($action) {
         }
 
         try {
-            $availableTimes = $calendarObj->getDoctorScheduleForMove($date, $employeeId, $excludeEventId);
+            $availableTimes = $calendarObj->getDoctorScheduleForMove($date, $employeeId, $excludeEventId, $branchId);
             die(json_encode(['success' => true, 'availableTimes' => $availableTimes]));
         } catch (Exception $e) {
             die(json_encode(['success' => false, 'error' => $e->getMessage()]));
@@ -381,9 +455,26 @@ switch ($action) {
 
     case 'moveEvent':
         $eventId = (int)($_POST['eventId'] ?? 0);
-        $employeeId = $_POST['employeeId'] ?? null;
+        $branchId = isset($_POST['branchId']) ? (int)$_POST['branchId'] : null;
+        $employeeId = isset($_POST['employeeId']) ? (int)$_POST['employeeId'] : null;
         $newDateFrom = $_POST['dateFrom'] ?? '';
         $newDateTo = $_POST['dateTo'] ?? '';
+
+        // Логируем входящие параметры
+        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+            "MOVE_EVENT_ACTION: Parameters:\n" .
+            "  - eventId: $eventId\n" .
+            "  - dateFrom: $newDateFrom\n" .
+            "  - dateTo: $newDateTo\n" .
+            "  - employeeId: $employeeId\n" .
+            "  - branchId: $branchId\n\n", 
+            FILE_APPEND | LOCK_EX);
+
+        // Проверяем на NaN в dateTo
+        if (strpos($newDateTo, 'NaN') !== false) {
+            http_response_code(400);
+            die(json_encode(['success' => false, 'error' => 'Неправильный формат даты окончания']));
+        }
 
         if (!$eventId || !$newDateFrom || !$newDateTo) {
             http_response_code(400);
@@ -391,11 +482,22 @@ switch ($action) {
         }
 
         try {
-            $result = $calendarObj->moveEvent($eventId, $newDateFrom, $newDateTo, $employeeId);
-            if ($result) {
-                die(json_encode(['success' => true]));
+            $component = new ArtmaxCalendarComponent();
+            $params = [
+                'event_id' => $eventId,
+                'branch_id' => $branchId,
+                'employee_id' => $employeeId,
+                'date_from' => $newDateFrom,
+                'date_to' => $newDateTo,
+            ];
+
+            $result = $component->moveEventAction($params);
+            if (!empty($result['success'])) {
+                // Передаем полный результат с информацией о затронутых событиях
+                die(json_encode($result));
             } else {
-                die(json_encode(['success' => false, 'error' => 'Ошибка переноса записи']));
+                $error = $result['error'] ?? 'Ошибка переноса записи';
+                die(json_encode(['success' => false, 'error' => $error]));
             }
         } catch (Exception $e) {
             die(json_encode(['success' => false, 'error' => $e->getMessage()]));
@@ -433,7 +535,8 @@ switch ($action) {
                     $dateFromStandard, 
                     $dateToStandard, 
                     $event['EMPLOYEE_ID'], 
-                    $eventId
+                    $eventId,
+                    $event['BRANCH_ID']
                 );
                 
                 if (!$isAvailable) {
@@ -499,97 +602,15 @@ switch ($action) {
         }
 
         try {
-            $event = $calendarObj->getEvent($eventId);
+            // Используем компонент для получения события с контактом
+            $component = new ArtmaxCalendarComponent();
+            $result = $component->getEventAction($eventId);
+            
             file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-                "AJAX: getEvent result: " . json_encode($event) . "\n",
+                "AJAX: getEventAction result: " . json_encode($result) . "\n",
                 FILE_APPEND | LOCK_EX);
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-                "AJAX: DATE_FROM type: " . gettype($event['DATE_FROM'] ?? null) . "\n",
-                FILE_APPEND | LOCK_EX);
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-                "AJAX: DATE_TO type: " . gettype($event['DATE_TO'] ?? null) . "\n",
-                FILE_APPEND | LOCK_EX);
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-                "AJAX: DATE_FROM value: " . print_r($event['DATE_FROM'] ?? null, true) . "\n",
-                FILE_APPEND | LOCK_EX);
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-                "AJAX: DATE_TO value: " . print_r($event['DATE_TO'] ?? null, true) . "\n",
-                FILE_APPEND | LOCK_EX);
-
-            if ($event) {
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-                    "AJAX: Event found, returning success\n",
-                    FILE_APPEND | LOCK_EX);
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-                    "AJAX: Final event data before JSON: " . print_r($event, true) . "\n",
-                    FILE_APPEND | LOCK_EX);
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-                    "AJAX: Final DATE_FROM type: " . gettype($event['DATE_FROM'] ?? null) . "\n",
-                    FILE_APPEND | LOCK_EX);
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-                    "AJAX: Final DATE_TO type: " . gettype($event['DATE_TO'] ?? null) . "\n",
-                    FILE_APPEND | LOCK_EX);
-                $jsonResult = json_encode(['success' => true, 'event' => $event]);
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-                    "AJAX: JSON result: " . $jsonResult . "\n",
-                    FILE_APPEND | LOCK_EX);
-                if (json_last_error() !== JSON_ERROR_NONE) {
-                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-                        "AJAX: JSON error: " . json_last_error_msg() . "\n",
-                        FILE_APPEND | LOCK_EX);
-                }
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-                    "AJAX: JSON length: " . strlen($jsonResult) . "\n",
-                    FILE_APPEND | LOCK_EX);
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-                    "AJAX: JSON first 500 chars: " . substr($jsonResult, 0, 500) . "\n",
-                    FILE_APPEND | LOCK_EX);
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-                    "AJAX: JSON last 500 chars: " . substr($jsonResult, -500) . "\n",
-                    FILE_APPEND | LOCK_EX);
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-                    "AJAX: JSON contains DATE_FROM: " . (strpos($jsonResult, 'DATE_FROM') !== false ? 'YES' : 'NO') . "\n",
-                    FILE_APPEND | LOCK_EX);
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-                    "AJAX: JSON contains DATE_TO: " . (strpos($jsonResult, 'DATE_TO') !== false ? 'YES' : 'NO') . "\n",
-                    FILE_APPEND | LOCK_EX);
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-                    "AJAX: JSON contains empty objects: " . (strpos($jsonResult, '{}') !== false ? 'YES' : 'NO') . "\n",
-                    FILE_APPEND | LOCK_EX);
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-                    "AJAX: JSON contains quotes around DATE_FROM: " . (strpos($jsonResult, '"DATE_FROM"') !== false ? 'YES' : 'NO') . "\n",
-                    FILE_APPEND | LOCK_EX);
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-                    "AJAX: JSON contains quotes around DATE_TO: " . (strpos($jsonResult, '"DATE_TO"') !== false ? 'YES' : 'NO') . "\n",
-                    FILE_APPEND | LOCK_EX);
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-                    "AJAX: JSON contains quotes around DATE_FROM value: " . (strpos($jsonResult, '"DATE_FROM":') !== false ? 'YES' : 'NO') . "\n",
-                    FILE_APPEND | LOCK_EX);
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-                    "AJAX: JSON contains quotes around DATE_TO value: " . (strpos($jsonResult, '"DATE_TO":') !== false ? 'YES' : 'NO') . "\n",
-                    FILE_APPEND | LOCK_EX);
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-                    "AJAX: JSON contains quotes around DATE_FROM value: " . (strpos($jsonResult, '"DATE_FROM":') !== false ? 'YES' : 'NO') . "\n",
-                    FILE_APPEND | LOCK_EX);
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-                    "AJAX: JSON contains quotes around DATE_TO value: " . (strpos($jsonResult, '"DATE_TO":') !== false ? 'YES' : 'NO') . "\n",
-                    FILE_APPEND | LOCK_EX);
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-                    "AJAX: JSON contains quotes around DATE_FROM value: " . (strpos($jsonResult, '"DATE_FROM":') !== false ? 'YES' : 'NO') . "\n",
-                    FILE_APPEND | LOCK_EX);
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-                    "AJAX: JSON contains quotes around DATE_TO value: " . (strpos($jsonResult, '"DATE_TO":') !== false ? 'YES' : 'NO') . "\n",
-                    FILE_APPEND | LOCK_EX);
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-                    "AJAX: JSON contains quotes around DATE_FROM value: " . (strpos($jsonResult, '"DATE_FROM":') !== false ? 'YES' : 'NO') . "\n",
-                    FILE_APPEND | LOCK_EX);
-                die($jsonResult);
-            } else {
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-                    "AJAX: Event not found\n",
-                    FILE_APPEND | LOCK_EX);
-                die(json_encode(['success' => false, 'error' => 'Событие не найдено']));
-            }
+            
+            die(json_encode($result));
         } catch (Exception $e) {
             file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
                 "AJAX: Exception: " . $e->getMessage() . "\n",
@@ -622,22 +643,36 @@ switch ($action) {
         file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
             "eventColor from POST: " . ($_POST['eventColor'] ?? 'NOT SET') . "\n",
             FILE_APPEND | LOCK_EX);
+        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
+            "excludeWeekends from POST: " . ($_POST['excludeWeekends'] ?? 'NOT SET') . "\n",
+            FILE_APPEND | LOCK_EX);
+        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
+            "excludeHolidays from POST: " . ($_POST['excludeHolidays'] ?? 'NOT SET') . "\n",
+            FILE_APPEND | LOCK_EX);
 
         // Создаем экземпляр компонента для вызова метода
         $component = new ArtmaxCalendarComponent();
-        $result = $component->addScheduleAction(
-            $_POST['title'] ?? '',
-            $_POST['date'] ?? '',
-            $_POST['time'] ?? '',
-            $_POST['employee_id'] ?? null,
-            $_POST['repeat'] === 'on' || $_POST['repeat'] === 'true',
-            $_POST['frequency'] ?? null,
-            $weekdays,
-            $_POST['repeatEnd'] ?? 'never',
-            !empty($_POST['repeatCount']) ? (int)$_POST['repeatCount'] : null,
-            !empty($_POST['repeatEndDate']) ? $_POST['repeatEndDate'] : null,
-            $_POST['eventColor'] ?? '#3498db'
-        );
+        
+        // Подготавливаем параметры в виде массива
+        $params = [
+            'title' => $_POST['title'] ?? '',
+            'date' => $_POST['date'] ?? '',
+            'time' => $_POST['time'] ?? '',
+            'employee_id' => $_POST['employee_id'] ?? null,
+            'branch_id' => $_POST['branch_id'] ?? 1,
+            'repeat' => $_POST['repeat'] === 'on' || $_POST['repeat'] === 'true',
+            'frequency' => $_POST['frequency'] ?? null,
+            'weekdays' => $weekdays,
+            'repeat_end' => $_POST['repeatEnd'] ?? 'never',
+            'repeat_count' => !empty($_POST['repeatCount']) ? (int)$_POST['repeatCount'] : null,
+            'repeat_end_date' => !empty($_POST['repeatEndDate']) ? $_POST['repeatEndDate'] : null,
+            'event_color' => $_POST['eventColor'] ?? '#3498db',
+            'exclude_weekends' => $_POST['excludeWeekends'] === 'on' || $_POST['excludeWeekends'] === 'true' || false,
+            'exclude_holidays' => $_POST['excludeHolidays'] === 'on' || $_POST['excludeHolidays'] === 'true' || false,
+            'include_end_date' => $_POST['includeEndDate'] === 'on' || $_POST['includeEndDate'] === 'true'
+        ];
+        
+        $result = $component->addScheduleAction($params);
 
         file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
             "Result: " . json_encode($result) . "\n",
@@ -788,15 +823,19 @@ switch ($action) {
         
     case 'saveEventContact':
         $eventId = $_POST['eventId'] ?? 0;
-        $contactId = $_POST['contactId'] ?? 0;
         $contactData = $_POST['contactData'] ?? '';
         
-        if (empty($eventId) || empty($contactId)) {
-            die(json_encode(['success' => false, 'error' => 'ID события или контакта не указан']));
+        if (empty($eventId) || empty($contactData)) {
+            die(json_encode(['success' => false, 'error' => 'ID события или данные контакта не указаны']));
         }
         
         try {
             $contactData = json_decode($contactData, true);
+            if (!$contactData || !isset($contactData['id'])) {
+                die(json_encode(['success' => false, 'error' => 'Неверный формат данных контакта']));
+            }
+            
+            $contactId = $contactData['id'];
             $component = new ArtmaxCalendarComponent();
             $result = $component->saveEventContactAction($eventId, $contactId, $contactData);
             die(json_encode($result));

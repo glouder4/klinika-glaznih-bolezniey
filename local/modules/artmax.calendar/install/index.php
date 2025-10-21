@@ -126,6 +126,10 @@ class artmax_calendar extends CModule
         
         // Создаем пользовательское поле "Бронирование" для сделки
         $this->createDealBookingField();
+        
+        // Создаем пользовательские поля "Подтверждение" и "Визит" для сделки
+        $this->createDealConfirmationField();
+        $this->createDealVisitField();
     }
     
     /**
@@ -201,10 +205,184 @@ class artmax_calendar extends CModule
         // Удаляем пользовательское поле бронирования
         $this->deleteDealBookingField();
         
+        // Удаляем пользовательские поля
+        $this->deleteDealConfirmationField();
+        $this->deleteDealVisitField();
+        
         // Удаляем настройки модуля
         \Bitrix\Main\Config\Option::delete('artmax.calendar', ['name' => 'menu_item_id']);
         \Bitrix\Main\Config\Option::delete('artmax.calendar', ['name' => 'custom_section_id']);
         \Bitrix\Main\Config\Option::delete('artmax.calendar', ['name' => 'deal_booking_field']);
+        \Bitrix\Main\Config\Option::delete('artmax.calendar', ['name' => 'deal_confirmation_field']);
+        \Bitrix\Main\Config\Option::delete('artmax.calendar', ['name' => 'deal_visit_field']);
+    }
+    
+    /**
+     * Создание пользовательского поля "Подтверждение" для сделки
+     */
+    private function createDealConfirmationField()
+    {
+        if (!\Bitrix\Main\Loader::includeModule('crm')) {
+            return;
+        }
+        
+        $fieldCode = 'UF_CRM_CALENDAR_CONFIRM';
+        
+        // Проверяем, существует ли уже поле
+        $existingField = \CUserTypeEntity::GetList(
+            [],
+            [
+                'ENTITY_ID' => 'CRM_DEAL',
+                'FIELD_NAME' => $fieldCode
+            ]
+        )->Fetch();
+        
+        if ($existingField) {
+            \Bitrix\Main\Config\Option::set('artmax.calendar', 'deal_confirmation_field', $fieldCode);
+            return;
+        }
+        
+        // Создаем новое поле типа "Список"
+        $userTypeEntity = new \CUserTypeEntity();
+        $fieldId = $userTypeEntity->Add([
+            'ENTITY_ID' => 'CRM_DEAL',
+            'FIELD_NAME' => $fieldCode,
+            'USER_TYPE_ID' => 'enumeration', // Тип "Список"
+            'SORT' => 510,
+            'MULTIPLE' => 'N',
+            'MANDATORY' => 'N',
+            'SHOW_FILTER' => 'Y',
+            'SHOW_IN_LIST' => 'Y',
+            'EDIT_IN_LIST' => 'Y',
+            'IS_SEARCHABLE' => 'N',
+            'EDIT_FORM_LABEL' => [
+                'ru' => 'Подтверждение записи',
+                'en' => 'Appointment Confirmation'
+            ],
+            'LIST_COLUMN_LABEL' => [
+                'ru' => 'Подтверждение',
+                'en' => 'Confirmation'
+            ],
+            'LIST_FILTER_LABEL' => [
+                'ru' => 'Подтверждение',
+                'en' => 'Confirmation'
+            ]
+        ]);
+        
+        if ($fieldId) {
+            // Добавляем значения списка
+            $enumFieldId = $fieldId;
+            $enumValues = [
+                'n1' => [
+                    'VALUE' => 'Ожидается подтверждение',
+                    'DEF' => 'Y',
+                    'SORT' => 100,
+                    'XML_ID' => 'pending'
+                ],
+                'n2' => [
+                    'VALUE' => 'Подтверждено',
+                    'DEF' => 'N',
+                    'SORT' => 200,
+                    'XML_ID' => 'confirmed'
+                ],
+                'n3' => [
+                    'VALUE' => 'Не подтверждено',
+                    'DEF' => 'N',
+                    'SORT' => 300,
+                    'XML_ID' => 'not_confirmed'
+                ]
+            ];
+            
+            $obEnum = new \CUserFieldEnum();
+            $obEnum->SetEnumValues($enumFieldId, $enumValues);
+            
+            // Сохраняем код поля в настройках модуля
+            \Bitrix\Main\Config\Option::set('artmax.calendar', 'deal_confirmation_field', $fieldCode);
+        }
+    }
+    
+    /**
+     * Создание пользовательского поля "Визит" для сделки
+     */
+    private function createDealVisitField()
+    {
+        if (!\Bitrix\Main\Loader::includeModule('crm')) {
+            return;
+        }
+        
+        $fieldCode = 'UF_CRM_CALENDAR_VISIT';
+        
+        // Проверяем, существует ли уже поле
+        $existingField = \CUserTypeEntity::GetList(
+            [],
+            [
+                'ENTITY_ID' => 'CRM_DEAL',
+                'FIELD_NAME' => $fieldCode
+            ]
+        )->Fetch();
+        
+        if ($existingField) {
+            \Bitrix\Main\Config\Option::set('artmax.calendar', 'deal_visit_field', $fieldCode);
+            return;
+        }
+        
+        // Создаем новое поле типа "Список"
+        $userTypeEntity = new \CUserTypeEntity();
+        $fieldId = $userTypeEntity->Add([
+            'ENTITY_ID' => 'CRM_DEAL',
+            'FIELD_NAME' => $fieldCode,
+            'USER_TYPE_ID' => 'enumeration', // Тип "Список"
+            'SORT' => 520,
+            'MULTIPLE' => 'N',
+            'MANDATORY' => 'N',
+            'SHOW_FILTER' => 'Y',
+            'SHOW_IN_LIST' => 'Y',
+            'EDIT_IN_LIST' => 'Y',
+            'IS_SEARCHABLE' => 'N',
+            'EDIT_FORM_LABEL' => [
+                'ru' => 'Статус визита',
+                'en' => 'Visit Status'
+            ],
+            'LIST_COLUMN_LABEL' => [
+                'ru' => 'Визит',
+                'en' => 'Visit'
+            ],
+            'LIST_FILTER_LABEL' => [
+                'ru' => 'Визит',
+                'en' => 'Visit'
+            ]
+        ]);
+        
+        if ($fieldId) {
+            // Добавляем значения списка
+            $enumFieldId = $fieldId;
+            $enumValues = [
+                'n1' => [
+                    'VALUE' => 'Не указано',
+                    'DEF' => 'Y',
+                    'SORT' => 100,
+                    'XML_ID' => 'not_specified'
+                ],
+                'n2' => [
+                    'VALUE' => 'Клиент пришел',
+                    'DEF' => 'N',
+                    'SORT' => 200,
+                    'XML_ID' => 'client_came'
+                ],
+                'n3' => [
+                    'VALUE' => 'Клиент не пришел',
+                    'DEF' => 'N',
+                    'SORT' => 300,
+                    'XML_ID' => 'client_did_not_come'
+                ]
+            ];
+            
+            $obEnum = new \CUserFieldEnum();
+            $obEnum->SetEnumValues($enumFieldId, $enumValues);
+            
+            // Сохраняем код поля в настройках модуля
+            \Bitrix\Main\Config\Option::set('artmax.calendar', 'deal_visit_field', $fieldCode);
+        }
     }
     
     /**
@@ -217,6 +395,58 @@ class artmax_calendar extends CModule
         }
         
         $fieldCode = \Bitrix\Main\Config\Option::get('artmax.calendar', 'deal_booking_field', 'UF_CRM_CALENDAR_BOOKING');
+        
+        // Ищем поле
+        $existingField = \CUserTypeEntity::GetList(
+            [],
+            [
+                'ENTITY_ID' => 'CRM_DEAL',
+                'FIELD_NAME' => $fieldCode
+            ]
+        )->Fetch();
+        
+        if ($existingField) {
+            $userTypeEntity = new \CUserTypeEntity();
+            $userTypeEntity->Delete($existingField['ID']);
+        }
+    }
+    
+    /**
+     * Удаление пользовательского поля "Подтверждение" для сделки
+     */
+    private function deleteDealConfirmationField()
+    {
+        if (!\Bitrix\Main\Loader::includeModule('crm')) {
+            return;
+        }
+        
+        $fieldCode = \Bitrix\Main\Config\Option::get('artmax.calendar', 'deal_confirmation_field', 'UF_CRM_CALENDAR_CONFIRM');
+        
+        // Ищем поле
+        $existingField = \CUserTypeEntity::GetList(
+            [],
+            [
+                'ENTITY_ID' => 'CRM_DEAL',
+                'FIELD_NAME' => $fieldCode
+            ]
+        )->Fetch();
+        
+        if ($existingField) {
+            $userTypeEntity = new \CUserTypeEntity();
+            $userTypeEntity->Delete($existingField['ID']);
+        }
+    }
+    
+    /**
+     * Удаление пользовательского поля "Визит" для сделки
+     */
+    private function deleteDealVisitField()
+    {
+        if (!\Bitrix\Main\Loader::includeModule('crm')) {
+            return;
+        }
+        
+        $fieldCode = \Bitrix\Main\Config\Option::get('artmax.calendar', 'deal_visit_field', 'UF_CRM_CALENDAR_VISIT');
         
         // Ищем поле
         $existingField = \CUserTypeEntity::GetList(

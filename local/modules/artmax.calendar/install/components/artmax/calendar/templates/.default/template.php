@@ -8,6 +8,40 @@ Loc::loadMessages(__FILE__);
 echo '<!-- STATIC LOAD DEBUG: Total events = ' . count($arResult['EVENTS']) . ' -->';
 echo '<!-- STATIC LOAD DEBUG: Events by date keys = ' . implode(', ', array_keys($arResult['EVENTS_BY_DATE'])) . ' -->';
 
+// Передаем IS_ADMIN в JavaScript
+?>
+<script>
+    window.IS_ADMIN = <?= $arResult['IS_ADMIN'] ? 'true' : 'false' ?>;
+    window.CURRENT_USER_ID = <?= $arResult['CURRENT_USER_ID'] ?>;
+</script>
+
+<!-- ИСПРАВЛЕНИЕ: CSS стили для отображения заметок врачам (только просмотр) -->
+<style>
+<?php if (!$arResult['IS_ADMIN'] && $USER->IsAuthorized()): ?>
+/* Врачи видят секцию заметок, но БЕЗ кнопок редактирования */
+.add-note-section {
+    display: block !important;
+    visibility: visible !important;
+}
+
+.note-display {
+    display: block !important;
+}
+
+/* ВАЖНО: Врачи НЕ видят кнопки добавления/редактирования заметок */
+.add-note-btn,
+.edit-note-btn {
+    display: none !important;
+    visibility: hidden !important;
+}
+
+.note-content {
+    display: block !important;
+}
+<?php endif; ?>
+</style>
+<?php
+
 /**
  * Конвертирует дату из российского формата (день.месяц.год) в стандартный (год-месяц-день)
  * @param string $dateString Дата в формате "04.08.2025 09:00:00"
@@ -155,6 +189,7 @@ $totalDays = 42; // 6 недель * 7 дней
         </div>
 
         
+        <?php if ($arResult['IS_ADMIN']): ?>
         <div class="header-right">
             <button class="btn btn-primary btn-add-branch" onclick="openAddBranchModal()" title="Добавить филиал">
                 ➕ Добавить филиал
@@ -163,8 +198,9 @@ $totalDays = 42; // 6 недель * 7 дней
                 ⚙️ Настройки филиала
             </button>
         </div>
+        <?php endif; ?>
     </div>
-
+  
     <!-- Основной календарь -->
     <div class="calendar-main">
         <div class="calendar-toolbar">
@@ -172,14 +208,21 @@ $totalDays = 42; // 6 недель * 7 дней
                 <span class="current-month"><?= translateMonthToRussian($currentDate->format('F')) . ', ' . $currentDate->format('Y') ?></span>
             </div>
             <div class="calendar-controls">
+                <?php if ($arResult['IS_ADMIN']): ?>
                 <button class="btn btn-primary btn-create">
                     СОЗДАТЬ РАСПИСАНИЕ
                 </button>
+                <?php endif; ?>
                 <span class="view-type">Месяц</span>
                 <button class="btn-nav" onclick="previousMonth()">◀</button>
                 <button class="btn-nav" onclick="nextMonth()">▶</button>
                 <button class="btn-today" onclick="goToToday()">Сегодня</button>
                 <button class="btn-refresh" onclick="refreshCalendarEvents()" title="Обновить события">🔄</button>
+                <?php if ($arResult['IS_ADMIN']): ?>
+                <button class="btn btn-danger btn-clear-all" onclick="clearAllEvents()" title="Удалить все события">
+                    🗑️
+                </button>
+                <?php endif; ?>
             </div>
         </div>
 
@@ -246,7 +289,17 @@ $totalDays = 42; // 6 недель * 7 дней
                                 
                                 echo '<div class="calendar-event ' . $statusClass . $timeChangedClass . '" data-event-id="' . $event['ID'] . '" style="' . $style . '" onclick="event.stopPropagation();">';
                                 echo '<div class="event-content">';
-                                echo '<div class="event-title">' . htmlspecialchars($event['TITLE']) . '</div>';
+                                
+                                // Формируем заголовок: Название - Имя - Телефон
+                                $eventTitle = htmlspecialchars($event['TITLE']);
+                                if (!empty($event['CONTACT_NAME'])) {
+                                    $eventTitle .= ' - ' . htmlspecialchars($event['CONTACT_NAME']);
+                                }
+                                if (!empty($event['CONTACT_PHONE'])) {
+                                    $eventTitle .= ' - ' . htmlspecialchars($event['CONTACT_PHONE']);
+                                }
+                                
+                                echo '<div class="event-title">' . $eventTitle . '</div>';
                                 echo '<div class="event-time">';
                                 echo '<span>';
                                 echo $eventTime . ' – ' . $eventEndTime;
@@ -620,6 +673,9 @@ $totalDays = 42; // 6 недель * 7 дней
             </div>
             
             <form id="scheduleForm" class="schedule-form">
+                <!-- Скрытое поле для ID филиала -->
+                <input type="hidden" id="schedule-branch-id" name="branch_id" value="<?= $arResult['BRANCH']['ID'] ?>">
+                
                 <div class="form-group">
                     <label for="schedule-title">Название *</label>
                     <input type="text" id="schedule-title" name="title" required placeholder="Введите название расписания">
@@ -654,6 +710,23 @@ $totalDays = 42; // 6 недель * 7 дней
                         <input type="checkbox" id="schedule-repeat" name="repeat" onchange="toggleRepeatFields()">
                         <span class="checkmark"></span>
                         Повторяемое
+                    </label>
+                </div>
+                
+                <!-- Галочки для исключения выходных и праздников (скрыты) -->
+                <div class="form-group checkbox-group" style="display: none;">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="exclude-weekends" name="exclude_weekends" value="false">
+                        <span class="checkmark"></span>
+                        Исключить выходные
+                    </label>
+                </div>
+                
+                <div class="form-group checkbox-group" style="display: none;">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="exclude-holidays" name="exclude_holidays" value="false">
+                        <span class="checkmark"></span>
+                        Исключить праздничные дни
                     </label>
                 </div>
                 
@@ -705,19 +778,22 @@ $totalDays = 42; // 6 недель * 7 дней
                     <!-- Поля для окончания повторения -->
                     <div class="form-group">
                         <label>Окончание</label>
-                        <div class="radio-group">
+                        <div class="radio-group" id="repeat-end-group">
                             <label class="radio-label">
-                                <input type="radio" name="repeat-end" value="after" checked onchange="toggleEndFields()">
-                                После <input type="number" name="repeat-count" min="1" value="1" class="repeat-count-input"> повторений
+                                <input type="radio" name="repeat-end" value="after" checked onclick="toggleEndFields()">
+                                После <input type="number" name="repeat-count" id="repeat-count" min="1" value="1" class="repeat-count-input"> повторений
                             </label>
                             <label class="radio-label">
-                                <input type="radio" name="repeat-end" value="date" onchange="toggleEndFields()">
-                                Дата <input type="date" name="repeat-end-date" class="repeat-end-date-input">
+                                <input type="radio" name="repeat-end" value="date" onclick="toggleEndFields()">
+                                Дата <input type="date" name="repeat-end-date" id="repeat-end-date" class="repeat-end-date-input">
                             </label>
-                            <label class="radio-label">
-                                <input type="radio" name="repeat-end" value="never" onchange="toggleEndFields()">
-                                Никогда
-                            </label>
+                            <div id="include-end-date-container" class="checkbox-inline" style="display: none;">
+                                <label class="checkbox-label-small">
+                                    <input type="checkbox" id="include-end-date" name="include-end-date" checked>
+                                    <span class="checkmark-small"></span>
+                                    Включая дату окончания
+                                </label>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -727,20 +803,20 @@ $totalDays = 42; // 6 недель * 7 дней
                     <label for="event-color">Цвет события</label>
                     <div class="color-picker-container">
                         <div class="color-presets">
-                            <button type="button" class="color-preset" data-color="#3498db" style="background-color: #3498db;" onclick="selectPresetColor('#3498db')"></button>
-                            <button type="button" class="color-preset" data-color="#e74c3c" style="background-color: #e74c3c;" onclick="selectPresetColor('#e74c3c')"></button>
-                            <button type="button" class="color-preset" data-color="#2ecc71" style="background-color: #2ecc71;" onclick="selectPresetColor('#2ecc71')"></button>
-                            <button type="button" class="color-preset" data-color="#f39c12" style="background-color: #f39c12;" onclick="selectPresetColor('#f39c12')"></button>
-                            <button type="button" class="color-preset" data-color="#9b59b6" style="background-color: #9b59b6;" onclick="selectPresetColor('#9b59b6')"></button>
-                            <button type="button" class="color-preset" data-color="#1abc9c" style="background-color: #1abc9c;" onclick="selectPresetColor('#1abc9c')"></button>
-                            <button type="button" class="color-preset" data-color="#34495e" style="background-color: #34495e;" onclick="selectPresetColor('#34495e')"></button>
-                            <button type="button" class="color-preset" data-color="#95a5a6" style="background-color: #95a5a6;" onclick="selectPresetColor('#95a5a6')"></button>
+                            <button type="button" class="color-preset" data-color="#3498db" style="background-color: #3498db;" onclick="selectSchedulePresetColor('#3498db')"></button>
+                            <button type="button" class="color-preset" data-color="#e74c3c" style="background-color: #e74c3c;" onclick="selectSchedulePresetColor('#e74c3c')"></button>
+                            <button type="button" class="color-preset" data-color="#2ecc71" style="background-color: #2ecc71;" onclick="selectSchedulePresetColor('#2ecc71')"></button>
+                            <button type="button" class="color-preset" data-color="#f39c12" style="background-color: #f39c12;" onclick="selectSchedulePresetColor('#f39c12')"></button>
+                            <button type="button" class="color-preset" data-color="#9b59b6" style="background-color: #9b59b6;" onclick="selectSchedulePresetColor('#9b59b6')"></button>
+                            <button type="button" class="color-preset" data-color="#1abc9c" style="background-color: #1abc9c;" onclick="selectSchedulePresetColor('#1abc9c')"></button>
+                            <button type="button" class="color-preset" data-color="#34495e" style="background-color: #34495e;" onclick="selectSchedulePresetColor('#34495e')"></button>
+                            <button type="button" class="color-preset" data-color="#95a5a6" style="background-color: #95a5a6;" onclick="selectSchedulePresetColor('#95a5a6')"></button>
                         </div>
                         <div class="custom-color">
                             <label for="custom-color-input">Свой цвет:</label>
-                            <input type="color" id="custom-color-input" name="custom-color" value="#3498db" onchange="selectCustomColor(this.value)">
+                            <input type="color" id="custom-color-input" name="custom-color" value="#3498db" onchange="selectScheduleCustomColor(this.value)">
                         </div>
-                        <input type="hidden" id="selected-color" name="event-color" value="#3498db">
+                        <input type="hidden" id="schedule-selected-color" name="event-color" value="#3498db">
                     </div>
                 </div>
                 
@@ -843,10 +919,10 @@ $totalDays = 42; // 6 недель * 7 дней
                             <div class="client-placeholder">Добавьте информацию о клиенте</div>
                         </div>
                         <div class="client-actions">
-                            <button class="action-btn add-contact-btn" title="Добавить" onclick="event.stopPropagation(); openClientModal();">➕</button>
+                            <button class="action-btn add-contact-btn admin-only" title="Добавить" onclick="event.stopPropagation(); openClientModal();">➕</button>
                         </div>
                     </div>
-                    <div class="add-note-section">
+                    <div class="add-note-section admin-only">
                         <button class="add-note-btn" id="add-note-btn" onclick="event.stopPropagation(); openNoteModal();">+ Добавить заметку к записи</button>
                         <div class="note-display" id="note-display" style="display: none;">
                             <div class="note-content">
@@ -867,8 +943,8 @@ $totalDays = 42; // 6 недель * 7 дней
                             <div class="card-status" id="deal-status">Не добавлена</div>
                         </div>
                         <div class="card-actions" onclick="event.stopPropagation()">
-                            <button class="card-action-btn add-btn" onclick="createNewDeal()" title="Создать новую сделку">+</button>
-                            <button class="card-action-btn select-btn" onclick="openDealModal()">Выбрать</button>
+                            <button class="card-action-btn add-btn admin-only" onclick="createNewDeal()" title="Создать новую сделку">+</button>
+                            <button class="card-action-btn select-btn admin-only" onclick="openDealModal()">Выбрать</button>
                         </div>
                     </div>
 
@@ -879,7 +955,7 @@ $totalDays = 42; // 6 недель * 7 дней
                             <div class="card-status" id="employee-status">Не назначен</div>
                         </div>
                         <div class="card-actions" onclick="event.stopPropagation()">
-                            <button class="card-action-btn add-btn" onclick="openEmployeeModal()" title="Назначить врача">+</button>
+                            <button class="card-action-btn add-btn admin-only" onclick="openEmployeeModal()" title="Назначить врача">+</button>
                         </div>
                     </div>
 
@@ -891,10 +967,10 @@ $totalDays = 42; // 6 недель * 7 дней
                             <div class="card-title">Подтверждение</div>
                             <div class="card-status" id="confirmation-status">Ожидается подтверждение</div>
                         </div>
-                        <button class="card-action-btn" id="confirmation-select-btn" onclick="toggleConfirmationDropdown()">Выбрать ▼</button>
+                        <button class="card-action-btn admin-only" id="confirmation-select-btn" onclick="toggleConfirmationDropdown()">Выбрать ▼</button>
                         
                         <!-- Выпадающее меню подтверждения -->
-                        <div class="confirmation-dropdown" id="confirmation-dropdown">
+                        <div class="confirmation-dropdown admin-only" id="confirmation-dropdown">
                             <div class="confirmation-dropdown-item" onclick="setConfirmationStatus('confirmed')">Подтверждено</div>
                             <div class="confirmation-dropdown-item" onclick="setConfirmationStatus('not_confirmed')">Не подтверждено</div>
                         </div>
@@ -906,10 +982,10 @@ $totalDays = 42; // 6 недель * 7 дней
                             <div class="card-title">Визит</div>
                             <div class="card-status" id="visit-status">Не указано</div>
                         </div>
-                        <button class="card-action-btn" id="visit-select-btn" onclick="toggleVisitDropdown()">Выбрать ▼</button>
+                        <button class="card-action-btn admin-only" id="visit-select-btn" onclick="toggleVisitDropdown()">Выбрать ▼</button>
                         
                         <!-- Выпадающее меню визита -->
-                        <div class="visit-dropdown" id="visit-dropdown">
+                        <div class="visit-dropdown admin-only" id="visit-dropdown">
                             <div class="visit-dropdown-item" onclick="setVisitStatus('not_specified')">Не указано</div>
                             <div class="visit-dropdown-item" onclick="setVisitStatus('client_came')">Клиент пришел</div>
                             <div class="visit-dropdown-item" onclick="setVisitStatus('client_did_not_come')">Клиент не пришел</div>
@@ -1234,23 +1310,7 @@ $totalDays = 42; // 6 недель * 7 дней
         }
     }
     
-    // Функция для переключения полей окончания повторения
-    function toggleEndFields() {
-        const repeatEnd = document.querySelector('input[name="repeat-end"]:checked').value;
-        const repeatCountInput = document.querySelector('.repeat-count-input');
-        const repeatEndDateInput = document.querySelector('.repeat-end-date-input');
-        
-        // Скрываем все поля
-        repeatCountInput.style.display = 'none';
-        repeatEndDateInput.style.display = 'none';
-        
-        // Показываем нужные поля
-        if (repeatEnd === 'after') {
-            repeatCountInput.style.display = 'inline-block';
-        } else if (repeatEnd === 'date') {
-            repeatEndDateInput.style.display = 'inline-block';
-        }
-    }
+    // Функция toggleEndFields определена в script.js
     
     // Функция для выбора предустановленного цвета
     function selectPresetColor(color) {
@@ -1352,8 +1412,47 @@ $totalDays = 42; // 6 недель * 7 дней
         }
     }
 
+    // ИСПРАВЛЕНИЕ: Показать заметки для врачей (только просмотр, без редактирования)
+    function initDoctorNotesAccess() {
+        // Если пользователь не администратор, но авторизован - показываем заметки БЕЗ кнопок редактирования
+        if (!window.IS_ADMIN && window.CURRENT_USER_ID) {
+            console.log('Включаем просмотр заметок для врача ID:', window.CURRENT_USER_ID);
+            
+            // Находим все блоки заметок и делаем их видимыми для врачей
+            const noteSections = document.querySelectorAll('.add-note-section');
+            noteSections.forEach(section => {
+                section.style.display = 'block';
+                section.style.visibility = 'visible';
+                
+                // Показываем блок отображения заметок
+                const noteDisplay = section.querySelector('.note-display');
+                if (noteDisplay) {
+                    noteDisplay.style.display = 'block';
+                }
+            });
+            
+            // ВАЖНО: Скрываем кнопки добавления/редактирования для врачей
+            const addNoteButtons = document.querySelectorAll('.add-note-btn');
+            addNoteButtons.forEach(btn => {
+                btn.style.display = 'none';
+                btn.style.visibility = 'hidden';
+            });
+            
+            const editNoteButtons = document.querySelectorAll('.edit-note-btn');
+            editNoteButtons.forEach(btn => {
+                btn.style.display = 'none';
+                btn.style.visibility = 'hidden';
+            });
+            
+            console.log('Врач видит заметки (только просмотр, без редактирования)');
+        }
+    }
+
     // Обработка клика по ячейке календаря
     document.addEventListener('DOMContentLoaded', function() {
+        // Инициализируем доступ к заметкам для врачей
+        initDoctorNotesAccess();
+        
         const calendarDays = document.querySelectorAll('.calendar-day');
         calendarDays.forEach(day => {
             day.addEventListener('click', function() {
