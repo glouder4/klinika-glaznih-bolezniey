@@ -179,51 +179,9 @@ $totalDays = 42; // 6 недель * 7 дней
 ?>
 
 <div class="artmax-calendar" data-branch-id="<?= $arResult['BRANCH']['ID'] ?>">
-    <!-- Заголовок календаря -->
-    <div class="calendar-header">
-        <div class="header-left">
-            <h1 class="calendar-title">
-                Календарь
-            </h1>
-        </div>
-
-        
-        <?php if ($arResult['IS_ADMIN']): ?>
-        <div class="header-right">
-            <button class="btn btn-primary btn-add-branch" onclick="openAddBranchModal()" title="Добавить филиал">
-                ➕ Добавить филиал
-            </button>
-            <button class="btn btn-secondary btn-branch" id="branch-settings-btn" title="Настройки филиала">
-                ⚙️ Настройки филиала
-            </button>
-        </div>
-        <?php endif; ?>
-    </div>
   
     <!-- Основной календарь -->
     <div class="calendar-main">
-        <div class="calendar-toolbar">
-            <div class="month-selector">
-                <span class="current-month"><?= translateMonthToRussian($currentDate->format('F')) . ', ' . $currentDate->format('Y') ?></span>
-            </div>
-            <div class="calendar-controls">
-                <?php if ($arResult['IS_ADMIN']): ?>
-                <button class="btn btn-primary btn-create">
-                    СОЗДАТЬ РАСПИСАНИЕ
-                </button>
-                <?php endif; ?>
-                <span class="view-type">Месяц</span>
-                <button class="btn-nav" onclick="previousMonth()">◀</button>
-                <button class="btn-nav" onclick="nextMonth()">▶</button>
-                <button class="btn-today" onclick="goToToday()">Сегодня</button>
-                <button class="btn-refresh" onclick="refreshCalendarEvents()" title="Обновить события">🔄</button>
-                <?php if ($arResult['IS_ADMIN']): ?>
-                <button class="btn btn-danger btn-clear-all" onclick="clearAllEvents()" title="Удалить все события">
-                    🗑️
-                </button>
-                <?php endif; ?>
-            </div>
-        </div>
 
         <div class="calendar-grid">
             <!-- Заголовки дней недели -->

@@ -4,9 +4,9 @@
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     line-height: 1.6;
     color: #333;
-    background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
     min-height: 100vh;
     padding: 0;
+    border-radius: 12px;
 }
 
 /* Заголовок календаря */
@@ -239,8 +239,8 @@ input:checked + .toggle-slider:before {
 
 /* Основной календарь */
 .calendar-main {
-    padding: 30px;
-    max-width: 1400px;
+    /*max-width: 1400px;*/
+    border-radius: 12px;
     margin: 0 auto;
 }
 
@@ -4576,4 +4576,213 @@ input:checked + .toggle-slider:before {
 }
 .pagetitle-below {
     border-top: 1px solid rgba(255, 255, 255, .4);
+}
+
+/* Стили для навигации по месяцам */
+.calendar-month-navigation {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 8px;
+    margin: 5px 0;
+    padding: 0 10px;
+}
+
+.calendar-month-navigation .nav-btn {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+    padding: 4px 6px;
+    color: white;
+    cursor: pointer;
+    font-size: 12px;
+    transition: all 0.3s ease;
+    backdrop-filter: blur(10px);
+}
+
+.calendar-month-navigation .nav-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+/* Стили для кнопок навигации Bitrix24 */
+.calendar-month-navigation .ui-btn {
+    /* Переопределяем базовые стили Bitrix24 для наших кнопок */
+    background: rgba(255, 255, 255, 0.1) !important;
+    border: 1px solid rgba(255, 255, 255, 0.2) !important;
+    border-radius: 3px !important;
+    padding: 2px 4px !important;
+    color: white !important;
+    font-size: 10px !important;
+    transition: all 0.3s ease !important;
+    backdrop-filter: blur(10px) !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 20px !important;
+    height: 20px !important;
+}
+
+.calendar-month-navigation .ui-btn:hover {
+    background: rgba(255, 255, 255, 0.2) !important;
+}
+
+/* Стили для иконок в кнопках навигации */
+.calendar-month-navigation .ui-btn::after {
+    color: white !important;
+    font-size: 10px !important;
+    display: block !important;
+    visibility: visible !important;
+    width: 12px !important;
+    height: 12px !important;
+    /* Наследуем иконку из CSS переменной */
+    background-image: var(--ui-btn-icon) !important;
+    background-repeat: no-repeat !important;
+    background-position: center !important;
+    background-size: contain !important;
+}
+
+/* Поворот иконок для направления */
+.calendar-month-navigation .prev-month::after {
+    transform: rotate(90deg) !important;
+    left: unset !important;
+    margin: unset !important;
+    top: unset !important;
+}
+
+.calendar-month-navigation .next-month::after {
+    transform: rotate(-90deg) !important;
+    left: unset !important;
+    margin: unset !important;
+    top: unset !important;
+}
+
+/* Стили для кнопки "Сегодня" */
+.calendar-month-navigation .today-btn {
+    background: rgba(255, 255, 255, 0.1) !important;
+    border: 1px solid rgba(255, 255, 255, 0.2) !important;
+    border-radius: 3px !important;
+    padding: 4px 4px !important;
+    color: white !important;
+    font-size: 10px !important;
+    transition: all 0.3s
+    ease !important;
+    backdrop-filter: blur(10px) !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    min-width: 75px !important;
+    height: 25px !important;
+}
+
+.calendar-month-navigation .today-btn:hover {
+    background: rgba(255, 255, 255, 0.2) !important;
+}
+
+/* Стили для кнопки "Удалить все события" */
+.calendar-month-navigation .clear-all-btn {
+    background: rgba(220, 53, 69, 0.1) !important;
+    border: 1px solid rgba(220, 53, 69, 0.2) !important;
+    border-radius: 3px !important;
+    padding: 4px 8px !important;
+    color: white !important;
+    font-size: 10px !important;
+    transition: all 0.3s ease !important;
+    backdrop-filter: blur(10px) !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    min-width: 105px !important;
+    height: 25px !important;
+}
+
+.calendar-month-navigation .clear-all-btn:hover {
+    background: rgba(220, 53, 69, 0.2) !important;
+}
+
+.calendar-month-navigation .current-month {
+    position: relative;
+}
+
+#monthSelect {
+    background: transparent;
+    border: none;
+    color: white;
+    font-size: 10px;
+    font-weight: 500;
+    text-align: center;
+    cursor: pointer;
+    outline: none;
+    border-bottom: 1px dotted rgba(255, 255, 255, 0.6);
+    padding: 2px 12px 2px 12px;
+    appearance: none;
+    background-image: url('data:image/svg+xml;charset=US-ASCII,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 4 5"><path fill="white" d="M2 0L0 2h4zm0 5L0 3h4z"/></svg>');
+    background-repeat: no-repeat;
+    background-position: right 3px center;
+    background-size: 6px;
+    min-width: 80px;
+}
+
+#monthSelect:focus {
+    border-bottom-color: rgba(255, 255, 255, 0.9);
+}
+
+#monthSelect option {
+    background: #ffffff;
+    color: rgb(51, 51, 51);
+    padding: 4px 8px;
+    border: none;
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 1.3;
+    border-radius: 3px;
+    margin: 1px 0;
+}
+
+#monthSelect option:hover {
+    background: #f5f5f5;
+    color: rgb(51, 51, 51);
+}
+
+#monthSelect option:checked,
+#monthSelect option:focus,
+#monthSelect option:selected {
+    background: #0066cc;
+    color: #ffffff;
+    font-weight: 500;
+}
+
+#monthSelect option:active {
+    background: #004499;
+    color: #ffffff;
+}
+
+/* Стили для кнопки настроек филиала */
+.calendar-settings-btn.ui-btn-secondary,
+.calendar-settings-btn {
+    background: rgba(255, 255, 255, 0.1) !important;
+    border: 1px solid rgba(255, 255, 255, 0.2) !important;
+    backdrop-filter: blur(10px);
+    transition: all 0.3s ease;
+}
+
+.calendar-settings-btn.ui-btn-secondary:hover,
+.calendar-settings-btn:hover {
+    background: rgba(255, 255, 255, 0.2) !important;
+}
+
+/* Белый цвет иконки шестеренки */
+.calendar-settings-btn.ui-btn-secondary .ui-btn-icon,
+.calendar-settings-btn.ui-btn-secondary .ui-btn-icon-setting,
+.calendar-settings-btn .ui-btn-icon,
+.calendar-settings-btn .ui-btn-icon-setting,
+.calendar-settings-btn svg,
+.calendar-settings-btn i {
+    color: white !important;
+    fill: white !important;
+}
+
+@media(min-width: 1920px){
+    .calendar-day{
+        min-height: 239px;
+    }
 }

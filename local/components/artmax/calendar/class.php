@@ -238,7 +238,9 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
             'text' => 'Создать',
             'title' => 'Создать новый элемент',
             'color' => \Bitrix\UI\Buttons\Color::SUCCESS,
-            'icon' => 'add',
+            'dataset' => [
+                'toolbar-collapsed-icon' => \Bitrix\UI\Buttons\Icon::ADD
+            ],
             'menu' => [
                 'items' => [
                     [
@@ -293,185 +295,95 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
             <div class="calendar-month-navigation" style="
                 display: flex;
                 align-items: center;
-                justify-content: flex-start;
+                justify-content: space-between;
                 gap: 15px;
                 margin: 10px 0;
                 padding: 0 20px;
             ">
-                <button class="nav-btn prev-month" 
-                        onclick="previousMonth()" 
-                        style="
-                            background: rgba(255, 255, 255, 0.1);
-                            border: 1px solid rgba(255, 255, 255, 0.2);
-                            border-radius: 6px;
-                            padding: 8px 12px;
-                            color: white;
-                            cursor: pointer;
-                            font-size: 16px;
-                            transition: all 0.3s ease;
-                            backdrop-filter: blur(10px);
-                        "
-                        onmouseover="this.style.background=\'rgba(255, 255, 255, 0.2)\'"
-                        onmouseout="this.style.background=\'rgba(255, 255, 255, 0.1)\'">
-                    ←
+                <div class="nav-left" style="display: flex; align-items: center; gap: 8px;">
+                <button class="ui-btn ui-btn-icon-angle-down ui-btn-empty nav-btn prev-month" 
+                        onclick="previousMonth()">
                 </button>
                 
                 <div class="current-month" style="position: relative;">
                     <select id="monthSelect" 
-                            onchange="changeMonth(this.value)" 
+                            onchange="changeMonth(this.value)"  
                             style="
                                 background: transparent;
                                 border: none;
                                 color: white;
-                                font-size: 18px;
+                                font-size: 12px;
                                 font-weight: 500;
                                 text-align: center;
                                 cursor: pointer;
                                 outline: none;
-                                border-bottom: 2px dotted rgba(255, 255, 255, 0.6);
-                                padding: 4px 30px 4px 8px;
+                                border-bottom: 1px dotted rgba(255, 255, 255, 0.6);
+                                padding: 2px 20px 2px 20px;
                                 appearance: none;
                                 background-image: url(\'data:image/svg+xml;charset=US-ASCII,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 4 5"><path fill="white" d="M2 0L0 2h4zm0 5L0 3h4z"/></svg>\');
                                 background-repeat: no-repeat;
-                                background-position: right 8px center;
-                                background-size: 12px;
-                                min-width: 120px;
+                                background-position: right 6px center;
+                                background-size: 10px;
+                                min-width: 100px;
                             ">
                         ' . $monthOptions . '
                     </select>
                 </div>
                 
-                <button class="nav-btn next-month" 
-                        onclick="nextMonth()" 
+                <button class="ui-btn ui-btn-icon-angle-down ui-btn-empty nav-btn next-month"  
+                        onclick="nextMonth()">
+                </button>
+                
+                <button class="ui-btn ui-btn-empty nav-btn today-btn" 
+                        onclick="goToToday()"
                         style="
                             background: rgba(255, 255, 255, 0.1);
                             border: 1px solid rgba(255, 255, 255, 0.2);
-                            border-radius: 6px;
-                            padding: 8px 12px;
+                            border-radius: 3px;
+                            padding: 2px 8px;
                             color: white;
                             cursor: pointer;
-                            font-size: 16px;
+                            font-size: 10px;
                             transition: all 0.3s ease;
                             backdrop-filter: blur(10px);
+                            display: inline-flex;
+                            align-items: center;
+                            justify-content: center;
+                            min-width: 50px;
+                            height: 20px;
                         "
                         onmouseover="this.style.background=\'rgba(255, 255, 255, 0.2)\'"
                         onmouseout="this.style.background=\'rgba(255, 255, 255, 0.1)\'">
-                    →
+                    Сегодня
                 </button>
+                </div>
+                
+                <div class="nav-right" style="display: flex; align-items: center;">
+                    <button class="ui-btn ui-btn-empty nav-btn clear-all-btn" 
+                            onclick="clearAllEvents()"
+                            title="Удалить все события"
+                            style="
+                                background: rgba(220, 53, 69, 0.1);
+                                border: 1px solid rgba(220, 53, 69, 0.2);
+                                border-radius: 3px;
+                                padding: 4px 8px;
+                                color: white;
+                                cursor: pointer;
+                                font-size: 10px;
+                                transition: all 0.3s ease;
+                                backdrop-filter: blur(10px);
+                                display: inline-flex;
+                                align-items: center;
+                                justify-content: center;
+                                min-width: 60px;
+                                height: 20px;
+                            "
+                            onmouseover="this.style.background=\'rgba(220, 53, 69, 0.2)\'"
+                            onmouseout="this.style.background=\'rgba(220, 53, 69, 0.1)\'">
+                        🗑️ Удалить все
+                    </button>
+                </div>
             </div>
-            
-            <style>
-                #monthSelect option {
-                    background: #2c2c2c;
-                    color: white;
-                    padding: 8px 12px;
-                    border: none;
-                }
-                
-                #monthSelect option:hover {
-                    background: #404040;
-                }
-                
-                #monthSelect option:checked {
-                    background: #007bff;
-                    color: white;
-                }
-                
-                #monthSelect:focus {
-                    border-bottom-color: rgba(255, 255, 255, 0.9);
-                }
-                
-                /* Стили для кнопки настроек филиала */
-                .calendar-settings-btn.ui-btn-secondary,
-                .calendar-settings-btn {
-                    background: rgba(255, 255, 255, 0.1) !important;
-                    border: 1px solid rgba(255, 255, 255, 0.2) !important;
-                    backdrop-filter: blur(10px);
-                    transition: all 0.3s ease;
-                }
-                
-                .calendar-settings-btn.ui-btn-secondary:hover,
-                .calendar-settings-btn:hover {
-                    background: rgba(255, 255, 255, 0.2) !important;
-                }
-                
-                /* Белый цвет иконки шестеренки */
-                .calendar-settings-btn.ui-btn-secondary .ui-btn-icon,
-                .calendar-settings-btn.ui-btn-secondary .ui-btn-icon-setting,
-                .calendar-settings-btn .ui-btn-icon,
-                .calendar-settings-btn .ui-btn-icon-setting,
-                .calendar-settings-btn svg,
-                .calendar-settings-btn i {
-                    color: white !important;
-                    fill: white !important;
-                }
-            </style>
-            
-            <script>
-                // Версия функции changeMonth: 2.2 - добавлена синхронизация селектора
-                function changeMonth(month) {
-                    console.log(\'changeMonth v2.2 called with month:\', month);
-                    
-                    // Получаем текущую дату из URL
-                    const urlParams = new URLSearchParams(window.location.search);
-                    const currentDateStr = urlParams.get(\'date\') || new Date().toISOString().split(\'T\')[0];
-                    
-                    console.log(\'Current date from URL:\', currentDateStr);
-                    
-                    // Парсим текущую дату
-                    const currentDate = new Date(currentDateStr);
-                    const year = currentDate.getFullYear();
-                    
-                    console.log(\'Parsed year:\', year);
-                    
-                    // Создаем новую дату с выбранным месяцем (1-е число месяца)
-                    // Используем правильный формат: год-месяц-день
-                    const dateString = year + \'-\' + String(month).padStart(2, \'0\') + \'-\' + \'01\';
-                    
-                    console.log(\'Changing month to:\', month, \'New date:\', dateString);
-                    
-                    // Обновляем URL с новой датой
-                    const url = new URL(window.location);
-                    url.searchParams.set(\'date\', dateString);
-                    window.location.href = url.toString();
-                }
-                
-                // Функция для установки правильного значения в селектор при загрузке страницы
-                function initMonthSelector() {
-                    console.log(\'initMonthSelector v2.2 called\');
-                    
-                    // Получаем текущую дату из URL
-                    const urlParams = new URLSearchParams(window.location.search);
-                    const currentDateStr = urlParams.get(\'date\') || new Date().toISOString().split(\'T\')[0];
-                    
-                    console.log(\'Current date from URL for selector:\', currentDateStr);
-                    
-                    // Парсим дату и получаем месяц
-                    const currentDate = new Date(currentDateStr);
-                    const month = currentDate.getMonth() + 1; // getMonth() возвращает 0-11, нам нужно 1-12
-                    
-                    console.log(\'Setting month selector to:\', month);
-                    
-                    // Устанавливаем значение в селектор
-                    const monthSelect = document.getElementById(\'monthSelect\');
-                    if (monthSelect) {
-                        monthSelect.value = month;
-                        console.log(\'Month selector updated to:\', monthSelect.value);
-                    } else {
-                        console.log(\'Month selector not found!\');
-                    }
-                }
-                
-                // Инициализируем селектор после загрузки страницы
-                document.addEventListener(\'DOMContentLoaded\', initMonthSelector);
-                
-                // Также вызываем при загрузке, если DOMContentLoaded уже произошел
-                if (document.readyState === \'loading\') {
-                    document.addEventListener(\'DOMContentLoaded\', initMonthSelector);
-                } else {
-                    initMonthSelector();
-                }
-            </script>
         ');
     }
     
@@ -489,6 +401,7 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
             "ICON" => "bx-icon-plus",
             "SORT" => 10,
             "HINT" => "Создать новый элемент",
+            "DATA_TOOLBAR_COLLAPSED_ICON" => "bx-icon-plus",
             "MENU" => [
                 [
                     "TEXT" => "Создать расписание",
@@ -506,7 +419,7 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
         // Кнопка "Настройки филиала" (только иконка)
         $APPLICATION->AddPanelButton([
             "TEXT" => "",
-            "TITLE" => "Настроить параметры текущего филиала",    
+            "TITLE" => "Настроить параметры текущего филиала",       
             "ICON" => "bx-icon-settings",  
             "ONCLICK" => "openBranchModal",
             "SORT" => 20,
@@ -3154,6 +3067,9 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
     {
         global $APPLICATION;
         
+        // Подключаем библиотеку иконок Bitrix24
+        \Bitrix\Main\UI\Extension::load("ui.buttons.icons");
+        
         // Подключаем основной скрипт календаря с версионированием для обхода кэша
         $APPLICATION->AddHeadScript($this->getPath() . '/templates/.default/script.js?v=' . time());
         
@@ -3162,5 +3078,60 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
         
         // Подключаем стили с версионированием для обхода кэша
         $APPLICATION->SetAdditionalCSS($this->getPath() . '/templates/.default/style.css?v=' . time());
+        
+        // Временное решение: добавляем функцию changeMonth прямо в class.php
+        $APPLICATION->AddHeadString('<script>
+            window.changeMonth = function(month) {
+                console.log("changeMonth v2.3 called with month:", month);
+                
+                // Получаем текущую дату из URL
+                const urlParams = new URLSearchParams(window.location.search);
+                const currentDateStr = urlParams.get("date") || new Date().toISOString().split("T")[0];
+                
+                console.log("Current date from URL:", currentDateStr);
+                
+                // Парсим текущую дату
+                const currentDate = new Date(currentDateStr);
+                const year = currentDate.getFullYear();
+                
+                console.log("Parsed year:", year);
+                
+                // Создаем новую дату с выбранным месяцем (1-е число месяца)
+                const dateString = year + "-" + String(month).padStart(2, "0") + "-" + "01";
+                
+                console.log("Changing month to:", month, "New date:", dateString);
+                
+                // Обновляем URL с новой датой
+                const url = new URL(window.location);
+                url.searchParams.set("date", dateString);
+                window.location.href = url.toString();
+            };
+            
+            window.initMonthSelector = function() {
+                console.log("initMonthSelector v2.3 called");
+                
+                const monthSelect = document.getElementById("monthSelect");
+                if (!monthSelect) {
+                    console.log("Month selector not found!");
+                    return;
+                }
+                
+                // Получаем текущую дату из URL
+                const urlParams = new URLSearchParams(window.location.search);
+                const currentDateStr = urlParams.get("date") || new Date().toISOString().split("T")[0];
+                
+                console.log("Current date from URL for selector:", currentDateStr);
+                
+                // Парсим дату и получаем месяц
+                const currentDate = new Date(currentDateStr);
+                const month = currentDate.getMonth() + 1; // getMonth() возвращает 0-11, нам нужно 1-12
+                
+                console.log("Setting month selector to:", month);
+                
+                // Устанавливаем значение селектора
+                monthSelect.value = month;
+                console.log("Month selector updated to:", monthSelect.value);
+            };
+        </script>');
     }
 }

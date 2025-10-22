@@ -99,6 +99,9 @@
             addBranchForm.addEventListener('submit', handleAddBranchSubmit);
         }
         
+        // Инициализируем селектор месяца
+        window.initMonthSelector();
+        
         // НЕ загружаем события при первой загрузке - они уже загружены сервером
         // refreshCalendarEvents() будет вызываться только при необходимости (изменения, обновления)
     }
@@ -7367,6 +7370,60 @@
     }
 
     // Вспомогательная функция для форматирования даты и времени
+    // Функции для навигации по месяцам - делаем их глобальными
+    window.changeMonth = function(month) {
+        console.log('changeMonth v2.2 called with month:', month);
+        
+        // Получаем текущую дату из URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const currentDateStr = urlParams.get('date') || new Date().toISOString().split('T')[0];
+        
+        console.log('Current date from URL:', currentDateStr);
+        
+        // Парсим текущую дату
+        const currentDate = new Date(currentDateStr);
+        const year = currentDate.getFullYear();
+        
+        console.log('Parsed year:', year);
+        
+        // Создаем новую дату с выбранным месяцем (1-е число месяца)
+        // Используем правильный формат: год-месяц-день
+        const dateString = year + '-' + String(month).padStart(2, '0') + '-' + '01';
+        
+        console.log('Changing month to:', month, 'New date:', dateString);
+        
+        // Обновляем URL с новой датой
+        const url = new URL(window.location);
+        url.searchParams.set('date', dateString);
+        window.location.href = url.toString();
+    };
+    
+    // Функция для установки правильного значения в селектор при загрузке страницы
+    window.initMonthSelector = function() {
+        console.log('initMonthSelector v2.2 called');
+        
+        // Получаем текущую дату из URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const currentDateStr = urlParams.get('date') || new Date().toISOString().split('T')[0];
+        
+        console.log('Current date from URL for selector:', currentDateStr);
+        
+        // Парсим дату и получаем месяц
+        const currentDate = new Date(currentDateStr);
+        const month = currentDate.getMonth() + 1; // getMonth() возвращает 0-11, нам нужно 1-12
+        
+        console.log('Setting month selector to:', month);
+        
+        // Устанавливаем значение в селектор
+        const monthSelect = document.getElementById('monthSelect');
+        if (monthSelect) {
+            monthSelect.value = month;
+            console.log('Month selector updated to:', monthSelect.value);
+        } else {
+            console.log('Month selector not found!');
+        }
+    };
+
     function formatLocalDateTime(date) {
         const year = date.getFullYear();
         const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -7424,5 +7481,18 @@
 
     // Делаем showNotification доступной глобально
     window.showNotification = showNotification;
+
+    // Функция для перехода к текущему дню
+    window.goToToday = function() {
+        const today = new Date();
+        const year = today.getFullYear();
+        const month = today.getMonth() + 1;
+        const day = today.getDate();
+        
+        const dateString = year + '-' + String(month).padStart(2, '0') + '-' + String(day).padStart(2, '0');
+        const url = new URL(window.location);
+        url.searchParams.set('date', dateString);
+        window.location.href = url.toString();
+    };
 
 })();
