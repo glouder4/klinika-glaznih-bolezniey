@@ -46,6 +46,166 @@ local/components/artmax/calendar/
 
 ## 📝 Стандарты кодирования
 
+## 🎨 Стандарты дизайна (SidePanel архитектура)
+
+### Основные принципы
+
+1. **SidePanel First** - все формы создания/редактирования открываются в SidePanel
+2. **Bitrix24 Native Design** - использование оригинальных CSS классов Bitrix24
+3. **Двухколоночная раскладка** - лейблы слева (200px), поля справа
+4. **Консистентный UX** - единообразный интерфейс для всех форм
+
+### Структура HTML для форм
+
+```html
+<div class="side-panel-content-container">
+    <div class="artmax-event-form">
+        <form id="form-id" novalidate>
+            <!-- Название - большое поле сверху -->
+            <div class="artmax-event-title-section">
+                <label for="field-id" class="artmax-title-label">Название</label>
+                <input type="text" id="field-id" class="artmax-title-input" required>
+            </div>
+            
+            <!-- Блок настроек -->
+            <div class="artmax-settings-block">
+                <!-- Поля в двухколоночной раскладке -->
+                <div class="artmax-form-field">
+                    <label class="artmax-field-label">Лейбл</label>
+                    <div class="artmax-field-content">
+                        <input type="text" class="artmax-input">
+                    </div>
+                </div>
+                
+                <!-- Дата и время в одной строке -->
+                <div class="artmax-form-row">
+                    <label class="artmax-field-label">Дата и время *</label>
+                    <div class="artmax-field-content">
+                        <div class="artmax-field-half">
+                            <input type="date" class="artmax-input">
+                        </div>
+                        <div class="artmax-field-half">
+                            <select class="artmax-select"></select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </form>
+    </div>
+    
+    <!-- Кнопки внизу -->
+    <div class="webform-buttons calendar-form-buttons-fixed">
+        <input type="button" class="ui-btn ui-btn-success" value="Сохранить">
+        <input type="button" class="ui-btn ui-btn-link" value="Отмена">
+    </div>
+</div>
+```
+
+### CSS классы
+
+#### Основные контейнеры
+- `.side-panel-content-container` - основной контейнер SidePanel
+- `.artmax-event-form` - контейнер формы
+- `.artmax-event-title-section` - секция названия
+- `.artmax-settings-block` - блок настроек
+
+#### Раскладка полей
+- `.artmax-form-field` - обычное поле в две колонки
+- `.artmax-form-row` - поле с несколькими элементами в строке
+- `.artmax-field-label` - лейбл поля (200px ширина)
+- `.artmax-field-content` - контент поля
+- `.artmax-field-half` - половина поля для даты/времени
+
+#### Элементы форм
+- `.artmax-title-input` - большое поле названия
+- `.artmax-input` - обычное поле ввода
+- `.artmax-textarea` - текстовое поле
+- `.artmax-select` - выпадающий список
+
+#### Кнопки
+- `.webform-buttons.calendar-form-buttons-fixed` - контейнер кнопок
+- `.ui-btn.ui-btn-success` - кнопка сохранения
+- `.ui-btn.ui-btn-link` - кнопка отмены
+
+### JavaScript стандарты
+
+#### Подключение Bitrix UI
+```php
+// В template.php
+CJSCore::Init(['ui.buttons']);
+```
+
+#### Обработка дат без конвертации
+```javascript
+// Формируем дату точно как указал пользователь
+const dateFrom = date + ' ' + time + ':00';
+
+// Вычисляем время окончания
+const [hours, minutes] = time.split(':');
+const startMinutes = parseInt(hours) * 60 + parseInt(minutes);
+const endMinutes = startMinutes + duration;
+const endHours = Math.floor(endMinutes / 60);
+const endMins = endMinutes % 60;
+const endTime = String(endHours).padStart(2, '0') + ':' + String(endMins).padStart(2, '0');
+const dateTo = date + ' ' + endTime + ':00';
+```
+
+#### SidePanel интеграция
+```javascript
+function openFormInSidePanel(url, title) {
+    if (typeof BX !== 'undefined' && BX.SidePanel) {
+        BX.SidePanel.Instance.open(url, {
+            title: title,
+            width: 600,
+            cacheable: false,
+            events: {
+                onClose: function() {
+                    // Обновление данных после закрытия
+                }
+            }
+        });
+    }
+}
+```
+
+### Миграция существующих форм
+
+#### Этапы миграции
+
+1. **Создание page.php для SidePanel**
+```php
+<?php
+require($_SERVER["DOCUMENT_ROOT"]."/bitrix/header.php");
+$APPLICATION->SetTitle("Название формы");
+
+$APPLICATION->IncludeComponent(
+    "artmax:component.name",
+    ".default",
+    [
+        "PARAM1" => $param1,
+        "PARAM2" => $param2,
+    ]
+);
+
+require($_SERVER["DOCUMENT_ROOT"]."/bitrix/footer.php");
+?>
+```
+
+2. **Обновление HTML структуры**
+- Применение CSS классов дизайн-системы
+- Реализация двухколоночной раскладки
+- Добавление контейнеров для кнопок
+
+3. **Обновление JavaScript**
+- Адаптация обработчиков событий
+- Интеграция с Bitrix UI
+- Обновление AJAX запросов
+
+4. **Тестирование**
+- Проверка в разных браузерах
+- Тестирование на мобильных устройствах
+- Валидация форм
+
 ### PHP
 
 #### Именование
