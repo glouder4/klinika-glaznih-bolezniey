@@ -183,7 +183,6 @@ $totalDays = 42; // 6 недель * 7 дней
     <div class="calendar-header">
         <div class="header-left">
             <h1 class="calendar-title">
-                <span class="star-icon">★</span>
                 Календарь
             </h1>
         </div>

@@ -1207,11 +1207,11 @@ input:checked + .toggle-slider:before {
 /* Адаптивность для больших экранов (1440px - 1920px) */
 @media (max-width: 1920px) and (min-width: 1441px) {
     .calendar-grid {
-        margin: 20px;
+        margin: 20px 0px;
     }
     
     .calendar-day {
-        min-height: 110px;
+        min-height: 175px;
         padding: 8px;
     }
     
@@ -1236,7 +1236,7 @@ input:checked + .toggle-slider:before {
     }
     
     .calendar-grid {
-        margin: 15px;
+        margin: 15px 0px;
     }
     
     .calendar-day {
@@ -1551,7 +1551,7 @@ input:checked + .toggle-slider:before {
     }
     
     .calendar-grid {
-        margin: 8px;
+        margin: 8px 0px;
     }
     
     .calendar-day {
@@ -1875,7 +1875,7 @@ input:checked + .toggle-slider:before {
     }
     
     .calendar-grid {
-        margin: 6px;
+        margin: 6px 0px;
         border-radius: 4px;
     }
     
@@ -4573,4 +4573,7 @@ input:checked + .toggle-slider:before {
 
 .modal-header h3 {
     font-size: 16px !important;
+}
+.pagetitle-below {
+    border-top: 1px solid rgba(255, 255, 255, .4);
 }

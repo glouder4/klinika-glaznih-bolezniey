@@ -5,6 +5,8 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true) die();
 
 
 use Bitrix\Main\Localization\Loc;
+use Bitrix\UI\Toolbar\Facade\Toolbar;
+use Bitrix\UI\Toolbar\ButtonLocation;
 
 Loc::loadMessages(__FILE__);
 
@@ -167,8 +169,362 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
             'CAN_ADD_EVENTS' => $USER ? $USER->IsAuthorized() : false,
         ];
 
+        // Добавляем панельные кнопки для администраторов
+        if ($USER && $USER->IsAdmin()) {
+            $this->addPanelButtons();
+            
+            // Управляем звездочкой "Добавить в избранное"
+            $this->manageFavoriteStar();
+            
+            // Также добавляем данные для отображения кнопок в шаблоне
+            $this->arResult['SHOW_BRANCH_BUTTONS'] = true;
+            $this->arResult['BRANCH_BUTTONS'] = [
+                'create_menu' => [
+                    'text' => 'Создать',
+                    'title' => 'Создать новый элемент',
+                    'icon' => '➕',
+                    'menu' => [
+                        [
+                            'text' => 'Создать расписание',
+                            'title' => 'Создать новое расписание',
+                            'icon' => '📅',
+                            'onclick' => 'openScheduleModal()'
+                        ],
+                        [
+                            'text' => 'Создать филиал',
+                            'title' => 'Создать новый филиал клиники',
+                            'icon' => '🏢',
+                            'onclick' => 'openAddBranchModal()'
+                        ]
+                    ]
+                ],
+                'branch_settings' => [
+                    'text' => '',
+                    'title' => 'Настроить параметры текущего филиала',
+                    'icon' => '⚙️',
+                    'onclick' => 'openBranchModal()'
+                ]
+            ];
+        } else {
+            $this->arResult['SHOW_BRANCH_BUTTONS'] = false;
+        }
+
         // Подключаем шаблон
         $this->includeComponentTemplate();
+    }
+
+    /**
+     * Добавляет кнопки в тулбар Bitrix24 используя современный API
+     * Использует Bitrix\UI\Toolbar\Facade\Toolbar согласно документации
+     */
+    private function addPanelButtons()
+    {
+        // Проверяем, доступен ли современный API тулбара
+        if (class_exists('\Bitrix\UI\Toolbar\Facade\Toolbar')) {
+            $this->addModernToolbarButtons();
+        } else {
+            // Fallback на старый API для совместимости
+            $this->addLegacyPanelButtons();
+        }
+    }
+    
+    /**
+     * Добавляет кнопки через современный API тулбара Bitrix24
+     */
+    private function addModernToolbarButtons()
+    {
+        // Кнопка "Создать" с выпадающим меню
+        Toolbar::addButton([
+            'text' => 'Создать',
+            'title' => 'Создать новый элемент',
+            'color' => \Bitrix\UI\Buttons\Color::SUCCESS,
+            'icon' => 'add',
+            'menu' => [
+                'items' => [
+                    [
+                        'text' => 'Создать расписание',
+                        'onclick' => new \Bitrix\UI\Buttons\JsHandler('openScheduleModal')
+                    ],
+                    [
+                        'text' => 'Создать филиал',
+                        'onclick' => new \Bitrix\UI\Buttons\JsHandler('openAddBranchModal')
+                    ]
+                ]
+            ]
+        ], ButtonLocation::AFTER_TITLE);
+
+        // Кнопка "Настройки филиала" (только иконка с полупрозрачным фоном)
+        Toolbar::addButton([
+            'text' => '',
+            'title' => 'Настроить параметры текущего филиала',
+            'icon' => \Bitrix\UI\Buttons\Icon::SETTING,
+            'dataset' => [
+                'toolbar-collapsed-icon' => \Bitrix\UI\Buttons\Icon::SETTING
+            ],
+            'onclick' => 'openBranchModal',
+            'classList' => ['calendar-settings-btn']
+        ], ButtonLocation::AFTER_TITLE);
+
+        // Блок навигации по месяцам в pagetitle-below через отложенные функции
+        global $APPLICATION;
+        
+        // Получаем текущую дату
+        $currentDate = $this->arParams['DATE'] ?? date('Y-m-d');
+        $currentMonth = date('n', strtotime($currentDate));
+        $currentYear = date('Y', strtotime($currentDate));
+        
+        // Массив названий месяцев
+        $monthNames = [
+            1 => 'Январь', 2 => 'Февраль', 3 => 'Март', 4 => 'Апрель',
+            5 => 'Май', 6 => 'Июнь', 7 => 'Июль', 8 => 'Август',
+            9 => 'Сентябрь', 10 => 'Октябрь', 11 => 'Ноябрь', 12 => 'Декабрь'
+        ];
+        
+        $currentMonthName = $monthNames[$currentMonth];
+        
+        // Генерируем опции для select
+        $monthOptions = '';
+        foreach ($monthNames as $num => $name) {
+            $selected = ($num == $currentMonth) ? 'selected' : '';
+            $monthOptions .= "<option value=\"{$num}\" {$selected}>{$name}</option>";
+        }
+        
+        $APPLICATION->AddViewContent('below_pagetitle', '
+            <div class="calendar-month-navigation" style="
+                display: flex;
+                align-items: center;
+                justify-content: flex-start;
+                gap: 15px;
+                margin: 10px 0;
+                padding: 0 20px;
+            ">
+                <button class="nav-btn prev-month" 
+                        onclick="previousMonth()" 
+                        style="
+                            background: rgba(255, 255, 255, 0.1);
+                            border: 1px solid rgba(255, 255, 255, 0.2);
+                            border-radius: 6px;
+                            padding: 8px 12px;
+                            color: white;
+                            cursor: pointer;
+                            font-size: 16px;
+                            transition: all 0.3s ease;
+                            backdrop-filter: blur(10px);
+                        "
+                        onmouseover="this.style.background=\'rgba(255, 255, 255, 0.2)\'"
+                        onmouseout="this.style.background=\'rgba(255, 255, 255, 0.1)\'">
+                    ←
+                </button>
+                
+                <div class="current-month" style="position: relative;">
+                    <select id="monthSelect" 
+                            onchange="changeMonth(this.value)" 
+                            style="
+                                background: transparent;
+                                border: none;
+                                color: white;
+                                font-size: 18px;
+                                font-weight: 500;
+                                text-align: center;
+                                cursor: pointer;
+                                outline: none;
+                                border-bottom: 2px dotted rgba(255, 255, 255, 0.6);
+                                padding: 4px 30px 4px 8px;
+                                appearance: none;
+                                background-image: url(\'data:image/svg+xml;charset=US-ASCII,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 4 5"><path fill="white" d="M2 0L0 2h4zm0 5L0 3h4z"/></svg>\');
+                                background-repeat: no-repeat;
+                                background-position: right 8px center;
+                                background-size: 12px;
+                                min-width: 120px;
+                            ">
+                        ' . $monthOptions . '
+                    </select>
+                </div>
+                
+                <button class="nav-btn next-month" 
+                        onclick="nextMonth()" 
+                        style="
+                            background: rgba(255, 255, 255, 0.1);
+                            border: 1px solid rgba(255, 255, 255, 0.2);
+                            border-radius: 6px;
+                            padding: 8px 12px;
+                            color: white;
+                            cursor: pointer;
+                            font-size: 16px;
+                            transition: all 0.3s ease;
+                            backdrop-filter: blur(10px);
+                        "
+                        onmouseover="this.style.background=\'rgba(255, 255, 255, 0.2)\'"
+                        onmouseout="this.style.background=\'rgba(255, 255, 255, 0.1)\'">
+                    →
+                </button>
+            </div>
+            
+            <style>
+                #monthSelect option {
+                    background: #2c2c2c;
+                    color: white;
+                    padding: 8px 12px;
+                    border: none;
+                }
+                
+                #monthSelect option:hover {
+                    background: #404040;
+                }
+                
+                #monthSelect option:checked {
+                    background: #007bff;
+                    color: white;
+                }
+                
+                #monthSelect:focus {
+                    border-bottom-color: rgba(255, 255, 255, 0.9);
+                }
+                
+                /* Стили для кнопки настроек филиала */
+                .calendar-settings-btn.ui-btn-secondary,
+                .calendar-settings-btn {
+                    background: rgba(255, 255, 255, 0.1) !important;
+                    border: 1px solid rgba(255, 255, 255, 0.2) !important;
+                    backdrop-filter: blur(10px);
+                    transition: all 0.3s ease;
+                }
+                
+                .calendar-settings-btn.ui-btn-secondary:hover,
+                .calendar-settings-btn:hover {
+                    background: rgba(255, 255, 255, 0.2) !important;
+                }
+                
+                /* Белый цвет иконки шестеренки */
+                .calendar-settings-btn.ui-btn-secondary .ui-btn-icon,
+                .calendar-settings-btn.ui-btn-secondary .ui-btn-icon-setting,
+                .calendar-settings-btn .ui-btn-icon,
+                .calendar-settings-btn .ui-btn-icon-setting,
+                .calendar-settings-btn svg,
+                .calendar-settings-btn i {
+                    color: white !important;
+                    fill: white !important;
+                }
+            </style>
+            
+            <script>
+                // Версия функции changeMonth: 2.2 - добавлена синхронизация селектора
+                function changeMonth(month) {
+                    console.log(\'changeMonth v2.2 called with month:\', month);
+                    
+                    // Получаем текущую дату из URL
+                    const urlParams = new URLSearchParams(window.location.search);
+                    const currentDateStr = urlParams.get(\'date\') || new Date().toISOString().split(\'T\')[0];
+                    
+                    console.log(\'Current date from URL:\', currentDateStr);
+                    
+                    // Парсим текущую дату
+                    const currentDate = new Date(currentDateStr);
+                    const year = currentDate.getFullYear();
+                    
+                    console.log(\'Parsed year:\', year);
+                    
+                    // Создаем новую дату с выбранным месяцем (1-е число месяца)
+                    // Используем правильный формат: год-месяц-день
+                    const dateString = year + \'-\' + String(month).padStart(2, \'0\') + \'-\' + \'01\';
+                    
+                    console.log(\'Changing month to:\', month, \'New date:\', dateString);
+                    
+                    // Обновляем URL с новой датой
+                    const url = new URL(window.location);
+                    url.searchParams.set(\'date\', dateString);
+                    window.location.href = url.toString();
+                }
+                
+                // Функция для установки правильного значения в селектор при загрузке страницы
+                function initMonthSelector() {
+                    console.log(\'initMonthSelector v2.2 called\');
+                    
+                    // Получаем текущую дату из URL
+                    const urlParams = new URLSearchParams(window.location.search);
+                    const currentDateStr = urlParams.get(\'date\') || new Date().toISOString().split(\'T\')[0];
+                    
+                    console.log(\'Current date from URL for selector:\', currentDateStr);
+                    
+                    // Парсим дату и получаем месяц
+                    const currentDate = new Date(currentDateStr);
+                    const month = currentDate.getMonth() + 1; // getMonth() возвращает 0-11, нам нужно 1-12
+                    
+                    console.log(\'Setting month selector to:\', month);
+                    
+                    // Устанавливаем значение в селектор
+                    const monthSelect = document.getElementById(\'monthSelect\');
+                    if (monthSelect) {
+                        monthSelect.value = month;
+                        console.log(\'Month selector updated to:\', monthSelect.value);
+                    } else {
+                        console.log(\'Month selector not found!\');
+                    }
+                }
+                
+                // Инициализируем селектор после загрузки страницы
+                document.addEventListener(\'DOMContentLoaded\', initMonthSelector);
+                
+                // Также вызываем при загрузке, если DOMContentLoaded уже произошел
+                if (document.readyState === \'loading\') {
+                    document.addEventListener(\'DOMContentLoaded\', initMonthSelector);
+                } else {
+                    initMonthSelector();
+                }
+            </script>
+        ');
+    }
+    
+    /**
+     * Fallback метод для старых версий Bitrix24
+     */
+    private function addLegacyPanelButtons()
+    {
+        global $APPLICATION;
+        
+        // Кнопка "Создать" с выпадающим меню
+        $APPLICATION->AddPanelButton([
+            "TEXT" => "Создать",
+            "TITLE" => "Создать новый элемент",
+            "ICON" => "bx-icon-plus",
+            "SORT" => 10,
+            "HINT" => "Создать новый элемент",
+            "MENU" => [
+                [
+                    "TEXT" => "Создать расписание",
+                    "TITLE" => "Создать новое расписание",
+                    "LINK" => "javascript:openScheduleModal();"
+                ],
+                [
+                    "TEXT" => "Создать филиал",
+                    "TITLE" => "Создать новый филиал клиники",
+                    "LINK" => "javascript:openAddBranchModal();"
+                ]
+            ]
+        ]);
+
+        // Кнопка "Настройки филиала" (только иконка)
+        $APPLICATION->AddPanelButton([
+            "TEXT" => "",
+            "TITLE" => "Настроить параметры текущего филиала",    
+            "ICON" => "bx-icon-settings",  
+            "ONCLICK" => "openBranchModal",
+            "SORT" => 20,
+            "HINT" => "Настроить часовой пояс, сотрудников и другие параметры филиала",
+            "MENU" => false
+        ]);
+    }
+    
+    /**
+     * Управляет звездочкой "Добавить в избранное" в тулбаре
+     */
+    private function manageFavoriteStar()
+    {
+        // Проверяем, доступен ли современный API тулбара
+        if (class_exists('\Bitrix\UI\Toolbar\Facade\Toolbar')) {
+            // Показываем звездочку для календаря филиала
+            Toolbar::addFavoriteStar();
+        }
     }
 
     /**
@@ -1136,7 +1492,7 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                 
                 // Используем исходное время как есть
                 $bookingDateTime = $dateFromObj->format('d.m.Y H:i:s');
-                
+                 
                 // Вычисляем длительность
                 $durationSeconds = $dateToObj->getTimestamp() - $dateFromObj->getTimestamp();
                 $bookingValue = "user|{$responsibleId}|{$bookingDateTime}|{$durationSeconds}|{$title}";
@@ -2800,6 +3156,9 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
         
         // Подключаем основной скрипт календаря с версионированием для обхода кэша
         $APPLICATION->AddHeadScript($this->getPath() . '/templates/.default/script.js?v=' . time());
+        
+        // Добавляем принудительное обновление кэша для JavaScript
+        $APPLICATION->AddHeadString('<script>console.log("Calendar script loaded at:", new Date().toISOString());</script>');
         
         // Подключаем стили с версионированием для обхода кэша
         $APPLICATION->SetAdditionalCSS($this->getPath() . '/templates/.default/style.css?v=' . time());
