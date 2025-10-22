@@ -3070,6 +3070,9 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
         // Подключаем библиотеку иконок Bitrix24
         \Bitrix\Main\UI\Extension::load("ui.buttons.icons");
         
+        // Подключаем библиотеку SidePanel для боковых слайдеров
+        \CJSCore::init("sidepanel");
+        
         // Подключаем основной скрипт календаря с версионированием для обхода кэша
         $APPLICATION->AddHeadScript($this->getPath() . '/templates/.default/script.js?v=' . time());
         

@@ -102,8 +102,60 @@
         // Инициализируем селектор месяца
         window.initMonthSelector();
         
+        // Инициализация обработчиков SidePanel
+        initSidePanelHandlers();
+        
+        // Инициализация обработчиков postMessage для SidePanel
+        initPostMessageHandlers();
+        
         // НЕ загружаем события при первой загрузке - они уже загружены сервером
         // refreshCalendarEvents() будет вызываться только при необходимости (изменения, обновления)
+    }
+
+    // Инициализация обработчиков SidePanel
+    function initSidePanelHandlers() {
+        if (typeof BX !== 'undefined' && BX.SidePanel) {
+            // Обработчик события закрытия SidePanel
+            BX.addCustomEvent('SidePanel.Slider:onClose', function(event) {
+                console.log('SidePanel closed, refreshing calendar...');
+                // Обновляем календарь после закрытия SidePanel
+                setTimeout(() => {
+                    refreshCalendarEvents();
+                }, 100);
+            });
+            
+            // Обработчик события успешного создания события
+            BX.addCustomEvent('Calendar:EventCreated', function(event) {
+                console.log('Event created, refreshing calendar...');
+                refreshCalendarEvents();
+            });
+        }
+    }
+
+    // Инициализация обработчиков postMessage для SidePanel
+    function initPostMessageHandlers() {
+        window.addEventListener('message', function(event) {
+            // Проверяем, что сообщение от нашего SidePanel
+            if (event.data && typeof event.data === 'object') {
+                switch (event.data.type) {
+                    case 'calendar:eventCreated':
+                        console.log('Event created via postMessage:', event.data);
+                        // Обновляем календарь после создания события
+                        setTimeout(() => {
+                            refreshCalendarEvents();
+                        }, 100);
+                        break;
+                        
+                    case 'calendar:closePanel':
+                        console.log('Close panel via postMessage');
+                        // Закрываем SidePanel
+                        if (typeof BX !== 'undefined' && BX.SidePanel) {
+                            BX.SidePanel.Instance.close();
+                        }
+                        break;
+                }
+            }
+        });
     }
 
     function initCalendarCells() {
@@ -340,47 +392,35 @@
 
     // Функции для работы с календарем
     function openEventForm(date) {
-        const modal = document.getElementById('eventFormModal');
-        if (modal) {
-            // Устанавливаем выбранную дату
-            const dateInput = document.getElementById('event-date');
-            if (dateInput) {
-                dateInput.value = date;
-            }
-
-            const timeSelect = document.getElementById('event-time');
-            if (timeSelect) {
-                timeSelect.value = '09:00';
-            }
-
-            const durationSelect = document.getElementById('event-duration');
-            if (durationSelect) {
-                durationSelect.value = '30';
-            }
-
-            modal.style.display = 'block';
-
-            // Фокус на первое поле
-            setTimeout(() => {
-                const titleInput = document.getElementById('event-title');
-                if (titleInput) {
-                    titleInput.focus();
+        // Получаем ID текущего филиала
+        const branchId = document.querySelector('.artmax-calendar').getAttribute('data-branch-id') || '1';
+        
+        // Формируем URL для SidePanel с компонентом event.form
+        const url = `/local/components/artmax/event.form/page.php?BRANCH_ID=${branchId}&DATE=${date}&IFRAME=Y&IFRAME_TYPE=SIDE_SLIDER`;
+        
+        // Открываем SidePanel
+        if (typeof BX !== 'undefined' && BX.SidePanel) {
+            BX.SidePanel.Instance.open(url, {
+                title: 'Создание события',
+                width: 600,
+                cacheable: false,
+                events: {
+                    onClose: function() {
+                        // Обновляем календарь после закрытия SidePanel
+                        refreshCalendarEvents();
+                    }
                 }
-            }, 100);
+            });
+        } else {
+            // Fallback для случаев, когда SidePanel недоступен
+            window.open(url, '_blank', 'width=600,height=800,scrollbars=yes,resizable=yes');
         }
     }
 
     function closeEventForm() {
-        const modal = document.getElementById('eventFormModal');
-        if (modal) {
-            modal.style.display = 'none';
-
-            // Сбрасываем форму
-            const form = document.getElementById('add-event-form');
-            if (form) {
-                form.reset();
-            }
-        }
+        // Эта функция больше не используется, так как форма теперь открывается в SidePanel
+        // Оставляем для совместимости с существующим кодом
+        console.log('closeEventForm() called - no longer needed with SidePanel');
     }
 
     function closeEditEventModal() {

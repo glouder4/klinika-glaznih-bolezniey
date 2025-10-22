@@ -153,6 +153,7 @@ switch ($action) {
         }
         break;
 
+
     case 'deleteEvent':
         $eventId = (int)($_POST['eventId'] ?? 0);
 
