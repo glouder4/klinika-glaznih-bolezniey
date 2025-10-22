@@ -10,34 +10,35 @@ if (!defined("B_PROLOG_INCLUDED") || B_PROLOG_INCLUDED !== true) {
 $templateFolder = $this->GetFolder();
 $this->addExternalCss($templateFolder . '/style.css');
 $this->addExternalJS($templateFolder . '/script.js');
+
+// Подключаем стили Bitrix UI для кнопок
+CJSCore::Init(['ui.buttons']);
 ?>
 
-<div class="artmax-event-form">
-    <form id="add-event-form" novalidate>
-        <?= bitrix_sessid_post() ?>
-        <input type="hidden" name="branch_id" value="<?= htmlspecialchars($arResult['BRANCH']['ID']) ?>">
-        
-        <!-- Название события -->
-        <div class="artmax-form-field">
-            <label for="event-title" class="artmax-field-label">
-                Название события
-                <span class="artmax-required">*</span>
-            </label>
-            <div class="artmax-field-content">
-                <input type="text" id="event-title" name="title" class="artmax-input" placeholder="Введите название события" required>
+<div class="side-panel-content-container">
+    <div class="artmax-event-form">
+        <form id="add-event-form" novalidate>
+            <?= bitrix_sessid_post() ?>
+            <input type="hidden" name="branch_id" value="<?= htmlspecialchars($arResult['BRANCH']['ID']) ?>">
+            
+            <!-- Название события - большое поле сверху -->
+            <div class="artmax-event-title-section">
+                <label for="event-title" class="artmax-title-label">Название события</label>
+                <input type="text" id="event-title" name="title" class="artmax-title-input" placeholder="Введите название события" required>
                 <div class="artmax-field-error" id="title-error" style="display: none;">
                     Заполните это поле
                 </div>
             </div>
-        </div>
-        
-        <!-- Описание -->
-        <div class="artmax-form-field">
-            <label for="event-description" class="artmax-field-label">Описание</label>
-            <div class="artmax-field-content">
-                <textarea id="event-description" name="description" class="artmax-textarea" rows="2" placeholder="Дополнительная информация о событии"></textarea>
+            
+            <!-- Блок настроек -->
+            <div class="artmax-settings-block">
+            <!-- Описание -->
+            <div class="artmax-form-field">
+                <label for="event-description" class="artmax-field-label">Описание</label>
+                <div class="artmax-field-content">
+                    <textarea id="event-description" name="description" class="artmax-textarea" rows="2" placeholder="Дополнительная информация о событии"></textarea>
+                </div>
             </div>
-        </div>
         
         <!-- Ответственный сотрудник -->
         <div class="artmax-form-field">
@@ -62,7 +63,7 @@ $this->addExternalJS($templateFolder . '/script.js');
         
         <!-- Дата и время в одной строке -->
         <div class="artmax-form-row">
-            <label class="artmax-field-label">
+            <label for="event-date" class="artmax-field-label">
                 Дата и время
                 <span class="artmax-required">*</span>
             </label>
@@ -149,18 +150,16 @@ $this->addExternalJS($templateFolder . '/script.js');
                     <input type="hidden" id="selected-color" name="event-color" value="#2fc6f6">
                 </div>
             </div>
-        </div>
-        
-        <?php if ($arResult['IS_IFRAME']): ?>
-        <!-- Кнопки для iframe режима -->
-        <div class="artmax-form-actions">
-            <button type="button" id="save-event-btn" class="artmax-btn artmax-btn-primary" onclick="saveEvent()">
-                Сохранить
-            </button>
-            <button type="button" id="cancel-event-btn" class="artmax-btn artmax-btn-secondary" onclick="closeSidePanel()">
-                Отмена
-            </button>
-        </div>
-        <?php endif; ?>
-    </form>
+            </div>
+            </div> <!-- Закрытие блока настроек -->
+        </form>
+    </div>
+    
+    <?php if ($arResult['IS_IFRAME']): ?>
+    <!-- Кнопки для iframe режима -->
+    <div class="webform-buttons calendar-form-buttons-fixed">
+        <input type="button" class="ui-btn ui-btn-success" id="save-event-btn" value="Сохранить" onclick="saveEvent()">
+        <input type="button" class="ui-btn ui-btn-link" id="cancel-event-btn" value="Отмена" onclick="closeSidePanel()">
+    </div>
+    <?php endif; ?>
 </div>

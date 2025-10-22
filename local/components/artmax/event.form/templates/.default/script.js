@@ -100,14 +100,21 @@ function initializeEventForm() {
         const time = document.getElementById('event-time').value;
         const duration = parseInt(document.getElementById('event-duration').value);
         
-        const dateTimeFrom = date + ' ' + time;
-        const dateFrom = new Date(dateTimeFrom);
+        // Формируем дату точно как указал пользователь
+        const dateFrom = date + ' ' + time + ':00';
         
         // Вычисляем время окончания
-        const dateTo = new Date(dateFrom.getTime() + duration * 60000); // duration в минутах
+        const [hours, minutes] = time.split(':');
+        const startMinutes = parseInt(hours) * 60 + parseInt(minutes);
+        const endMinutes = startMinutes + duration;
+        const endHours = Math.floor(endMinutes / 60);
+        const endMins = endMinutes % 60;
+        const endTime = String(endHours).padStart(2, '0') + ':' + String(endMins).padStart(2, '0');
+        const dateTo = date + ' ' + endTime + ':00';
         
-        formData.append('dateFrom', dateFrom.toISOString().slice(0, 19).replace('T', ' '));
-        formData.append('dateTo', dateTo.toISOString().slice(0, 19).replace('T', ' '));
+        // Отправляем даты как есть, без конвертации
+        formData.append('dateFrom', dateFrom);
+        formData.append('dateTo', dateTo);
         
         fetch('/local/components/artmax/calendar/ajax.php', {
             method: 'POST',
