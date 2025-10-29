@@ -158,6 +158,14 @@
                             window.location.reload();
                         }, 500);
                         break;
+                    
+                    case 'calendar:branchSettingsSaved':
+                        console.log('Branch settings saved via postMessage:', event.data);
+                        // Перезагружаем страницу для обновления названия филиала и настроек
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 500);
+                        break;
                         
                     case 'calendar:closePanel':
                         console.log('Close panel via postMessage');
@@ -3985,34 +3993,38 @@
         });
     }
 
-    // Функции для работы с модальным окном настроек филиала
+    // Функции для работы с модальным окном настроек филиала (перенесено в SidePanel)
     function openBranchModal() {
-        const modal = document.getElementById('branchModal');
-        if (modal) {
-            modal.style.display = 'flex';
-            setTimeout(() => {
-                modal.classList.add('show');
-            }, 10);
-            
-            // Получаем ID филиала из скрытого поля формы
-            const branchIdInput = document.querySelector('input[name="branch_id"]');
-            const branchId = branchIdInput ? branchIdInput.value : null;
-            
-            // Загружаем всех сотрудников и выбранных сотрудников филиала
-            loadEmployees();
-            if (branchId) {
-                loadBranchEmployees(branchId);
-            }
+        // Получаем ID филиала из текущего календаря
+        const branchId = document.querySelector('.artmax-calendar')?.getAttribute('data-branch-id') || 
+                         document.querySelector('input[name="branch_id"]')?.value ||
+                         '1';
+        
+        const url = `/local/components/artmax/branch.settings/page.php?BRANCH_ID=${branchId}&IFRAME=Y&IFRAME_TYPE=SIDE_SLIDER`;
+        
+        if (typeof BX !== 'undefined' && BX.SidePanel) {
+            BX.SidePanel.Instance.open(url, {
+                title: 'Настройки филиала',
+                width: 600,
+                cacheable: false,
+                events: {
+                    onClose: function() {
+                        // Обновляем страницу при необходимости
+                        if (window.location) {
+                            // Можно сделать мягкое обновление через AJAX
+                        }
+                    }
+                }
+            });
+        } else {
+            window.open(url, '_blank', 'width=600,height=800,scrollbars=yes,resizable=yes');
         }
     }
 
     function closeBranchModal() {
-        const modal = document.getElementById('branchModal');
-        if (modal) {
-            modal.classList.remove('show');
-            setTimeout(() => {
-                modal.style.display = 'none';
-            }, 300);
+        // Если SidePanel открыт, закрываем его
+        if (typeof BX !== 'undefined' && BX.SidePanel && BX.SidePanel.Instance) {
+            BX.SidePanel.Instance.close();
         }
     }
 
