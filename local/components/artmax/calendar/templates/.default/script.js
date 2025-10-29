@@ -145,6 +145,14 @@
                             refreshCalendarEvents();
                         }, 100);
                         break;
+                    
+                    case 'calendar:scheduleCreated':
+                        console.log('Schedule created via postMessage:', event.data);
+                        // Обновляем календарь после создания расписания
+                        setTimeout(() => {
+                            refreshCalendarEvents();
+                        }, 100);
+                        break;
                         
                     case 'calendar:closePanel':
                         console.log('Close panel via postMessage');
@@ -1636,70 +1644,41 @@
         });
     }
 
-    // Функции для работы с модальным окном расписания
+    // Функции для работы с формой расписания в SidePanel
     function openScheduleModal() {
-        const modal = document.getElementById('scheduleModal');
-        if (modal) {
-            // Устанавливаем текущую дату по умолчанию
-            const today = new Date();
-            // Форматируем дату в локальном формате, избегая проблем с часовыми поясами
-            const year = today.getFullYear();
-            const month = String(today.getMonth() + 1).padStart(2, '0');
-            const day = String(today.getDate()).padStart(2, '0');
-            const todayString = `${year}-${month}-${day}`;
-            
-            const dateInput = document.getElementById('schedule-date');
-            if (dateInput) {
-                dateInput.value = todayString;
-            }
-
-            // Устанавливаем текущее время по умолчанию
-            const timeInput = document.getElementById('schedule-time');
-            if (timeInput) {
-                const now = new Date();
-                const hours = now.getHours().toString().padStart(2, '0');
-                const minutes = now.getMinutes().toString().padStart(2, '0');
-                timeInput.value = `${hours}:${minutes}`;
-            }
-
-            // Сбрасываем форму
-            document.getElementById('scheduleForm').reset();
-            document.getElementById('schedule-repeat').checked = false;
-            document.getElementById('repeat-fields').style.display = 'none';
-            
-            // Устанавливаем галочки по умолчанию
-            const excludeWeekendsCheckbox = document.getElementById('exclude-weekends');
-            const excludeHolidaysCheckbox = document.getElementById('exclude-holidays');
-            const includeEndDateCheckbox = document.getElementById('include-end-date');
-            
-            if (excludeWeekendsCheckbox) excludeWeekendsCheckbox.checked = true;
-            if (excludeHolidaysCheckbox) excludeHolidaysCheckbox.checked = true;
-            if (includeEndDateCheckbox) includeEndDateCheckbox.checked = true;
-            
-            // Скрываем галочку "Включая дату окончания" по умолчанию
-            const includeEndDateContainer = document.getElementById('include-end-date-container');
-            if (includeEndDateContainer) includeEndDateContainer.style.display = 'none';
-            
-            // Скрываем дополнительные поля
-            const weeklyDays = document.getElementById('weekly-days');
-            if (weeklyDays) weeklyDays.style.display = 'none';
-            
-            // Инициализируем поля окончания повторения
-            window.toggleEndFields();
-
-            // Загружаем сотрудников текущего филиала для селектора
-            loadBranchEmployeesForSchedule();
-
-            modal.style.display = 'block';
-            document.body.style.overflow = 'hidden';
+        // Получаем ID текущего филиала
+        const branchId = document.querySelector('.artmax-calendar').getAttribute('data-branch-id') || '1';
+        
+        // Формируем URL для SidePanel с компонентом schedule.form
+        const url = `/local/components/artmax/schedule.form/page.php?BRANCH_ID=${branchId}&DATE=${new Date().toISOString().split('T')[0]}&IFRAME=Y&IFRAME_TYPE=SIDE_SLIDER`;
+        
+        // Открываем SidePanel
+        if (typeof BX !== 'undefined' && BX.SidePanel) {
+            BX.SidePanel.Instance.open(url, {
+                title: 'Создание расписания',
+                width: 600,
+                cacheable: false,
+                events: {
+                    onClose: function() {
+                        // Обновляем календарь после закрытия SidePanel
+                        if (typeof refreshCalendarEvents === 'function') {
+                            refreshCalendarEvents();
+                        }
+                    }
+                }
+            });
+        } else {
+            // Fallback для случаев, когда SidePanel недоступен
+            window.open(url, '_blank', 'width=600,height=800,scrollbars=yes,resizable=yes');
         }
     }
 
+    // Функция closeScheduleModal больше не нужна, так как форма теперь в SidePanel
+    // Оставлена для обратной совместимости
     function closeScheduleModal() {
-        const modal = document.getElementById('scheduleModal');
-        if (modal) {
-            modal.style.display = 'none';
-            document.body.style.overflow = 'auto';
+        // Если SidePanel открыт, закрываем его
+        if (typeof BX !== 'undefined' && BX.SidePanel && BX.SidePanel.Instance) {
+            BX.SidePanel.Instance.close();
         }
     }
 
