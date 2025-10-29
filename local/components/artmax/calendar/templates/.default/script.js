@@ -293,6 +293,24 @@
                             }
                         }, 100);
                         break;
+                    
+                    case 'calendar:eventMoved':
+                        console.log('Event moved via postMessage:', event.data);
+                        setTimeout(() => {
+                            if (typeof refreshCalendarEvents === 'function') {
+                                refreshCalendarEvents();
+                            }
+                            // Закрываем боковую панель события, если она открыта для перенесенного события
+                            if (event.data && event.data.eventId) {
+                                const currentEventId = getCurrentEventId();
+                                if (currentEventId && String(currentEventId) === String(event.data.eventId)) {
+                                    if (typeof closeEventSidePanel === 'function') {
+                                        closeEventSidePanel();
+                                    }
+                                }
+                            }
+                        }, 100);
+                        break;
                         
                     case 'calendar:closePanel':
                         console.log('Close panel via postMessage');
@@ -6773,34 +6791,27 @@
 
     // Функция открытия модального окна переноса записи
     function openMoveEventModal(event) {
-        const modal = document.getElementById('moveEventModal');
-        if (!modal) {
-            console.error('Модальное окно переноса не найдено');
+        if (!event || !event.ID) {
+            showNotification('Ошибка: данные события не найдены', 'error');
             return;
         }
-
-        // Заполняем форму данными события
-        document.getElementById('move-event-id').value = event.ID;
         
-        // Устанавливаем текущую дату события
-        const eventDate = event.DATE_FROM.split(' ')[0];
-        const [day, month, year] = eventDate.split('.');
-        const standardDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
-        document.getElementById('move-event-date').value = standardDate;
-        
-        // Очищаем селекторы
-        const timeSelect = document.getElementById('move-event-time');
-        timeSelect.innerHTML = '<option value="">Выберите время</option>';
-        
-        // Загружаем филиалы и устанавливаем текущий
-        loadBranchesForMove(event.BRANCH_ID, event.EMPLOYEE_ID);
-        
-        // Показываем модальное окно
-        modal.style.display = 'flex';
-        setTimeout(() => {
-            modal.classList.add('show');
-        }, 10);
-        document.body.style.overflow = 'hidden';
+        const url = `/local/components/artmax/move.event/page.php?EVENT_ID=${event.ID}&IFRAME=Y&IFRAME_TYPE=SIDE_SLIDER`;
+        if (typeof BX !== 'undefined' && BX.SidePanel) {
+            BX.SidePanel.Instance.open(url, {
+                width: 600,
+                cacheable: false,
+                allowChangeHistory: false,
+                events: {
+                    onClose: function() {
+                        // Можно добавить логику при закрытии, если нужно
+                    }
+                }
+            });
+        } else {
+            // Fallback для старых версий
+            window.open(url, '_blank', 'width=600,height=400');
+        }
     }
 
     // Функция закрытия модального окна переноса
