@@ -358,6 +358,7 @@ function initializeDealForm() {
                         window.parent.postMessage({
                             type: 'calendar:dealSaved',
                             dealId: dealData.id,
+                            dealTitle: dealData.title,
                             eventId: eventId
                         }, '*');
                     }
