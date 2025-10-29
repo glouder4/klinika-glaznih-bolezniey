@@ -197,6 +197,27 @@
                             }, event.origin);
                         }
                         break;
+                    
+                    case 'calendar:dealSaved':
+                        console.log('Deal saved via postMessage:', event.data);
+                        // Обновляем календарь и боковую панель при необходимости
+                        setTimeout(() => {
+                            if (typeof refreshCalendarEvents === 'function') {
+                                refreshCalendarEvents();
+                            }
+                            // Обновляем информацию о сделке в боковой панели если она открыта
+                            if (event.data && event.data.dealId && event.data.eventId) {
+                                const currentEventId = getCurrentEventId();
+                                if (currentEventId && String(currentEventId) === String(event.data.eventId)) {
+                                    // Боковая панель открыта для этого события, обновляем данные
+                                    // Загружаем данные события заново для обновления информации о сделке
+                                    if (typeof showEventDetails === 'function') {
+                                        showEventDetails(currentEventId);
+                                    }
+                                }
+                            }
+                        }, 100);
+                        break;
                         
                     case 'calendar:closePanel':
                         console.log('Close panel via postMessage');
@@ -4902,18 +4923,29 @@
         }
     }
 
-    // Функции для работы с модальным окном сделок
+    // Функции для работы с модальным окном сделок (перенесено в SidePanel)
     function openDealModal() {
-        const modal = document.getElementById('dealModal');
-        if (modal) {
-            modal.style.display = 'flex';
-            setTimeout(() => {
-                modal.classList.add('show');
-            }, 10);
-            document.body.style.overflow = 'hidden';
-            
-            // Инициализируем обработчики для модального окна сделок
-            initDealModal();
+        // Получаем ID текущего события (если есть)
+        let eventId = getCurrentEventId();
+        
+        const url = `/local/components/artmax/deal.form/page.php?IFRAME=Y&IFRAME_TYPE=SIDE_SLIDER${eventId ? '&EVENT_ID=' + eventId : ''}`;
+        
+        if (typeof BX !== 'undefined' && BX.SidePanel) {
+            BX.SidePanel.Instance.open(url, {
+                title: 'Добавить или выбрать сделку',
+                width: 600,
+                cacheable: false,
+                events: {
+                    onClose: function() {
+                        // Обновляем календарь при необходимости
+                        if (typeof refreshCalendarEvents === 'function') {
+                            refreshCalendarEvents();
+                        }
+                    }
+                }
+            });
+        } else {
+            window.open(url, '_blank', 'width=600,height=800,scrollbars=yes,resizable=yes');
         }
     }
 

@@ -731,48 +731,6 @@ $totalDays = 42; // 6 недель * 7 дней
         </div>
     </div>
 
-    <!-- Модальное окно для выбора сделки -->
-    <div id="dealModal" class="deal-modal" style="display: none;">
-        <div class="deal-modal-content">
-            <div class="deal-modal-header">
-                <h3>Добавить или выбрать сделку</h3>
-                <button class="close-deal-modal" onclick="closeDealModal()">×</button>
-            </div>
-            <div class="deal-modal-body">
-                <div class="deal-modal-form-wrapper">
-                    <!-- Скрытое поле для ID сделки -->
-                    <input type="hidden" id="deal-id" value="">
-                    
-                    <div class="form-group">
-                        <label for="deal-input">Сделка</label>
-                        <div class="input-with-icons">
-                            <div class="input-icon left">💼</div>
-                            <input type="text" id="deal-input" placeholder="Название сделки">
-                            <div class="input-icon right">🔍</div>
-                        </div>
-                        <!-- Выпадающее окошко с результатами поиска -->
-                        <div id="deal-search-dropdown" class="search-dropdown" style="display: none;">
-                            <div class="search-suggestion">
-                                <span class="search-text">«Поиск»</span>
-                            </div>
-                            <button class="create-new-deal-btn">
-                                <span class="plus-icon">+</span>
-                                создать новую сделку
-                            </button>
-                        </div>
-                    </div>
-                </div>
-                <div class="modal-instruction">
-                    Чтобы выбрать сделку из CRM, начните вводить название сделки
-                </div>
-            </div>
-            <div class="deal-modal-footer" style="display: none;">
-                <button type="button" class="btn btn-secondary" onclick="closeDealModal()">ОТМЕНА</button>
-                <button type="button" class="btn btn-primary" onclick="saveDealData()">СОХРАНИТЬ</button>
-            </div>
-        </div>
-    </div>
-
     <!-- Модальное окно для добавления заметки -->
     <div id="noteModal" class="note-modal" style="display: none;">
         <div class="note-modal-content">
