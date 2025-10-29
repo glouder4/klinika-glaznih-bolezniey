@@ -166,6 +166,37 @@
                             window.location.reload();
                         }, 500);
                         break;
+                    
+                    case 'calendar:contactSaved':
+                        console.log('Contact saved via postMessage:', event.data);
+                        // Обновляем календарь и боковую панель при необходимости
+                        setTimeout(() => {
+                            if (typeof refreshCalendarEvents === 'function') {
+                                refreshCalendarEvents();
+                            }
+                            // Обновляем информацию о клиенте в боковой панели если она открыта
+                            if (event.data && event.data.contactId && event.data.eventId) {
+                                const currentEventId = getCurrentEventId();
+                                if (currentEventId && String(currentEventId) === String(event.data.eventId)) {
+                                    // Боковая панель открыта для этого события, обновляем данные
+                                    if (typeof loadEventContact === 'function') {
+                                        loadEventContact(event.data.contactId);
+                                    }
+                                }
+                            }
+                        }, 100);
+                        break;
+                    
+                    case 'calendar:getCurrentEventId':
+                        // Отправляем текущий eventId обратно
+                        if (window.postMessage && event.source) {
+                            const currentEventId = getCurrentEventId();
+                            event.source.postMessage({
+                                type: 'calendar:currentEventId',
+                                eventId: currentEventId
+                            }, event.origin);
+                        }
+                        break;
                         
                     case 'calendar:closePanel':
                         console.log('Close panel via postMessage');
@@ -1247,13 +1278,27 @@
     }
 
     function openClientModal() {
-        const modal = document.getElementById('clientModal');
-        if (modal) {
-            modal.style.display = 'flex';
-            setTimeout(() => {
-                modal.classList.add('show');
-            }, 10);
-            document.body.style.overflow = 'hidden';
+        // Получаем ID текущего события (если есть)
+        let eventId = getCurrentEventId();
+        
+        const url = `/local/components/artmax/client.form/page.php?IFRAME=Y&IFRAME_TYPE=SIDE_SLIDER${eventId ? '&EVENT_ID=' + eventId : ''}`;
+        
+        if (typeof BX !== 'undefined' && BX.SidePanel) {
+            BX.SidePanel.Instance.open(url, {
+                title: 'Добавить или выбрать клиента',
+                width: 600,
+                cacheable: false,
+                events: {
+                    onClose: function() {
+                        // Обновляем календарь при необходимости
+                        if (typeof refreshCalendarEvents === 'function') {
+                            refreshCalendarEvents();
+                        }
+                    }
+                }
+            });
+        } else {
+            window.open(url, '_blank', 'width=600,height=800,scrollbars=yes,resizable=yes');
         }
     }
 
