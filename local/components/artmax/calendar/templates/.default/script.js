@@ -93,11 +93,8 @@
         // Инициализация модального окна клиента
         initClientModal();
         
-        // Обработка формы создания филиала
-        const addBranchForm = document.getElementById('add-branch-form');
-        if (addBranchForm) {
-            addBranchForm.addEventListener('submit', handleAddBranchSubmit);
-        }
+        // Обработка формы создания филиала больше не нужна,
+        // так как форма теперь в отдельном компоненте branch.form
         
         // Инициализируем селектор месяца
         window.initMonthSelector();
@@ -152,6 +149,14 @@
                         setTimeout(() => {
                             refreshCalendarEvents();
                         }, 100);
+                        break;
+                    
+                    case 'calendar:branchCreated':
+                        console.log('Branch created via postMessage:', event.data);
+                        // Перезагружаем страницу для обновления переключателя филиалов
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 500);
                         break;
                         
                     case 'calendar:closePanel':
@@ -1572,77 +1577,45 @@
         return branchElement ? branchElement.getAttribute('data-branch-id') : 0;
     }
 
-    // Функции для работы с модальным окном создания филиала
+    // Функции для работы с формой филиала в SidePanel
     function openAddBranchModal() {
-        const modal = document.getElementById('addBranchModal');
-        if (modal) {
-            // Сбрасываем форму
-            document.getElementById('add-branch-form').reset();
-            
-            modal.style.display = 'block';
-            document.body.style.overflow = 'hidden';
-        }
-    }
-
-    function closeAddBranchModal() {
-        const modal = document.getElementById('addBranchModal');
-        if (modal) {
-            modal.style.display = 'none';
-            document.body.style.overflow = 'auto';
-        }
-    }
-
-    // Обработка формы создания филиала
-    function handleAddBranchSubmit(event) {
-        event.preventDefault();
+        // Формируем URL для SidePanel с компонентом branch.form
+        const url = `/local/components/artmax/branch.form/page.php?IFRAME=Y&IFRAME_TYPE=SIDE_SLIDER`;
         
-        const formData = new FormData(event.target);
-        const branchData = {
-            name: formData.get('name'),
-            address: formData.get('address'),
-            phone: formData.get('phone'),
-            email: formData.get('email')
-        };
-
-        // Валидация
-        if (!branchData.name.trim()) {
-            showFieldError('branch-name', 'Заполните название филиала.');
-            return;
+        // Открываем SidePanel
+        if (typeof BX !== 'undefined' && BX.SidePanel) {
+            BX.SidePanel.Instance.open(url, {
+                title: 'Создание филиала',
+                width: 600,
+                cacheable: false,
+                events: {
+                    onClose: function() {
+                        // Обновляем страницу для обновления переключателя филиалов
+                        // Bitrix автоматически обновит переключатель через postMessage
+                        if (window.location) {
+                            // Можно сделать мягкое обновление через AJAX
+                        }
+                    }
+                }
+            });
+        } else {
+            // Fallback для случаев, когда SidePanel недоступен
+            window.open(url, '_blank', 'width=600,height=800,scrollbars=yes,resizable=yes');
         }
-
-        // Отправляем запрос на создание филиала
-        const csrfToken = getCSRFToken();
-        fetch('/local/components/artmax/calendar/ajax.php', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-                'X-Requested-With': 'XMLHttpRequest',
-                'X-Bitrix-Csrf-Token': csrfToken
-            },
-            body: new URLSearchParams({
-                action: 'addBranch',
-                name: branchData.name,
-                address: branchData.address,
-                phone: branchData.phone,
-                email: branchData.email,
-                sessid: csrfToken
-            })
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                showNotification('Филиал успешно создан! Переключатель филиалов обновится автоматически.', 'success');
-                closeAddBranchModal();
-                // Не перезагружаем страницу - Bitrix обновит переключатель автоматически
-            } else {
-                showNotification('Ошибка создания филиала: ' + (data.error || 'Неизвестная ошибка'), 'error');
-            }
-        })
-        .catch(error => {
-            console.error('Ошибка при создании филиала:', error);
-            showNotification('Ошибка соединения с сервером', 'error');
-        });
     }
+    
+    // Экспортируем функцию в глобальную область видимости для использования в onclick и других местах
+    window.openAddBranchModal = openAddBranchModal;
+
+    // Функция closeAddBranchModal больше не нужна, так как форма теперь в SidePanel
+    // Оставлена для обратной совместимости
+    function closeAddBranchModal() {
+        // Если SidePanel открыт, закрываем его
+        if (typeof BX !== 'undefined' && BX.SidePanel && BX.SidePanel.Instance) {
+            BX.SidePanel.Instance.close();
+        }
+    }
+
 
     // Функции для работы с формой расписания в SidePanel
     function openScheduleModal() {

@@ -1201,47 +1201,6 @@ $totalDays = 42; // 6 недель * 7 дней
         </div>
     </div>
 
-    <!-- Модальное окно для создания нового филиала -->
-    <div id="addBranchModal" class="event-form-modal" style="display: none;">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3>Создать новый филиал</h3>
-                <button class="close-btn" onclick="closeAddBranchModal()">×</button>
-            </div>
-            <form id="add-branch-form" novalidate>
-                <?= bitrix_sessid_post() ?>
-                
-                <div class="form-group" id="branch-name-group">
-                    <label for="branch-name">Название филиала *</label>
-                    <input type="text" id="branch-name" name="name" required placeholder="Введите название филиала">
-                    <div class="error-message" style="display: none;">
-                        <span class="error-icon">⚠️</span>
-                        <span>Заполните название филиала.</span>
-                    </div>
-                </div>
-                
-                <div class="form-group" id="branch-address-group">
-                    <label for="branch-address">Адрес</label>
-                    <input type="text" id="branch-address" name="address" placeholder="Введите адрес филиала">
-                </div>
-                
-                <div class="form-group" id="branch-phone-group">
-                    <label for="branch-phone">Телефон</label>
-                    <input type="tel" id="branch-phone" name="phone" placeholder="Введите телефон филиала">
-                </div>
-                
-                <div class="form-group" id="branch-email-group">
-                    <label for="branch-email">Email</label>
-                    <input type="email" id="branch-email" name="email" placeholder="Введите email филиала">
-                </div>
-                
-                <div class="form-actions">
-                    <button type="button" class="btn btn-secondary" onclick="closeAddBranchModal()">ОТМЕНА</button>
-                    <button type="submit" class="btn btn-primary">СОЗДАТЬ ФИЛИАЛ</button>
-                </div>
-            </form>
-        </div>
-    </div>
 </div>
 
 <script>

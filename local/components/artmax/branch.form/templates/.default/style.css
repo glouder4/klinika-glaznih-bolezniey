@@ -1,0 +1,406 @@
+/* ArtMax Event Form Component Styles */
+.artmax-event-form {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    background: #ffffff;
+    color: #333333;
+    line-height: 1.4;
+    padding: 12px;
+    margin: 15px;
+    border-radius: 12px;
+    max-width: 100%;
+}
+
+/* Секция названия события - большое поле сверху */
+.artmax-event-title-section {
+    margin-bottom: 24px;
+}
+
+.artmax-title-label {
+    position: absolute;
+    left: -10000px;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+}
+
+.artmax-title-input {
+    width: 100%;
+    padding: 16px 20px;
+    border: 0;
+    border-bottom: 1px solid silver;
+    border-radius: 0;
+    font-size: 18px;
+    font-weight: 500;
+    color: #111827;
+    background-color: #ffffff;
+    transition: border-color 0.2s
+    ease-in-out, box-shadow 0.2s
+    ease-in-out;
+    box-sizing: border-box;
+    height: 56px;
+}
+
+.artmax-title-input:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.artmax-title-input::placeholder {
+    color: #9ca3af;
+    font-weight: 400;
+}
+
+/* Блок настроек */
+.artmax-settings-block {
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 24px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+
+    background: var(--ui-color-palette-gray-03, #f8f9fa);
+}
+
+/* Form Fields - Two Column Layout */
+.artmax-form-field,
+.artmax-form-row {
+    display: flex !important;
+    align-items: flex-start;
+    margin-bottom: 16px;
+    padding-bottom: 16px;
+    gap: 16px;
+    min-height: 32px;
+    flex-direction: row !important;
+
+    border-bottom: 1px solid #e6e9ec;
+}
+.artmax-form-row:last-child,
+.artmax-form-field:last-child{
+    border: 0!important;
+}
+
+.artmax-field-label {
+    flex: 0 0 200px !important;
+    font-size: 13px;
+    font-weight: 400;
+    color: #525c69;
+    margin: 0 !important;
+    padding-top: 6px;
+    line-height: 1.3;
+    text-align: left !important;
+    width: 200px !important;
+    min-width: 200px !important;
+    max-width: 200px !important;
+}
+
+.artmax-field-content {
+    flex: 1;
+    min-width: 0;
+}
+
+/* Специальная раскладка для даты и времени в одной строке */
+.artmax-form-row .artmax-field-content {
+    display: flex !important;
+    gap: 12px;
+    flex-direction: row !important;
+}
+
+.artmax-field-half {
+    flex: 1 !important;
+    min-width: 0;
+    display: flex !important;
+    flex-direction: column !important;
+}
+
+.artmax-input,
+.artmax-select,
+.artmax-textarea {
+    width: 100%;
+    padding: 6px 8px;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+    font-size: 13px;
+    line-height: 1.4;
+    color: #333333;
+    background-color: #ffffff;
+    transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+    box-sizing: border-box;
+    height: 32px;
+}
+
+.artmax-textarea {
+    height: auto;
+    min-height: 60px;
+    resize: vertical;
+}
+
+.artmax-field-error {
+    font-size: 12px;
+    color: #ff5752;
+    margin-top: 4px;
+    line-height: 1.3;
+}
+
+/* Special layout for date/time row */
+.artmax-form-row {
+    display: flex;
+    align-items: flex-start;
+    margin-bottom: 12px;
+    gap: 16px;
+}
+
+.artmax-form-row .artmax-field-label {
+    flex: 0 0 180px;
+    text-align: right;
+    padding-top: 6px;
+}
+
+.artmax-form-row .artmax-field-content {
+    flex: 1;
+    display: flex;
+    gap: 12px;
+}
+
+.artmax-field-half {
+    flex: 1;
+}
+
+.artmax-required {
+    color: #ff5752;
+    margin-left: 2px;
+}
+
+.artmax-input:focus,
+.artmax-select:focus,
+.artmax-textarea:focus {
+    outline: none;
+    border-color: #2fc6f6;
+    box-shadow: 0 0 0 2px rgba(47, 198, 246, 0.1);
+}
+
+.artmax-input::placeholder,
+.artmax-textarea::placeholder {
+    color: #9ca3af;
+}
+
+/* Color Picker - Compact */
+.artmax-color-picker {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.artmax-color-presets {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.artmax-color-preset {
+    width: 24px;
+    height: 24px;
+    border: 1px solid transparent;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: all 0.15s ease-in-out;
+    position: relative;
+}
+
+.artmax-color-preset:hover {
+    transform: scale(1.1);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+}
+
+.artmax-color-preset.active {
+    border-color: #333333;
+    box-shadow: 0 0 0 1px rgba(47, 198, 246, 0.5);
+}
+
+.artmax-color-preset.active::after {
+    content: '✓';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: #ffffff;
+    font-size: 12px;
+    font-weight: bold;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+.artmax-custom-color {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.artmax-custom-color-label {
+    font-size: 13px;
+    color: #525c69;
+    margin: 0;
+}
+
+#custom-color-input {
+    width: 32px;
+    height: 24px;
+    border: 1px solid #d1d5db;
+    border-radius: 3px;
+    cursor: pointer;
+    padding: 0;
+}
+
+/* Form Actions - Compact */
+.artmax-form-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+    margin-top: 24px;
+    padding-top: 20px;
+    border-top: 1px solid #e5e7eb;
+}
+
+/* Адаптация для SidePanel */
+.artmax-sidepanel-body {
+    margin: 0;
+    padding: 20px;
+    background: #f8fafc;
+    min-height: 100vh;
+    box-sizing: border-box;
+}
+
+.artmax-sidepanel-content {
+    max-width: 100%;
+    margin: 0 auto;
+}
+
+/* Стили для SidePanel контейнера */
+.side-panel-content-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 100vh;
+}
+
+/* Стили для Bitrix кнопок в SidePanel */
+.webform-buttons.calendar-form-buttons-fixed {
+    display: flex;
+    gap: 12px;
+    justify-content: flex-start;
+    margin-top: auto;
+    padding: 20px;
+    border-top: 1px solid #e5e7eb;
+    background: #ffffff;
+    position: sticky;
+    bottom: 0;
+    z-index: 10;
+}
+
+/* Button Styles - Compact */
+.artmax-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 6px 12px;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 1.4;
+    text-decoration: none;
+    cursor: pointer;
+    transition: all 0.15s ease-in-out;
+    min-height: 32px;
+    box-sizing: border-box;
+}
+
+.artmax-btn-primary {
+    background-color: #2fc6f6;
+    color: #ffffff;
+    border-color: #2fc6f6;
+}
+
+.artmax-btn-primary:hover {
+    background-color: #1db5e8;
+    border-color: #1db5e8;
+}
+
+.artmax-btn-secondary {
+    background-color: #ffffff;
+    color: #525c69;
+    border-color: #d1d5db;
+}
+
+.artmax-btn-secondary:hover {
+    background-color: #f9fafb;
+    border-color: #9ca3af;
+}
+
+/* Loading States */
+.artmax-btn.loading {
+    position: relative;
+    color: transparent;
+}
+
+.artmax-btn.loading::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 16px;
+    height: 16px;
+    border: 2px solid transparent;
+    border-top: 2px solid currentColor;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: translate(-50%, -50%) rotate(0deg); }
+    100% { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+/* Success/Error States */
+.artmax-form-field.error .artmax-input,
+.artmax-form-field.error .artmax-select,
+.artmax-form-field.error .artmax-textarea {
+    border-color: #ff5752;
+}
+
+.artmax-form-field.error .artmax-field-error {
+    display: block;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .artmax-form-field,
+    .artmax-form-row {
+        flex-direction: column;
+        gap: 8px;
+    }
+    
+    .artmax-field-label {
+        flex: none;
+        text-align: left;
+        padding-top: 0;
+    }
+    
+    .artmax-form-row .artmax-field-content {
+        flex-direction: column;
+        gap: 8px;
+    }
+    
+    .artmax-field-half {
+        flex: none;
+    }
+    
+    .artmax-form-actions {
+        flex-direction: column;
+    }
+    
+    .artmax-btn {
+        width: 100%;
+    }
+}
