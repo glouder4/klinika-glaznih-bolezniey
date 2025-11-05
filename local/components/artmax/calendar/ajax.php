@@ -670,7 +670,7 @@ switch ($action) {
             'time' => $_POST['time'] ?? '',
             'employee_id' => $_POST['employee_id'] ?? null,
             'branch_id' => $_POST['branch_id'] ?? 1,
-            'repeat' => $_POST['repeat'] === 'on' || $_POST['repeat'] === 'true',
+            'repeat' => $_POST['repeat'] === 'on' || $_POST['repeat'] === 'true' || $_POST['repeat'] === 'Y' || $_POST['repeat'] === 'y',
             'frequency' => $_POST['frequency'] ?? null,
             'weekdays' => $weekdays,
             'repeat_end' => $_POST['repeatEnd'] ?? 'never',

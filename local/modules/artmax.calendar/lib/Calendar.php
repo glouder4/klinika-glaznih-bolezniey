@@ -526,16 +526,26 @@ class Calendar
         FROM artmax_calendar_events 
         WHERE BRANCH_ID = " . (int)$branchId;
 
-        // Фильтр по дате начала (>=)
-        if ($dateFrom) {
+        // Фильтр по диапазону дат - событие попадает в диапазон, если оно пересекается с ним
+        // Событие пересекается с диапазоном, если: DATE_FROM <= dateTo AND DATE_TO >= dateFrom
+        if ($dateFrom && $dateTo) {
             $safeDateFrom = $this->connection->getSqlHelper()->forSql($dateFrom);
-            $sql .= " AND DATE_FROM >= '$safeDateFrom'";
-        }
-
-        // Фильтр по дате окончания (<=)
-        if ($dateTo) {
             $safeDateTo = $this->connection->getSqlHelper()->forSql($dateTo);
-            $sql .= " AND DATE_TO <= '$safeDateTo'";
+            // Добавляем время к начальной дате (начало дня) и конечной (конец дня)
+            $safeDateFromWithTime = $safeDateFrom . ' 00:00:00';
+            $safeDateToWithTime = $safeDateTo . ' 23:59:59';
+            // Событие попадает в диапазон, если оно начинается до конца диапазона И заканчивается после начала диапазона
+            $sql .= " AND DATE_FROM <= '$safeDateToWithTime' AND DATE_TO >= '$safeDateFromWithTime'";
+        } elseif ($dateFrom) {
+            // Если указана только начальная дата - события, которые заканчиваются после начала диапазона
+            $safeDateFrom = $this->connection->getSqlHelper()->forSql($dateFrom);
+            $safeDateFromWithTime = $safeDateFrom . ' 00:00:00';
+            $sql .= " AND DATE_TO >= '$safeDateFromWithTime'";
+        } elseif ($dateTo) {
+            // Если указана только конечная дата - события, которые начинаются до конца диапазона
+            $safeDateTo = $this->connection->getSqlHelper()->forSql($dateTo);
+            $safeDateToWithTime = $safeDateTo . ' 23:59:59';
+            $sql .= " AND DATE_FROM <= '$safeDateToWithTime'";
         }
 
         // Фильтр по пользователю

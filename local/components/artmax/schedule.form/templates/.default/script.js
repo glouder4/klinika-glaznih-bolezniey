@@ -44,6 +44,8 @@ function initializeScheduleForm() {
         if (repeatCheckbox && repeatFields) {
             if (repeatCheckbox.checked) {
                 repeatFields.style.display = 'block';
+                // Убеждаемся, что weekly-days скрыт, если не выбрана еженедельная частота
+                toggleWeeklyDays();
             } else {
                 repeatFields.style.display = 'none';
                 // Скрываем дни недели при отключении повторения
@@ -385,6 +387,9 @@ function initializeScheduleForm() {
     if (document.getElementById('schedule-repeat')) {
         toggleEndFields();
     }
+    
+    // Инициализируем состояние weekly-days (должен быть скрыт по умолчанию)
+    toggleWeeklyDays();
 
     // Предотвращаем стандартную отправку формы
     const scheduleForm = document.getElementById('schedule-form');
