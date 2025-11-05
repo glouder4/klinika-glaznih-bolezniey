@@ -269,6 +269,110 @@ switch ($action) {
         try {
             $result = $calendarObj->updateEvent($eventId, $title, $description, $dateFrom, $dateTo, $eventColor, $branchId, $employeeId);
             if ($result) {
+                // Записываем в журнал изменения каждого поля отдельно
+                $journal = new \Artmax\Calendar\Journal();
+                $userId = $GLOBALS['USER']->GetID();
+                
+                // Сравниваем и записываем изменения для каждого поля
+                
+                // TITLE
+                if (isset($event['TITLE']) && $event['TITLE'] != $title) {
+                    $journal->writeEvent(
+                        $eventId,
+                        'EVENT_TITLE_CHANGED',
+                        'Artmax\Calendar\Calendar::updateEvent',
+                        $userId,
+                        'TITLE=' . $event['TITLE'] . '->' . $title
+                    );
+                }
+                
+                // DESCRIPTION
+                $oldDescription = $event['DESCRIPTION'] ?? '';
+                if ($oldDescription != $description) {
+                    $journal->writeEvent(
+                        $eventId,
+                        'EVENT_DESCRIPTION_CHANGED',
+                        'Artmax\Calendar\Calendar::updateEvent',
+                        $userId,
+                        'DESCRIPTION=' . ($oldDescription ?: 'empty') . '->' . ($description ?: 'empty')
+                    );
+                }
+                
+                // DATE_FROM (начало) - нормализуем даты для сравнения
+                if (isset($event['DATE_FROM'])) {
+                    // Конвертируем дату из формата dd.mm.yyyy в yyyy-mm-dd для сравнения
+                    $oldDateFromNormalized = $event['DATE_FROM'];
+                    if (preg_match('/^(\d{1,2})\.(\d{1,2})\.(\d{4})\s+(\d{1,2}):(\d{1,2}):(\d{1,2})$/', $oldDateFromNormalized, $matches)) {
+                        $oldDateFromNormalized = sprintf('%04d-%02d-%02d %02d:%02d:%02d', $matches[3], $matches[2], $matches[1], $matches[4], $matches[5], $matches[6]);
+                    }
+                    
+                    if ($oldDateFromNormalized != $dateFrom) {
+                        $journal->writeEvent(
+                            $eventId,
+                            'EVENT_DATE_FROM_CHANGED',
+                            'Artmax\Calendar\Calendar::updateEvent',
+                            $userId,
+                            'DATE_FROM=' . $event['DATE_FROM'] . '->' . $dateFrom
+                        );
+                    }
+                }
+                
+                // DATE_TO (окончание) - нормализуем даты для сравнения
+                if (isset($event['DATE_TO'])) {
+                    // Конвертируем дату из формата dd.mm.yyyy в yyyy-mm-dd для сравнения
+                    $oldDateToNormalized = $event['DATE_TO'];
+                    if (preg_match('/^(\d{1,2})\.(\d{1,2})\.(\d{4})\s+(\d{1,2}):(\d{1,2}):(\d{1,2})$/', $oldDateToNormalized, $matches)) {
+                        $oldDateToNormalized = sprintf('%04d-%02d-%02d %02d:%02d:%02d', $matches[3], $matches[2], $matches[1], $matches[4], $matches[5], $matches[6]);
+                    }
+                    
+                    if ($oldDateToNormalized != $dateTo) {
+                        $journal->writeEvent(
+                            $eventId,
+                            'EVENT_DATE_TO_CHANGED',
+                            'Artmax\Calendar\Calendar::updateEvent',
+                            $userId,
+                            'DATE_TO=' . $event['DATE_TO'] . '->' . $dateTo
+                        );
+                    }
+                }
+                
+                // EVENT_COLOR
+                $oldColor = $event['EVENT_COLOR'] ?? '#3498db';
+                if ($oldColor != $eventColor) {
+                    $journal->writeEvent(
+                        $eventId,
+                        'EVENT_COLOR_CHANGED',
+                        'Artmax\Calendar\Calendar::updateEvent',
+                        $userId,
+                        'EVENT_COLOR=' . $oldColor . '->' . $eventColor
+                    );
+                }
+                
+                // BRANCH_ID
+                $oldBranchId = $event['BRANCH_ID'] ?? 1;
+                if ($oldBranchId != $branchId) {
+                    $journal->writeEvent(
+                        $eventId,
+                        'EVENT_BRANCH_CHANGED',
+                        'Artmax\Calendar\Calendar::updateEvent',
+                        $userId,
+                        'BRANCH_ID=' . $oldBranchId . '->' . $branchId
+                    );
+                }
+                
+                // EMPLOYEE_ID
+                $oldEmployeeId = !empty($event['EMPLOYEE_ID']) ? (int)$event['EMPLOYEE_ID'] : null;
+                $newEmployeeId = !empty($employeeId) ? (int)$employeeId : null;
+                if ($oldEmployeeId != $newEmployeeId) {
+                    $journal->writeEvent(
+                        $eventId,
+                        'EVENT_EMPLOYEE_CHANGED',
+                        'Artmax\Calendar\Calendar::updateEvent',
+                        $userId,
+                        'EMPLOYEE_ID=' . ($oldEmployeeId ?? 'null') . '->' . ($newEmployeeId ?? 'null')
+                    );
+                }
+                
                 // Обновляем активность CRM если есть
                 if (!empty($event['ACTIVITY_ID'])) {
                     $activityUpdated = $calendarObj->updateCrmActivity(
