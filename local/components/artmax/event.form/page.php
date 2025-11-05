@@ -1,4 +1,10 @@
 <?php
+// Редирект на календарь, если нет параметра IFRAME=Y
+if (!isset($_REQUEST["IFRAME"]) || $_REQUEST["IFRAME"] !== "Y") {
+    header('Location: /page/artmax_calendar/calendar_branch_1/');
+    exit;
+}
+
 // Проверяем, открыта ли страница в iframe SidePanel
 if (isset($_REQUEST["IFRAME"]) && $_REQUEST["IFRAME"] === "Y") {
     // Адаптация для iframe режима

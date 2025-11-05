@@ -10,6 +10,9 @@ function initializeClientForm() {
     
     // Функция закрытия SidePanel
     window.closeSidePanel = function() {
+        // Устанавливаем флаг, чтобы предотвратить редирект при закрытии
+        window._isClosingSidePanel = true;
+        
         if (typeof BX !== 'undefined' && BX.SidePanel && BX.SidePanel.Instance) {
             BX.SidePanel.Instance.close();
         } else {

@@ -2269,11 +2269,40 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
             }
 
             $calendar = new \Artmax\Calendar\Calendar();
+            $journal = new \Artmax\Calendar\Journal();
+            $userId = $USER->GetID();
+            
+            // Получаем текущее событие, чтобы проверить, был ли ранее привязан контакт
+            $event = $calendar->getEvent($eventId);
+            if (!$event) {
+                return ['success' => false, 'error' => 'Событие не найдено'];
+            }
+            
+            $oldContactId = !empty($event['CONTACT_ENTITY_ID']) ? (int)$event['CONTACT_ENTITY_ID'] : null;
+            $newContactId = (int)$contactId;
+            
+            // Если был привязан другой контакт, сначала записываем отвязку старого
+            if ($oldContactId && $oldContactId !== $newContactId) {
+                $journal->writeEvent(
+                    $eventId,
+                    'CONTACT_DETACHED',
+                    'Artmax\Calendar\Calendar::updateEventContact',
+                    $userId
+                );
+            }
             
             // Обновляем событие с ID контакта
             $result = $calendar->updateEventContact($eventId, $contactId);
             
             if ($result) {
+                // Записываем в журнал привязку нового контакта
+                $journal->writeEvent(
+                    $eventId,
+                    'CONTACT_ATTACHED',
+                    'Artmax\Calendar\Calendar::updateEventContact',
+                    $userId
+                );
+                
                 return [
                     'success' => true, 
                     'message' => 'Контакт успешно привязан к событию',

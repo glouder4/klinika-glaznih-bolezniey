@@ -1,4 +1,10 @@
 <?php
+// Редирект на календарь, если нет параметра IFRAME=Y
+if (!isset($_REQUEST["IFRAME"]) || $_REQUEST["IFRAME"] !== "Y") {
+    header('Location: /page/artmax_calendar/calendar_branch_1/');
+    exit;
+}
+
 // Проверяем, открыта ли страница в iframe SidePanel
 if (isset($_REQUEST["IFRAME"]) && $_REQUEST["IFRAME"] === "Y") {
     // Адаптация для iframe режима
@@ -16,11 +22,37 @@ if (isset($_REQUEST["IFRAME"]) && $_REQUEST["IFRAME"] === "Y") {
     <html>
     <head>
         <script type="text/javascript">
+            // Предотвращаем редирект при закрытии SidePanel
+            window._isClosingSidePanel = false;
+            
             // Prevent loading page without header and footer
-            if(window == window.top)
-            {
-                window.location = "<?=CUtil::JSEscape($APPLICATION->GetCurPageParam('', array('IFRAME'))); ?>";
-            }
+            // Проверяем, что мы не в iframe (SidePanel)
+            // Используем более надежную проверку с несколькими условиями
+            (function() {
+                try {
+                    var isInIframe = window.self !== window.top;
+                    var hasIframeParam = window.location.search.indexOf('IFRAME=Y') !== -1;
+                    var isClosing = window._isClosingSidePanel;
+                    
+                    // Редирект только если:
+                    // 1. Мы не в iframe И
+                    // 2. Нет параметра IFRAME=Y И
+                    // 3. Не идет процесс закрытия SidePanel
+                    if (!isInIframe && !hasIframeParam && !isClosing) {
+                        // Редиректим на главную страницу календаря
+                        var calendarUrl = '/page/artmax_calendar/calendar_branch_1/';
+                        // Добавляем небольшую задержку, чтобы избежать конфликтов с закрытием SidePanel
+                        setTimeout(function() {
+                            if (!window._isClosingSidePanel) {
+                                window.location = calendarUrl;
+                            }
+                        }, 100);
+                    }
+                } catch(e) {
+                    // Если есть ошибка при проверке (например, из-за cross-origin), значит мы в iframe
+                    // Ничего не делаем
+                }
+            })();
         </script>
         <?$APPLICATION->ShowHead();?>
         <?$APPLICATION->ShowHeadStrings();?>
