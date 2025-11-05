@@ -179,52 +179,9 @@ $totalDays = 42; // 6 недель * 7 дней
 ?>
 
 <div class="artmax-calendar" data-branch-id="<?= $arResult['BRANCH']['ID'] ?>">
-    <!-- Заголовок календаря -->
-    <div class="calendar-header">
-        <div class="header-left">
-            <h1 class="calendar-title">
-                <span class="star-icon">★</span>
-                Календарь
-            </h1>
-        </div>
-
-        
-        <?php if ($arResult['IS_ADMIN']): ?>
-        <div class="header-right">
-            <button class="btn btn-primary btn-add-branch" onclick="openAddBranchModal()" title="Добавить филиал">
-                ➕ Добавить филиал
-            </button>
-            <button class="btn btn-secondary btn-branch" id="branch-settings-btn" title="Настройки филиала">
-                ⚙️ Настройки филиала
-            </button>
-        </div>
-        <?php endif; ?>
-    </div>
   
     <!-- Основной календарь -->
     <div class="calendar-main">
-        <div class="calendar-toolbar">
-            <div class="month-selector">
-                <span class="current-month"><?= translateMonthToRussian($currentDate->format('F')) . ', ' . $currentDate->format('Y') ?></span>
-            </div>
-            <div class="calendar-controls">
-                <?php if ($arResult['IS_ADMIN']): ?>
-                <button class="btn btn-primary btn-create">
-                    СОЗДАТЬ РАСПИСАНИЕ
-                </button>
-                <?php endif; ?>
-                <span class="view-type">Месяц</span>
-                <button class="btn-nav" onclick="previousMonth()">◀</button>
-                <button class="btn-nav" onclick="nextMonth()">▶</button>
-                <button class="btn-today" onclick="goToToday()">Сегодня</button>
-                <button class="btn-refresh" onclick="refreshCalendarEvents()" title="Обновить события">🔄</button>
-                <?php if ($arResult['IS_ADMIN']): ?>
-                <button class="btn btn-danger btn-clear-all" onclick="clearAllEvents()" title="Удалить все события">
-                    🗑️
-                </button>
-                <?php endif; ?>
-            </div>
-        </div>
 
         <div class="calendar-grid">
             <!-- Заголовки дней недели -->
@@ -346,70 +303,6 @@ $totalDays = 42; // 6 недель * 7 дней
                 }
                 ?>
             </div>
-        </div>
-    </div>
-
-    <!-- Модальное окно для переноса записи -->
-    <div class="event-form-modal" id="moveEventModal" style="display: none;">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3>Перенести запись</h3>
-                <button class="close-btn" onclick="closeMoveEventModal()">×</button>
-            </div>
-            <form id="move-event-form" novalidate onsubmit="handleMoveEventSubmit(event)">
-                <?= bitrix_sessid_post() ?>
-                <input type="hidden" id="move-event-id" name="eventId">
-                
-                <div class="form-group" id="move-branch-group">
-                    <label for="move-event-branch">Филиал *</label>
-                    <select id="move-event-branch" name="branch_id" required onchange="onMoveBranchChange()">
-                        <option value="">Выберите филиал</option>
-                        <!-- Опции будут загружены через JavaScript -->
-                    </select>
-                    <div class="error-message" style="display: none;">
-                        <span class="error-icon">⚠️</span>
-                        <span>Выберите филиал.</span>
-                    </div>
-                </div>
-                
-                <div class="form-group" id="move-employee-group">
-                    <label for="move-event-employee">Врач *</label>
-                    <select id="move-event-employee" name="employee_id" required onchange="onMoveEmployeeChange()">
-                        <option value="">Выберите врача</option>
-                        <!-- Опции будут загружены через JavaScript -->
-                    </select>
-                    <div class="error-message" style="display: none;">
-                        <span class="error-icon">⚠️</span>
-                        <span>Выберите врача.</span>
-                    </div>
-                </div>
-                
-                <div class="form-group" id="move-date-group">
-                    <label for="move-event-date">Дата *</label>
-                    <input type="date" id="move-event-date" name="date" required onchange="onMoveDateChange()">
-                    <div class="error-message" style="display: none;">
-                        <span class="error-icon">⚠️</span>
-                        <span>Выберите дату.</span>
-                    </div>
-                </div>
-                
-                <div class="form-group" id="move-time-group">
-                    <label for="move-event-time">Время *</label>
-                    <select id="move-event-time" name="time" required>
-                        <option value="">Выберите время</option>
-                        <!-- Опции будут загружены через JavaScript -->
-                    </select>
-                    <div class="error-message" style="display: none;">
-                        <span class="error-icon">⚠️</span>
-                        <span>Выберите время.</span>
-                    </div>
-                </div>
-                
-                <div class="form-actions">
-                    <button type="button" class="btn btn-secondary" onclick="closeMoveEventModal()">Отмена</button>
-                    <button type="submit" class="btn btn-primary">Перенести</button>
-                </div>
-            </form>
         </div>
     </div>
 
@@ -538,363 +431,6 @@ $totalDays = 42; // 6 недель * 7 дней
         </div>
     <?php endif; ?>
 
-    <!-- Модальное окно для редактирования события -->
-    <div id="editEventModal" class="event-form-modal" style="display: none;">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3>Редактировать событие</h3>
-                <button class="close-btn" onclick="closeEditEventModal()">×</button>
-            </div>
-            <form id="edit-event-form" novalidate>
-                <?= bitrix_sessid_post() ?>
-                <input type="hidden" id="edit-event-id" name="eventId">
-                
-                <div class="form-group" id="edit-title-group">
-                    <label for="edit-event-title">Название события *</label>
-                    <input type="text" id="edit-event-title" name="title" required>
-                    <div class="error-message" style="display: none;">
-                        <span class="error-icon">⚠️</span>
-                        <span>Заполните это поле.</span>
-                    </div>
-                </div>
-                
-                <div class="form-group" id="edit-description-group">
-                    <label for="edit-event-description">Описание</label>
-                    <textarea id="edit-event-description" name="description" rows="3"></textarea>
-                </div>
-                
-                <div class="form-group" id="edit-employee-group">
-                    <label for="edit-event-employee">Ответственный сотрудник *</label>
-                    <select id="edit-event-employee" name="employee_id" required>
-                        <option value="">Выберите сотрудника</option>
-                        <!-- Опции будут загружены через JavaScript -->
-                    </select>
-                    <div class="error-message" style="display: none;">
-                        <span class="error-icon">⚠️</span>
-                        <span>Выберите ответственного сотрудника.</span>
-                    </div>
-                </div>
-                
-                <div class="form-group" id="edit-date-group">
-                    <label for="edit-event-date">ДАТА *</label>
-                    <input type="date" id="edit-event-date" name="date" required>
-                    <div class="error-message" style="display: none;">
-                        <span class="error-icon">⚠️</span>
-                        <span>Заполните это поле.</span>
-                    </div>
-                </div>
-                
-                <div class="form-group" id="edit-time-group">
-                    <label for="edit-event-time">ВРЕМЯ *</label>
-                    <select id="edit-event-time" name="time" required>
-                        <option value="">Выберите время</option>
-                        <option value="08:00">08:00</option>
-                        <option value="08:30">08:30</option>
-                        <option value="09:00">09:00</option>
-                        <option value="09:30">09:30</option>
-                        <option value="10:00">10:00</option>
-                        <option value="10:30">10:30</option>
-                        <option value="11:00">11:00</option>
-                        <option value="11:30">11:30</option>
-                        <option value="12:00">12:00</option>
-                        <option value="12:30">12:30</option>
-                        <option value="13:00">13:00</option>
-                        <option value="13:30">13:30</option>
-                        <option value="14:00">14:00</option>
-                        <option value="14:30">14:30</option>
-                        <option value="15:00">15:00</option>
-                        <option value="15:30">15:30</option>
-                        <option value="16:00">16:00</option>
-                        <option value="16:30">16:30</option>
-                        <option value="17:00">17:00</option>
-                        <option value="17:30">17:30</option>
-                        <option value="18:00">18:00</option>
-                    </select>
-                    <div class="error-message" style="display: none;">
-                        <span class="error-icon">⚠️</span>
-                        <span>Заполните это поле.</span>
-                    </div>
-                </div>
-                
-                <div class="form-group" id="edit-duration-group">
-                    <label for="edit-event-duration">Длительность приема *</label>
-                    <select id="edit-event-duration" name="duration" required>
-                        <option value="">Выберите длительность</option>
-                        <option value="5">5 минут</option>
-                        <option value="10">10 минут</option>
-                        <option value="15">15 минут</option>
-                        <option value="30">30 минут</option>
-                        <option value="60">1 час</option>
-                        <option value="120">2 часа</option>
-                    </select>
-                    <div class="error-message" style="display: none;">
-                        <span class="error-icon">⚠️</span>
-                        <span>Заполните это поле.</span>
-                    </div>
-                </div>
-                
-                <!-- Поле для выбора цвета события -->
-                <div class="form-group">
-                    <label for="edit-event-color">Цвет события</label>
-                    <div class="color-picker-container">
-                        <div class="color-presets">
-                            <button type="button" class="color-preset" data-color="#3498db" style="background-color: #3498db;" onclick="selectEditPresetColor('#3498db')"></button>
-                            <button type="button" class="color-preset" data-color="#e74c3c" style="background-color: #e74c3c;" onclick="selectEditPresetColor('#e74c3c')"></button>
-                            <button type="button" class="color-preset" data-color="#2ecc71" style="background-color: #2ecc71;" onclick="selectEditPresetColor('#2ecc71')"></button>
-                            <button type="button" class="color-preset" data-color="#f39c12" style="background-color: #f39c12;" onclick="selectEditPresetColor('#f39c12')"></button>
-                            <button type="button" class="color-preset" data-color="#9b59b6" style="background-color: #9b59b6;" onclick="selectEditPresetColor('#9b59b6')"></button>
-                            <button type="button" class="color-preset" data-color="#1abc9c" style="background-color: #1abc9c;" onclick="selectEditPresetColor('#1abc9c')"></button>
-                            <button type="button" class="color-preset" data-color="#34495e" style="background-color: #34495e;" onclick="selectEditPresetColor('#34495e')"></button>
-                            <button type="button" class="color-preset" data-color="#95a5a6" style="background-color: #95a5a6;" onclick="selectEditPresetColor('#95a5a6')"></button>
-                        </div>
-                        <div class="custom-color">
-                            <label for="edit-custom-color-input">Свой цвет:</label>
-                            <input type="color" id="edit-custom-color-input" name="custom-color" value="#3498db" onchange="selectEditCustomColor(this.value)">
-                        </div>
-                        <input type="hidden" id="edit-selected-color" name="event-color" value="#3498db">
-                    </div>
-                </div>
-                
-                <div class="form-actions">
-                    <button type="button" class="btn btn-danger" onclick="deleteEventAjax(document.getElementById('edit-event-form').getAttribute('data-event-id'))">УДАЛИТЬ</button>
-                    <button type="button" class="btn btn-secondary" onclick="closeEditEventModal()">ОТМЕНА</button>
-                    <button type="submit" class="btn btn-primary">СОХРАНИТЬ</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- Модальное окно для создания расписания -->
-    <div id="scheduleModal" class="modal-overlay" style="display: none;">
-        <div class="modal-content schedule-modal">
-            <div class="modal-header">
-                <h3>Создать расписание</h3>
-                <button type="button" class="modal-close" onclick="closeScheduleModal()">&times;</button>
-            </div>
-            
-            <form id="scheduleForm" class="schedule-form">
-                <!-- Скрытое поле для ID филиала -->
-                <input type="hidden" id="schedule-branch-id" name="branch_id" value="<?= $arResult['BRANCH']['ID'] ?>">
-                
-                <div class="form-group">
-                    <label for="schedule-title">Название *</label>
-                    <input type="text" id="schedule-title" name="title" required placeholder="Введите название расписания">
-                </div>
-                
-                <div class="form-group">
-                    <label for="schedule-employee">Ответственный сотрудник *</label>
-                    <select id="schedule-employee" name="employee_id" required>
-                        <option value="">Выберите сотрудника</option>
-                        <!-- Опции будут загружены через JavaScript -->
-                    </select>
-                    <div class="error-message" style="display: none;">
-                        <span class="error-icon">⚠️</span>
-                        <span>Выберите ответственного сотрудника.</span>
-                    </div>
-                </div>
-                
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="schedule-date">Дата *</label>
-                        <input type="date" id="schedule-date" name="date" required>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="schedule-time">Время *</label>
-                        <input type="time" id="schedule-time" name="time" required>
-                    </div>
-                </div>
-                
-                <div class="form-group checkbox-group">
-                    <label class="checkbox-label">
-                        <input type="checkbox" id="schedule-repeat" name="repeat" onchange="toggleRepeatFields()">
-                        <span class="checkmark"></span>
-                        Повторяемое
-                    </label>
-                </div>
-                
-                <!-- Галочки для исключения выходных и праздников (скрыты) -->
-                <div class="form-group checkbox-group" style="display: none;">
-                    <label class="checkbox-label">
-                        <input type="checkbox" id="exclude-weekends" name="exclude_weekends" value="false">
-                        <span class="checkmark"></span>
-                        Исключить выходные
-                    </label>
-                </div>
-                
-                <div class="form-group checkbox-group" style="display: none;">
-                    <label class="checkbox-label">
-                        <input type="checkbox" id="exclude-holidays" name="exclude_holidays" value="false">
-                        <span class="checkmark"></span>
-                        Исключить праздничные дни
-                    </label>
-                </div>
-                
-                <div id="repeat-fields" class="repeat-fields" style="display: none;">
-                    <div class="form-group">
-                        <label for="schedule-frequency">Повторяемость</label>
-                        <select id="schedule-frequency" name="frequency" onchange="toggleWeeklyDays()">
-                            <option value="daily">Каждый день</option>
-                            <option value="weekly">Каждую неделю</option>
-                            <option value="monthly">Каждый месяц</option>
-                        </select>
-                    </div>
-                    
-                    <!-- Дни недели для еженедельного повторения -->
-                    <div id="weekly-days" class="weekly-days" style="display: none;">
-                        <label>Дни недели</label>
-                        <div class="weekday-checkboxes">
-                            <label class="weekday-checkbox">
-                                <input type="checkbox" name="weekdays[]" value="1">
-                                <span>ПН</span>
-                            </label>
-                            <label class="weekday-checkbox">
-                                <input type="checkbox" name="weekdays[]" value="2">
-                                <span>ВТ</span>
-                            </label>
-                            <label class="weekday-checkbox">
-                                <input type="checkbox" name="weekdays[]" value="3">
-                                <span>СР</span>
-                            </label>
-                            <label class="weekday-checkbox">
-                                <input type="checkbox" name="weekdays[]" value="4">
-                                <span>ЧТ</span>
-                            </label>
-                            <label class="weekday-checkbox">
-                                <input type="checkbox" name="weekdays[]" value="5">
-                                <span>ПТ</span>
-                            </label>
-                            <label class="weekday-checkbox">
-                                <input type="checkbox" name="weekdays[]" value="6">
-                                <span>СБ</span>
-                            </label>
-                            <label class="weekday-checkbox">
-                                <input type="checkbox" name="weekdays[]" value="7">
-                                <span>ВС</span>
-                            </label>
-                        </div>
-                    </div>
-                    
-                    <!-- Поля для окончания повторения -->
-                    <div class="form-group">
-                        <label>Окончание</label>
-                        <div class="radio-group" id="repeat-end-group">
-                            <label class="radio-label">
-                                <input type="radio" name="repeat-end" value="after" checked onclick="toggleEndFields()">
-                                После <input type="number" name="repeat-count" id="repeat-count" min="1" value="1" class="repeat-count-input"> повторений
-                            </label>
-                            <label class="radio-label">
-                                <input type="radio" name="repeat-end" value="date" onclick="toggleEndFields()">
-                                Дата <input type="date" name="repeat-end-date" id="repeat-end-date" class="repeat-end-date-input">
-                            </label>
-                            <div id="include-end-date-container" class="checkbox-inline" style="display: none;">
-                                <label class="checkbox-label-small">
-                                    <input type="checkbox" id="include-end-date" name="include-end-date" checked>
-                                    <span class="checkmark-small"></span>
-                                    Включая дату окончания
-                                </label>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Поле для выбора цвета события -->
-                <div class="form-group">
-                    <label for="event-color">Цвет события</label>
-                    <div class="color-picker-container">
-                        <div class="color-presets">
-                            <button type="button" class="color-preset" data-color="#3498db" style="background-color: #3498db;" onclick="selectSchedulePresetColor('#3498db')"></button>
-                            <button type="button" class="color-preset" data-color="#e74c3c" style="background-color: #e74c3c;" onclick="selectSchedulePresetColor('#e74c3c')"></button>
-                            <button type="button" class="color-preset" data-color="#2ecc71" style="background-color: #2ecc71;" onclick="selectSchedulePresetColor('#2ecc71')"></button>
-                            <button type="button" class="color-preset" data-color="#f39c12" style="background-color: #f39c12;" onclick="selectSchedulePresetColor('#f39c12')"></button>
-                            <button type="button" class="color-preset" data-color="#9b59b6" style="background-color: #9b59b6;" onclick="selectSchedulePresetColor('#9b59b6')"></button>
-                            <button type="button" class="color-preset" data-color="#1abc9c" style="background-color: #1abc9c;" onclick="selectSchedulePresetColor('#1abc9c')"></button>
-                            <button type="button" class="color-preset" data-color="#34495e" style="background-color: #34495e;" onclick="selectSchedulePresetColor('#34495e')"></button>
-                            <button type="button" class="color-preset" data-color="#95a5a6" style="background-color: #95a5a6;" onclick="selectSchedulePresetColor('#95a5a6')"></button>
-                        </div>
-                        <div class="custom-color">
-                            <label for="custom-color-input">Свой цвет:</label>
-                            <input type="color" id="custom-color-input" name="custom-color" value="#3498db" onchange="selectScheduleCustomColor(this.value)">
-                        </div>
-                        <input type="hidden" id="schedule-selected-color" name="event-color" value="#3498db">
-                    </div>
-                </div>
-                
-                <div class="form-actions">
-                    <button type="button" class="btn btn-secondary" onclick="closeScheduleModal()">Отмена</button>
-                    <button type="submit" class="btn btn-primary">Создать</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- Модальное окно для настроек филиала -->
-    <div id="branchModal" class="event-form-modal" style="display: none;">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3>Настройки филиала</h3>
-                <button class="close-btn" id="close-branch-modal">×</button>
-            </div>
-            <form id="branch-form" novalidate>
-                <?= bitrix_sessid_post() ?>
-                <input type="hidden" name="branch_id" value="<?= $arResult['BRANCH']['ID'] ?>">
-                
-                <div class="form-group">
-                    <label for="branch-name">Название филиала</label>
-                    <input type="text" id="branch-name" name="branch_name" value="<?= htmlspecialchars($arResult['BRANCH']['NAME']) ?>" required>
-                </div>
-                
-                <div class="form-group">
-                    <label for="timezone-name">Часовой пояс</label>
-                    <select id="timezone-name" name="timezone_name" class="timezone-select">
-                        <option value="">Выберите часовой пояс</option>
-                        <?php
-                        $timezoneManager = new \Artmax\Calendar\TimezoneManager();
-                        $availableTimezones = $timezoneManager->getAvailableTimezones();
-                        $currentTimezone = null;
-                        
-                        // Получаем текущие настройки часового пояса для филиала
-                        if (isset($arResult['BRANCH']['ID'])) {
-                            $currentTimezone = $timezoneManager->getBranchTimezone($arResult['BRANCH']['ID']);
-                        }
-                        
-                        foreach ($availableTimezones as $timezoneName => $timezoneLabel) {
-                            $selected = ($currentTimezone && $currentTimezone['TIMEZONE_NAME'] === $timezoneName) ? 'selected' : '';
-                            echo '<option value="' . htmlspecialchars($timezoneName) . '" ' . $selected . '>' . htmlspecialchars($timezoneLabel) . '</option>';
-                        }
-                        ?>
-                    </select>
-                </div>
-                
-                <div class="form-group">
-                    <label for="branch-employees">Сотрудники филиала</label>
-                    <div class="multiselect-container">
-                        <div class="multiselect-input" id="multiselect-input">
-                            <span class="placeholder">Выберите сотрудников</span>
-                            <span class="dropdown-arrow">▼</span>
-                        </div>
-                        <div class="multiselect-dropdown" id="multiselect-dropdown" style="display: none;">
-                            <div class="multiselect-search">
-                                <input type="text" id="employee-search" placeholder="Поиск сотрудников..." autocomplete="off">
-                            </div>
-                            <div class="multiselect-options" id="multiselect-options">
-                                <!-- Опции будут загружены через AJAX -->
-                            </div>
-                        </div>
-                    </div>
-                    <div class="selected-employees" id="selected-employees">
-                        <!-- Выбранные сотрудники будут отображаться здесь -->
-                    </div>
-                </div>
-                
-                <div class="form-actions">
-                    <button type="button" class="btn btn-secondary" id="cancel-branch-modal">ОТМЕНА</button>
-                    <button type="submit" class="btn btn-primary">СОХРАНИТЬ</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
     <!-- Боковое окно для просмотра деталей события -->
     <div id="eventSidePanel" class="event-side-panel" style="display: none;">
         <!-- Прелоадер -->
@@ -913,13 +449,21 @@ $totalDays = 42; // 6 недель * 7 дней
                 <!-- Информация о клиенте -->
                 <div class="client-section" onclick="openContactDetails()">
                     <div class="client-info">
-                        <div class="client-icon">👤</div>
+                        <div class="client-icon">
+                            <div class="booking-actions-popup__item-client-icon">
+                                <div class="ui-icon-set --person" style="--ui-icon-set__icon-size: 26px; --ui-icon-set__icon-color: var(--ui-color-palette-gray-20);"></div>
+                            </div>
+                        </div>
                         <div class="client-details">
                             <div class="client-name">Нет клиента</div>
                             <div class="client-placeholder">Добавьте информацию о клиенте</div>
                         </div>
                         <div class="client-actions">
-                            <button class="action-btn add-contact-btn admin-only" title="Добавить" onclick="event.stopPropagation(); openClientModal();">➕</button>
+                            <span data-element="booking-menu-deal-create-button" class="booking-actions-popup-plus-button">
+                                <button class="ui-btn ui-btn-shadow ui-btn-xs ui-btn-light ui-btn-round deal-card-add-btn admin-only" title="Добавить" onclick="event.stopPropagation(); openClientModal();">
+                                    <div class="ui-icon-set --plus-30" style=""></div>
+                                </button>
+                            </span>
                         </div>
                     </div>
                     <div class="add-note-section admin-only">
@@ -937,31 +481,49 @@ $totalDays = 42; // 6 недель * 7 дней
                 <div class="action-cards">
 
                     <div class="action-card" id="deal-card" onclick="openDealDetails()">
-                        <div class="card-icon">🤝</div>
+                        <div class="card-icon">
+                            <div class="booking-actions-popup-item-icon">
+                                <div class="ui-icon-set --deal" style=""></div>
+                            </div>
+                        </div>
                         <div class="card-content">
                             <div class="card-title">Сделка</div>
                             <div class="card-status" id="deal-status">Не добавлена</div>
                         </div>
                         <div class="card-actions" onclick="event.stopPropagation()">
-                            <button class="card-action-btn add-btn admin-only" onclick="createNewDeal()" title="Создать новую сделку">+</button>
+                            <span data-element="booking-menu-deal-create-button" class="booking-actions-popup-plus-button">
+                                <button class="ui-btn ui-btn-shadow ui-btn-xs ui-btn-light ui-btn-round deal-card-add-btn admin-only" onclick="createNewDeal()" title="Создать новую сделку">
+                                    <div class="ui-icon-set --plus-30" style=""></div>
+                                </button>
+                            </span>
                             <button class="card-action-btn select-btn admin-only" onclick="openDealModal()">Выбрать</button>
                         </div>
                     </div>
 
                     <div class="action-card" id="employee-card" onclick="openEmployeeDetails()">
-                        <div class="card-icon">👨‍⚕️</div>
+                        <div class="card-icon">
+                            <div class="booking-actions-popup__item-client-icon">
+                                <div class="ui-icon-set --person" style="--ui-icon-set__icon-size: 26px; --ui-icon-set__icon-color: var(--ui-color-palette-gray-20);"></div>
+                            </div>
+                        ️</div>
                         <div class="card-content">
                             <div class="card-title">Ответственный врач</div>
                             <div class="card-status" id="employee-status">Не назначен</div>
                         </div>
                         <div class="card-actions" onclick="event.stopPropagation()">
-                            <button class="card-action-btn add-btn admin-only" onclick="openEmployeeModal()" title="Назначить врача">+</button>
+                            <span data-element="booking-menu-deal-create-button" class="booking-actions-popup-plus-button">
+                                <button class="ui-btn ui-btn-shadow ui-btn-xs ui-btn-light ui-btn-round deal-card-add-btn admin-only" title="Назначить врача" onclick="event.stopPropagation(); openEmployeeModal();">
+                                    <div class="ui-icon-set --plus-30" style=""></div>
+                                </button>
+                            </span>
                         </div>
                     </div>
 
                     <div class="action-card">
                         <div class="card-icon">
-                            <div class="booking-actions-popup-item-icon">✓</div>
+                            <div class="booking-actions-popup-item-icon">
+                                <div class="ui-icon-set --check"></div>
+                            </div>
                         </div>
                         <div class="card-content">
                             <div class="card-title">Подтверждение</div>
@@ -977,7 +539,11 @@ $totalDays = 42; // 6 недель * 7 дней
                     </div>
 
                     <div class="action-card">
-                        <div class="card-icon">🏥</div>
+                        <div class="card-icon">
+                            <div class="booking-actions-popup-item-icon">
+                                <div class="ui-icon-set --customer-card"></div>
+                            </div>
+                        </div>
                         <div class="card-content">
                             <div class="card-title">Визит</div>
                             <div class="card-status" id="visit-status">Не указано</div>
@@ -998,160 +564,9 @@ $totalDays = 42; // 6 недель * 7 дней
                     <button class="edit-event-btn" onclick="openEditEventModalFromSidePanel()">✏️ Редактировать</button>
                     <button class="move-event-btn" onclick="moveEventFromSidePanel()">📅 Перенести запись</button>
                     <button id="cancel-event-btn" class="cancel-event-btn" onclick="toggleEventStatusFromSidePanel()">❌ Отменить запись</button>
+                    <button class="journal-btn" onclick="openJournalSidePanel()">📋 Журнал</button>
                     <button class="delete-event-btn" style="display: none;" onclick="deleteEventFromSidePanel()">🗑️ Удалить</button>
                 </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Модальное окно для выбора клиента -->
-    <div id="clientModal" class="client-modal" style="display: none;">
-        <div class="client-modal-content">
-            <div class="client-modal-header">
-                <h3>Добавить или выбрать клиента</h3>
-                <button class="close-client-modal" onclick="closeClientModal()">×</button>
-            </div>
-            <div class="client-modal-body">
-                <div class="client-modal-form-wrapper">
-                    <!-- Скрытое поле для ID контакта -->
-                    <input type="hidden" id="contact-id" value="">
-                    
-                    <div class="form-group" id="contact-search-group">
-                        <label for="contact-input">Контакт</label>
-                        <div class="input-with-icons">
-                            <div class="input-icon left">👤</div>
-                            <input type="text" id="contact-input" placeholder="Имя, email или номер телефона">
-                            <div class="input-icon right">🔍</div>
-                        </div>
-                        <!-- Кнопка создания нового контакта -->
-                        <div class="create-contact-section">
-                            <button class="create-new-contact-btn" onclick="showCreateContactForm()">
-                                <span class="plus-icon">+</span>
-                                Создать новый контакт
-                            </button>
-                        </div>
-                        <!-- Выпадающее окошко с результатами поиска -->
-                        <div id="contact-search-dropdown" class="search-dropdown" style="display: none;">
-                            <div class="search-suggestion">
-                                <span class="search-text">«Поиск»</span>
-                            </div>
-                            <button class="create-new-contact-btn" onclick="showCreateContactForm()">
-                                <span class="plus-icon">+</span>
-                                создать новый контакт
-                            </button>
-                        </div>
-                    </div>
-                    
-                    <!-- Кнопка "Назад" для возврата к поиску -->
-                    <div id="back-to-search" class="back-to-search" style="display: none;">
-                        <button class="back-btn" onclick="hideCreateContactForm()">
-                            <span class="back-icon">←</span>
-                            Назад к поиску
-                        </button>
-                    </div>
-                    
-                    <!-- Форма создания нового контакта -->
-                    <div id="create-contact-form" class="create-contact-form" style="display: none;">
-                        <div class="form-group">
-                            <label for="new-contact-name">Имя *</label>
-                            <input type="text" id="new-contact-name" placeholder="Введите имя" required>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label for="new-contact-lastname">Фамилия</label>
-                            <input type="text" id="new-contact-lastname" placeholder="Введите фамилию">
-                        </div>
-                        
-                        <div class="form-group">
-                            <label for="new-contact-phone">Телефон</label>
-                            <input type="tel" id="new-contact-phone" placeholder="Введите номер телефона">
-                        </div>
-                        
-                        <div class="form-group">
-                            <label for="new-contact-email">E-mail</label>
-                            <input type="email" id="new-contact-email" placeholder="Введите email">
-                        </div>
-                        
-                        <div class="create-contact-actions">
-                            <button type="button" class="btn btn-primary" onclick="createContact()">Создать контакт</button>
-                            <button type="button" class="btn btn-secondary" onclick="hideCreateContactForm()">Отмена</button>
-                        </div>
-                    </div>
-                    
-                    <div class="form-group contact-details-field" style="display: none;">
-                        <label for="phone-input">Телефон</label>
-                        <div class="input-with-icons">
-                            <div class="input-icon left">🇷🇺</div>
-                            <input type="tel" id="phone-input" placeholder="Номер телефона">
-                        </div>
-                    </div>
-                    
-                    <div class="form-group contact-details-field" style="display: none;">
-                        <label for="email-input">E-mail</label>
-                        <div class="input-with-icons">
-                            <div class="input-icon left">✉️</div>
-                            <input type="email" id="email-input" placeholder="Адрес электронной почты">
-                        </div>
-                    </div>
-                    
-                    <!--<div class="form-group contact-details-field" style="display: none;">
-                        <label for="company-input">Компания</label>
-                        <div class="input-with-icons">
-                            <div class="input-icon left">🏢</div>
-                            <input type="text" id="company-input" placeholder="Название компании">
-                            <div class="input-icon right">🔍</div>
-                        </div>
-                    </div>-->
-                </div>
-                <div class="modal-instruction">
-                    Чтобы выбрать клиента из CRM, начните вводить имя, телефон или e-mail
-                </div>
-            </div>
-            <div class="client-modal-footer" style="display: none;">
-                <button type="button" class="btn btn-secondary" onclick="closeClientModal()">ОТМЕНА</button>
-                <button type="button" class="btn btn-primary" onclick="saveClientData()">СОХРАНИТЬ</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Модальное окно для выбора сделки -->
-    <div id="dealModal" class="deal-modal" style="display: none;">
-        <div class="deal-modal-content">
-            <div class="deal-modal-header">
-                <h3>Добавить или выбрать сделку</h3>
-                <button class="close-deal-modal" onclick="closeDealModal()">×</button>
-            </div>
-            <div class="deal-modal-body">
-                <div class="deal-modal-form-wrapper">
-                    <!-- Скрытое поле для ID сделки -->
-                    <input type="hidden" id="deal-id" value="">
-                    
-                    <div class="form-group">
-                        <label for="deal-input">Сделка</label>
-                        <div class="input-with-icons">
-                            <div class="input-icon left">💼</div>
-                            <input type="text" id="deal-input" placeholder="Название сделки">
-                            <div class="input-icon right">🔍</div>
-                        </div>
-                        <!-- Выпадающее окошко с результатами поиска -->
-                        <div id="deal-search-dropdown" class="search-dropdown" style="display: none;">
-                            <div class="search-suggestion">
-                                <span class="search-text">«Поиск»</span>
-                            </div>
-                            <button class="create-new-deal-btn">
-                                <span class="plus-icon">+</span>
-                                создать новую сделку
-                            </button>
-                        </div>
-                    </div>
-                </div>
-                <div class="modal-instruction">
-                    Чтобы выбрать сделку из CRM, начните вводить название сделки
-                </div>
-            </div>
-            <div class="deal-modal-footer" style="display: none;">
-                <button type="button" class="btn btn-secondary" onclick="closeDealModal()">ОТМЕНА</button>
-                <button type="button" class="btn btn-primary" onclick="saveDealData()">СОХРАНИТЬ</button>
             </div>
         </div>
     </div>
@@ -1175,331 +590,6 @@ $totalDays = 42; // 6 недель * 7 дней
         </div>
     </div>
 
-    <!-- Модальное окно для выбора врача -->
-    <div id="employeeModal" class="employee-modal" style="display: none;">
-        <div class="employee-modal-content">
-            <div class="employee-modal-header">
-                <h3>Назначить ответственного врача</h3>
-                <button class="close-employee-modal" onclick="closeEmployeeModal()">×</button>
-            </div>
-            <div class="employee-modal-body">
-                <div class="form-group">
-                    <label for="employee-select">Выберите врача</label>
-                    <select id="employee-select" class="employee-select">
-                        <option value="">Выберите врача</option>
-                        <!-- Опции будут загружены через JavaScript -->
-                    </select>
-                </div>
-                <div class="modal-instruction">
-                    Выберите ответственного врача для данного события
-                </div>
-            </div>
-            <div class="employee-modal-footer">
-                <button type="button" class="btn btn-secondary" onclick="closeEmployeeModal()">ОТМЕНА</button>
-                <button type="button" class="btn btn-primary" onclick="saveEmployee()">СОХРАНИТЬ</button>
-            </div>
-        </div>
-    </div>
-
 </div>
 
-<script>
-    let currentYear = <?= $year ?>;
-    let currentMonth = <?= $month ?>;
-
-    // Функции для работы с модальным окном настроек филиала
-    function openTimezoneModal() {
-        const modal = document.getElementById('timezoneModal');
-        if (modal) {
-            modal.style.display = 'block';
-            document.body.style.overflow = 'hidden';
-        }
-    }
-
-    function closeTimezoneModal() {
-        const modal = document.getElementById('timezoneModal');
-        if (modal) {
-            modal.style.display = 'none';
-            document.body.style.overflow = 'auto';
-        }
-    }
-
-
-
-    function previousMonth() {
-        currentMonth--;
-        if (currentMonth < 1) {
-            currentMonth = 12;
-            currentYear--;
-        }
-        loadCalendar(currentYear, currentMonth);
-    }
-
-    function nextMonth() {
-        currentMonth++;
-        if (currentMonth > 12) {
-            currentMonth = 1;
-            currentYear++;
-        }
-        loadCalendar(currentYear, currentMonth);
-    }
-
-    function goToToday() {
-        const today = new Date();
-        currentYear = today.getFullYear();
-        currentMonth = today.getMonth() + 1;
-        loadCalendar(currentYear, currentMonth);
-    }
-
-    function loadCalendar(year, month) {
-        const url = new URL(window.location);
-        url.searchParams.set('date', `${year}-${month.toString().padStart(2, '0')}-01`);
-        window.location.href = url.toString();
-    }
-
-    // Функция для переключения отображения дней недели
-    function toggleWeeklyDays() {
-        const frequency = document.getElementById('schedule-frequency').value;
-        const weeklyDays = document.getElementById('weekly-days');
-        
-        if (frequency === 'weekly') {
-            weeklyDays.style.display = 'block';
-        } else {
-            weeklyDays.style.display = 'none';
-        }
-    }
-    
-    // Функция toggleEndFields определена в script.js
-    
-    // Функция для выбора предустановленного цвета
-    function selectPresetColor(color) {
-        document.getElementById('selected-color').value = color;
-        document.getElementById('custom-color-input').value = color;
-        
-        // Обновляем активный класс для пресетов
-        document.querySelectorAll('.color-preset').forEach(preset => {
-            preset.classList.remove('active');
-        });
-        event.target.classList.add('active');
-    }
-    
-    // Функция для выбора кастомного цвета
-    function selectCustomColor(color) {
-        document.getElementById('selected-color').value = color;
-        
-        // Убираем активный класс со всех пресетов
-        document.querySelectorAll('.color-preset').forEach(preset => {
-            preset.classList.remove('active');
-        });
-    }
-
-    function openEventForm(date) {
-        const modal = document.getElementById('eventFormModal');
-        if (modal) {
-            // Устанавливаем выбранную дату
-            const dateInput = document.getElementById('event-date');
-            if (dateInput) {
-                dateInput.value = date;
-            }
-
-            const timeSelect = document.getElementById('event-time');
-            if (timeSelect) {
-                timeSelect.value = '09:00';
-            }
-
-            const durationSelect = document.getElementById('event-duration');
-            if (durationSelect) {
-                durationSelect.value = '30';
-            }
-
-            modal.style.display = 'block';
-        }
-    }
-
-    function closeEventForm() {
-        const modal = document.getElementById('eventFormModal');
-        if (modal) {
-            modal.style.display = 'none';
-        }
-    }
-
-    function toggleRepeatFields() {
-        const repeatCheckbox = document.getElementById('schedule-repeat');
-        const repeatFields = document.getElementById('repeat-fields');
-        
-        if (repeatCheckbox.checked) {
-            repeatFields.style.display = 'block';
-        } else {
-            repeatFields.style.display = 'none';
-        }
-    }
-
-    function openScheduleModal() {
-        const modal = document.getElementById('scheduleModal');
-        if (modal) {
-            // Устанавливаем текущую дату по умолчанию
-            const today = new Date().toISOString().split('T')[0];
-            const dateInput = document.getElementById('schedule-date');
-            if (dateInput) {
-                dateInput.value = today;
-            }
-
-            // Устанавливаем текущее время по умолчанию
-            const timeInput = document.getElementById('schedule-time');
-            if (timeInput) {
-                const now = new Date();
-                const hours = now.getHours().toString().padStart(2, '0');
-                const minutes = now.getMinutes().toString().padStart(2, '0');
-                timeInput.value = `${hours}:${minutes}`;
-            }
-
-            // Сбрасываем форму
-            document.getElementById('scheduleForm').reset();
-            document.getElementById('schedule-repeat').checked = false;
-            document.getElementById('repeat-fields').style.display = 'none';
-
-            modal.style.display = 'block';
-            document.body.style.overflow = 'hidden';
-        }
-    }
-
-    function closeScheduleModal() {
-        const modal = document.getElementById('scheduleModal');
-        if (modal) {
-            modal.style.display = 'none';
-            document.body.style.overflow = 'auto';
-        }
-    }
-
-    // ИСПРАВЛЕНИЕ: Показать заметки для врачей (только просмотр, без редактирования)
-    function initDoctorNotesAccess() {
-        // Если пользователь не администратор, но авторизован - показываем заметки БЕЗ кнопок редактирования
-        if (!window.IS_ADMIN && window.CURRENT_USER_ID) {
-            console.log('Включаем просмотр заметок для врача ID:', window.CURRENT_USER_ID);
-            
-            // Находим все блоки заметок и делаем их видимыми для врачей
-            const noteSections = document.querySelectorAll('.add-note-section');
-            noteSections.forEach(section => {
-                section.style.display = 'block';
-                section.style.visibility = 'visible';
-                
-                // Показываем блок отображения заметок
-                const noteDisplay = section.querySelector('.note-display');
-                if (noteDisplay) {
-                    noteDisplay.style.display = 'block';
-                }
-            });
-            
-            // ВАЖНО: Скрываем кнопки добавления/редактирования для врачей
-            const addNoteButtons = document.querySelectorAll('.add-note-btn');
-            addNoteButtons.forEach(btn => {
-                btn.style.display = 'none';
-                btn.style.visibility = 'hidden';
-            });
-            
-            const editNoteButtons = document.querySelectorAll('.edit-note-btn');
-            editNoteButtons.forEach(btn => {
-                btn.style.display = 'none';
-                btn.style.visibility = 'hidden';
-            });
-            
-            console.log('Врач видит заметки (только просмотр, без редактирования)');
-        }
-    }
-
-    // Обработка клика по ячейке календаря
-    document.addEventListener('DOMContentLoaded', function() {
-        // Инициализируем доступ к заметкам для врачей
-        initDoctorNotesAccess();
-        
-        const calendarDays = document.querySelectorAll('.calendar-day');
-        calendarDays.forEach(day => {
-            day.addEventListener('click', function() {
-                const date = this.getAttribute('data-date');
-                if (date) {
-                    openEventForm(date);
-                }
-            });
-        });
-
-        // Обработка кнопки настроек филиала
-        const branchBtn = document.getElementById('branch-settings-btn');
-        if (branchBtn) {
-            branchBtn.addEventListener('click', function() {
-                openBranchModal();
-            });
-        }
-
-        // Обработка кнопки закрытия модального окна настроек
-        const closeBranchBtn = document.getElementById('close-branch-modal');
-        if (closeBranchBtn) {
-            closeBranchBtn.addEventListener('click', function() {
-                closeBranchModal();
-            });
-        }
-
-        // Обработка кнопки "ОТМЕНА" в форме настроек
-        const cancelBranchBtn = document.getElementById('cancel-branch-modal');
-        if (cancelBranchBtn) {
-            cancelBranchBtn.addEventListener('click', function() {
-                closeBranchModal();
-            });
-        }
-
-
-
-        // Обработка формы добавления события уже настроена в script.js
-    });
-
-    // Закрытие модального окна при клике вне его
-    window.addEventListener('click', function(event) {
-        const modal = document.getElementById('eventFormModal');
-        if (event.target === modal) {
-            closeEventForm();
-        }
-        
-        const scheduleModal = document.getElementById('scheduleModal');
-        if (event.target === scheduleModal) {
-            closeScheduleModal();
-        }
-    });
-
-    // Обработка отправки формы расписания
-    document.addEventListener('DOMContentLoaded', function() {
-        const scheduleForm = document.getElementById('scheduleForm');
-        if (scheduleForm) {
-            scheduleForm.addEventListener('submit', function(e) {
-                e.preventDefault();
-                
-                const formData = new FormData(this);
-                const scheduleData = {
-                    title: formData.get('title'),
-                    date: formData.get('date'),
-                    time: formData.get('time'),
-                    employee_id: formData.get('employee_id'),
-                    repeat: formData.get('repeat') === 'on',
-                    frequency: formData.get('frequency')
-                };
-
-                console.log('Данные расписания:', scheduleData);
-                
-                // Здесь можно добавить AJAX запрос для сохранения расписания
-                // Пока просто показываем уведомление
-                showNotification('Расписание успешно создано!', 'success');
-                closeScheduleModal();
-            });
-        }
-    });
-
-    // Закрытие по Escape
-    document.addEventListener('keydown', function(e) {
-        if (e.key === 'Escape') {
-            closeEventForm();
-            closeScheduleModal();
-            closeTimezoneModal();
-        }
-    });
-
-
-
-</script>
+<!-- JavaScript код перенесен в отдельный файл script.js -->

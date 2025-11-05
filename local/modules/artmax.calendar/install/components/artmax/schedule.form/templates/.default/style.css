@@ -1,0 +1,423 @@
+/* ArtMax Schedule Form Component Styles */
+.artmax-event-form {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    background: #ffffff;
+    color: #333333;
+    line-height: 1.4;
+    padding: 12px;
+    margin: 15px;
+    border-radius: 12px;
+    max-width: 100%;
+}
+
+/* Секция названия расписания - большое поле сверху */
+.artmax-event-title-section {
+    margin-bottom: 24px;
+}
+
+.artmax-title-label {
+    position: absolute;
+    left: -10000px;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+}
+
+.artmax-title-input {
+    width: 100%;
+    padding: 16px 20px;
+    border: 0;
+    border-bottom: 1px solid silver;
+    border-radius: 0;
+    font-size: 18px;
+    font-weight: 500;
+    color: #111827;
+    background-color: #ffffff;
+    transition: border-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+    box-sizing: border-box;
+    height: 56px;
+}
+
+.artmax-title-input:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.artmax-title-input::placeholder {
+    color: #9ca3af;
+    font-weight: 400;
+}
+
+/* Блок настроек */
+.artmax-settings-block {
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 24px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    background: var(--ui-color-palette-gray-03, #f8f9fa);
+}
+
+/* Form Fields - Two Column Layout */
+.artmax-form-field,
+.artmax-form-row {
+    display: flex !important;
+    align-items: flex-start;
+    margin-bottom: 16px;
+    padding-bottom: 16px;
+    gap: 16px;
+    min-height: 32px;
+    flex-direction: row !important;
+    border-bottom: 1px solid #e6e9ec;
+}
+
+.artmax-form-row:last-child,
+.artmax-form-field:last-child {
+    border: 0 !important;
+}
+
+.artmax-field-label {
+    flex: 0 0 200px !important;
+    font-size: 13px;
+    font-weight: 400;
+    color: #525c69;
+    margin: 0 !important;
+    padding-top: 6px;
+    line-height: 1.3;
+    text-align: left !important;
+    width: 200px !important;
+    min-width: 200px !important;
+    max-width: 200px !important;
+}
+
+.artmax-field-content {
+    flex: 1;
+    min-width: 0;
+}
+
+/* Специальная раскладка для даты и времени в одной строке */
+.artmax-form-row .artmax-field-content {
+    display: flex !important;
+    gap: 12px;
+    flex-direction: row !important;
+}
+
+.artmax-field-half {
+    flex: 1 !important;
+    min-width: 0;
+    display: flex !important;
+    flex-direction: column !important;
+}
+
+.artmax-input,
+.artmax-select,
+.artmax-textarea {
+    width: 100%;
+    padding: 6px 8px;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+    font-size: 13px;
+    line-height: 1.4;
+    color: #333333;
+    background-color: #ffffff;
+    transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+    box-sizing: border-box;
+    height: 32px;
+}
+
+.artmax-textarea {
+    height: auto;
+    min-height: 60px;
+    resize: vertical;
+}
+
+.artmax-field-error {
+    font-size: 12px;
+    color: #ff5752;
+    margin-top: 4px;
+    line-height: 1.3;
+}
+
+.artmax-required {
+    color: #ff5752;
+    margin-left: 2px;
+}
+
+.artmax-input:focus,
+.artmax-select:focus,
+.artmax-textarea:focus {
+    outline: none;
+    border-color: #2fc6f6;
+    box-shadow: 0 0 0 2px rgba(47, 198, 246, 0.1);
+}
+
+.artmax-input::placeholder,
+.artmax-textarea::placeholder {
+    color: #9ca3af;
+}
+
+/* Checkbox Styles */
+.artmax-checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    user-select: none;
+}
+
+.artmax-checkbox {
+    width: 18px;
+    height: 18px;
+    margin: 0;
+    cursor: pointer;
+    accent-color: #2fc6f6;
+}
+
+.artmax-checkbox-text {
+    font-size: 13px;
+    color: #525c69;
+}
+
+/* Weekday Checkboxes */
+.weekday-checkboxes {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.weekday-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    user-select: none;
+    padding: 4px 8px;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+    transition: all 0.15s ease-in-out;
+}
+
+.weekday-checkbox:hover {
+    border-color: #2fc6f6;
+    background-color: #f0f9ff;
+}
+
+.weekday-checkbox input[type="checkbox"]:checked + span {
+    font-weight: 600;
+    color: #2fc6f6;
+}
+
+.weekday-checkbox input[type="checkbox"]:checked ~ span {
+    font-weight: 600;
+}
+
+/* Radio Group */
+.radio-group {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.radio-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    user-select: none;
+    font-size: 13px;
+}
+
+.radio-label input[type="radio"] {
+    width: 18px;
+    height: 18px;
+    margin: 0;
+    cursor: pointer;
+    accent-color: #2fc6f6;
+}
+
+.repeat-count-input {
+    width: 60px;
+    padding: 4px 8px;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+    font-size: 13px;
+    margin: 0 4px;
+}
+
+.repeat-end-date-input {
+    width: 150px;
+    margin-left: 8px;
+}
+
+.checkbox-inline {
+    margin-top: 8px;
+    padding-left: 26px;
+}
+
+.checkbox-label-small {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    user-select: none;
+    font-size: 12px;
+}
+
+.checkbox-label-small input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    margin: 0;
+    cursor: pointer;
+    accent-color: #2fc6f6;
+}
+
+/* Repeat Fields */
+.repeat-fields {
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid #e6e9ec;
+}
+
+/* Color Picker */
+.artmax-color-picker {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.artmax-color-presets {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.artmax-color-preset {
+    width: 24px;
+    height: 24px;
+    border: 1px solid transparent;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: all 0.15s ease-in-out;
+    position: relative;
+}
+
+.artmax-color-preset:hover {
+    transform: scale(1.1);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+}
+
+.artmax-color-preset.active {
+    border-color: #333333;
+    box-shadow: 0 0 0 1px rgba(47, 198, 246, 0.5);
+}
+
+.artmax-color-preset.active::after {
+    content: '✓';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: #ffffff;
+    font-size: 12px;
+    font-weight: bold;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+.artmax-custom-color {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.artmax-custom-color-label {
+    font-size: 13px;
+    color: #525c69;
+    margin: 0;
+}
+
+#custom-color-input {
+    width: 32px;
+    height: 24px;
+    border: 1px solid #d1d5db;
+    border-radius: 3px;
+    cursor: pointer;
+    padding: 0;
+}
+
+/* Адаптация для SidePanel */
+.artmax-sidepanel-body {
+    margin: 0;
+    padding: 20px;
+    background: #f8fafc;
+    min-height: 100vh;
+    box-sizing: border-box;
+}
+
+.artmax-sidepanel-content {
+    max-width: 100%;
+    margin: 0 auto;
+}
+
+/* Стили для SidePanel контейнера */
+.side-panel-content-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 100vh;
+}
+
+/* Стили для Bitrix кнопок в SidePanel */
+.webform-buttons.calendar-form-buttons-fixed {
+    display: flex;
+    gap: 12px;
+    justify-content: flex-start;
+    margin-top: auto;
+    padding: 20px;
+    border-top: 1px solid #e5e7eb;
+    background: #ffffff;
+    position: sticky;
+    bottom: 0;
+    z-index: 10;
+}
+
+/* Success/Error States */
+.artmax-form-field.error .artmax-input,
+.artmax-form-field.error .artmax-select,
+.artmax-form-field.error .artmax-textarea {
+    border-color: #ff5752;
+}
+
+.artmax-form-field.error .artmax-field-error {
+    display: block;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .artmax-form-field,
+    .artmax-form-row {
+        flex-direction: column;
+        gap: 8px;
+    }
+    
+    .artmax-field-label {
+        flex: none;
+        text-align: left;
+        padding-top: 0;
+    }
+    
+    .artmax-form-row .artmax-field-content {
+        flex-direction: column;
+        gap: 8px;
+    }
+    
+    .artmax-field-half {
+        flex: none;
+    }
+    
+    .weekday-checkboxes {
+        width: 100%;
+    }
+}
+

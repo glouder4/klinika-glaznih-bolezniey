@@ -4846,6 +4846,30 @@ input:checked + .toggle-slider:before {
     color: #2196f3;
 }
 
+.journal-btn {
+    background: none;
+    color: #6c757d;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    font-weight: 400;
+    transition: all 0.3s ease;
+    text-decoration: underline;
+    text-decoration-style: dashed;
+    text-align: left;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    margin-bottom: 8px;
+    width: 100%;
+    justify-content: flex-start;
+}
+
+.journal-btn:hover {
+    color: #9c27b0;
+}
+
 /* Компактные стили для формы расписания */
 .schedule-form {
     padding: 8px 0 !important;

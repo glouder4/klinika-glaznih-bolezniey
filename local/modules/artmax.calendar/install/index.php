@@ -113,9 +113,28 @@ class artmax_calendar extends CModule
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
         ";
         
+        // Таблица журнала событий
+        $sqlEventJournal = "
+        CREATE TABLE IF NOT EXISTS artmax_calendar_event_journal (
+            ID INT(11) NOT NULL AUTO_INCREMENT,
+            EVENT_ID INT(11) NOT NULL COMMENT 'ID события',
+            ACTION VARCHAR(100) NOT NULL COMMENT 'Действие (created, updated, deleted, moved, etc.)',
+            ACTION_DATE DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'Дата и время действия',
+            INITIATOR VARCHAR(255) DEFAULT NULL COMMENT 'Название класса и функции инициатора',
+            USER_ID INT(11) DEFAULT NULL COMMENT 'ID пользователя, выполнившего действие',
+            PRIMARY KEY (ID),
+            KEY EVENT_ID (EVENT_ID),
+            KEY ACTION_DATE (ACTION_DATE),
+            KEY USER_ID (USER_ID),
+            KEY ACTION (ACTION),
+            FOREIGN KEY (EVENT_ID) REFERENCES artmax_calendar_events(ID) ON DELETE CASCADE ON UPDATE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        ";
+        
         $connection->query($sqlEvents);
         $connection->query($sqlBranches);
         $connection->query($sqlBranchesSettings);
+        $connection->query($sqlEventJournal);
         
         // Создаем первый филиал по умолчанию
         $sqlDefaultBranch = "
@@ -198,6 +217,7 @@ class artmax_calendar extends CModule
     {
         // Удаление таблиц базы данных
         $connection = \Bitrix\Main\Application::getConnection();
+        $connection->query("DROP TABLE IF EXISTS artmax_calendar_event_journal");
         $connection->query("DROP TABLE IF EXISTS artmax_calendar_branch_employees");
         $connection->query("DROP TABLE IF EXISTS artmax_calendar_events");
         $connection->query("DROP TABLE IF EXISTS artmax_calendar_branches");

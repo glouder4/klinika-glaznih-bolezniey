@@ -1382,6 +1382,28 @@
         }
     }
 
+    function openJournalSidePanel() {
+        // Получаем ID текущего события (если есть)
+        let eventId = getCurrentEventId();
+        
+        const url = `/local/components/artmax/journal/page.php?IFRAME=Y&IFRAME_TYPE=SIDE_SLIDER${eventId ? '&EVENT_ID=' + eventId : ''}`;
+        
+        if (typeof BX !== 'undefined' && BX.SidePanel) {
+            BX.SidePanel.Instance.open(url, {
+                title: 'Журнал',
+                width: 800,
+                cacheable: false,
+                events: {
+                    onClose: function() {
+                        // Логика при закрытии будет реализована позже
+                    }
+                }
+            });
+        } else {
+            window.open(url, '_blank', 'width=800,height=600,scrollbars=yes,resizable=yes');
+        }
+    }
+
     function deleteEventFromSidePanel() {
         if (window.currentEventId) {
             if (confirm('Вы уверены, что хотите удалить это событие?')) {
@@ -5018,6 +5040,7 @@
     window.clearAllEvents = clearAllEvents;
     window.showEventSidePanel = showEventSidePanel;
     window.closeEventSidePanel = closeEventSidePanel;
+    window.openJournalSidePanel = openJournalSidePanel;
     window.openEditEventModalFromSidePanel = openEditEventModalFromSidePanel;
     window.deleteEventFromSidePanel = deleteEventFromSidePanel;
 

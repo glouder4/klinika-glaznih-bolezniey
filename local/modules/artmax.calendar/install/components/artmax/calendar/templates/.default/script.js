@@ -93,14 +93,235 @@
         // Инициализация модального окна клиента
         initClientModal();
         
-        // Обработка формы создания филиала
-        const addBranchForm = document.getElementById('add-branch-form');
-        if (addBranchForm) {
-            addBranchForm.addEventListener('submit', handleAddBranchSubmit);
-        }
+        // Обработка формы создания филиала больше не нужна,
+        // так как форма теперь в отдельном компоненте branch.form
+        
+        // Инициализируем селектор месяца
+        window.initMonthSelector();
+        
+        // Инициализация обработчиков SidePanel
+        initSidePanelHandlers();
+        
+        // Инициализация обработчиков postMessage для SidePanel
+        initPostMessageHandlers();
         
         // НЕ загружаем события при первой загрузке - они уже загружены сервером
         // refreshCalendarEvents() будет вызываться только при необходимости (изменения, обновления)
+    }
+
+    // Инициализация обработчиков SidePanel
+    function initSidePanelHandlers() {
+        if (typeof BX !== 'undefined' && BX.SidePanel) {
+            // Обработчик события закрытия SidePanel
+            BX.addCustomEvent('SidePanel.Slider:onClose', function(event) {
+                console.log('SidePanel closed, refreshing calendar...');
+                // Обновляем календарь после закрытия SidePanel
+                setTimeout(() => {
+                    refreshCalendarEvents();
+                }, 100);
+            });
+            
+            // Обработчик события успешного создания события
+            BX.addCustomEvent('Calendar:EventCreated', function(event) {
+                console.log('Event created, refreshing calendar...');
+                refreshCalendarEvents();
+            });
+        }
+    }
+
+    // Инициализация обработчиков postMessage для SidePanel
+    function initPostMessageHandlers() {
+        window.addEventListener('message', function(event) {
+            // Проверяем, что сообщение от нашего SidePanel
+            if (event.data && typeof event.data === 'object') {
+                switch (event.data.type) {
+                    case 'calendar:eventCreated':
+                        console.log('Event created via postMessage:', event.data);
+                        // Обновляем календарь после создания события
+                        setTimeout(() => {
+                            refreshCalendarEvents();
+                        }, 100);
+                        break;
+                    
+                    case 'calendar:scheduleCreated':
+                        console.log('Schedule created via postMessage:', event.data);
+                        // Обновляем календарь после создания расписания
+                        setTimeout(() => {
+                            refreshCalendarEvents();
+                        }, 100);
+                        break;
+                    
+                    case 'calendar:branchCreated':
+                        console.log('Branch created via postMessage:', event.data);
+                        // Перезагружаем страницу для обновления переключателя филиалов
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 500);
+                        break;
+                    
+                    case 'calendar:branchSettingsSaved':
+                        console.log('Branch settings saved via postMessage:', event.data);
+                        // Перезагружаем страницу для обновления названия филиала и настроек
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 500);
+                        break;
+                    
+                    case 'calendar:contactSaved':
+                        console.log('Contact saved via postMessage:', event.data);
+                        // Обновляем календарь и боковую панель при необходимости
+                        setTimeout(() => {
+                            if (typeof refreshCalendarEvents === 'function') {
+                                refreshCalendarEvents();
+                            }
+                            // Обновляем информацию о клиенте в боковой панели если она открыта
+                            if (event.data && event.data.contactId && event.data.eventId) {
+                                const currentEventId = getCurrentEventId();
+                                if (currentEventId && String(currentEventId) === String(event.data.eventId)) {
+                                    // Боковая панель открыта для этого события, обновляем данные
+                                    if (typeof loadEventContact === 'function') {
+                                        loadEventContact(event.data.contactId);
+                                    }
+                                }
+                            }
+                        }, 100);
+                        break;
+                    
+                    case 'calendar:getCurrentEventId':
+                        // Отправляем текущий eventId обратно
+                        if (window.postMessage && event.source) {
+                            const currentEventId = getCurrentEventId();
+                            event.source.postMessage({
+                                type: 'calendar:currentEventId',
+                                eventId: currentEventId
+                            }, event.origin);
+                        }
+                        break;
+                    
+                    case 'calendar:dealSaved':
+                        console.log('Deal saved via postMessage:', event.data);
+                        // Обновляем календарь
+                        setTimeout(() => {
+                            if (typeof refreshCalendarEvents === 'function') {
+                                refreshCalendarEvents();
+                            }
+                            // Обновляем информацию о сделке в боковой панели если она открыта
+                            if (event.data && event.data.dealId && event.data.eventId) {
+                                console.log('calendar:dealSaved: Проверяем обновление deal-status');
+                                // Проверяем, действительно ли боковая панель события открыта
+                                const eventSidePanel = document.getElementById('eventSidePanel');
+                                const isSidePanelOpen = eventSidePanel && eventSidePanel.classList.contains('open') && eventSidePanel.style.display !== 'none';
+                                
+                                console.log('calendar:dealSaved: eventSidePanel существует?', !!eventSidePanel);
+                                console.log('calendar:dealSaved: isSidePanelOpen?', isSidePanelOpen);
+                                
+                                if (isSidePanelOpen) {
+                                    const currentEventId = getCurrentEventId();
+                                    console.log('calendar:dealSaved: currentEventId =', currentEventId, 'event.data.eventId =', event.data.eventId);
+                                    
+                                    if (currentEventId && String(currentEventId) === String(event.data.eventId)) {
+                                        // Боковая панель открыта для этого события, просто обновляем данные о сделке
+                                        // Используем данные, которые уже есть в postMessage
+                                        console.log('calendar:dealSaved: Вызываем updateDealInfoInSidePanel');
+                                        console.log('calendar:dealSaved: dealTitle =', event.data.dealTitle);
+                                        
+                                        // Проверяем наличие элемента перед обновлением
+                                        const dealStatusElement = document.getElementById('deal-status');
+                                        console.log('calendar:dealSaved: deal-status элемент найден?', !!dealStatusElement);
+                                        
+                                        if (typeof updateDealInfoInSidePanel === 'function') {
+                                            updateDealInfoInSidePanel({
+                                                title: event.data.dealTitle || 'Сделка #' + event.data.dealId
+                                            });
+                                        } else {
+                                            console.error('calendar:dealSaved: функция updateDealInfoInSidePanel не найдена!');
+                                            // Fallback - обновляем напрямую
+                                            if (dealStatusElement) {
+                                                dealStatusElement.textContent = event.data.dealTitle || 'Сделка #' + event.data.dealId;
+                                                dealStatusElement.style.color = '#28a745';
+                                                console.log('calendar:dealSaved: deal-status обновлен напрямую');
+                                            }
+                                        }
+                                    } else {
+                                        console.log('calendar:dealSaved: ID события не совпадают, пропускаем обновление');
+                                    }
+                                } else {
+                                    console.log('calendar:dealSaved: Боковая панель не открыта, пропускаем обновление');
+                                }
+                            } else {
+                                console.log('calendar:dealSaved: Недостаточно данных для обновления');
+                            }
+                        }, 100);
+                        break;
+                    
+                    case 'calendar:eventUpdated':
+                        console.log('Event updated via postMessage:', event.data);
+                        // Обновляем календарь после обновления события
+                        setTimeout(() => {
+                            if (typeof refreshCalendarEvents === 'function') {
+                                refreshCalendarEvents();
+                            }
+                        }, 100);
+                        break;
+                    
+                    case 'calendar:eventDeleted':
+                        console.log('Event deleted via postMessage:', event.data);
+                        // Обновляем календарь после удаления события
+                        setTimeout(() => {
+                            if (typeof refreshCalendarEvents === 'function') {
+                                refreshCalendarEvents();
+                            }
+                            // Закрываем боковую панель если она открыта для удаленного события
+                            if (typeof closeEventSidePanel === 'function') {
+                                closeEventSidePanel();
+                            }
+                        }, 100);
+                        break;
+                    
+                    case 'calendar:employeeAssigned':
+                        console.log('Employee assigned via postMessage:', event.data);
+                        setTimeout(() => {
+                            if (typeof refreshCalendarEvents === 'function') {
+                                refreshCalendarEvents();
+                            }
+                            if (event.data && event.data.employeeId && event.data.eventId) {
+                                const currentEventId = getCurrentEventId();
+                                if (currentEventId && String(currentEventId) === String(event.data.eventId)) {
+                                    // Обновляем карточку врача в боковой панели
+                                    updateEmployeeCard(event.data.employeeId, event.data.employeeName);
+                                }
+                            }
+                        }, 100);
+                        break;
+                    
+                    case 'calendar:eventMoved':
+                        console.log('Event moved via postMessage:', event.data);
+                        setTimeout(() => {
+                            if (typeof refreshCalendarEvents === 'function') {
+                                refreshCalendarEvents();
+                            }
+                            // Закрываем боковую панель события, если она открыта для перенесенного события
+                            if (event.data && event.data.eventId) {
+                                const currentEventId = getCurrentEventId();
+                                if (currentEventId && String(currentEventId) === String(event.data.eventId)) {
+                                    if (typeof closeEventSidePanel === 'function') {
+                                        closeEventSidePanel();
+                                    }
+                                }
+                            }
+                        }, 100);
+                        break;
+                        
+                    case 'calendar:closePanel':
+                        console.log('Close panel via postMessage');
+                        // Закрываем SidePanel
+                        if (typeof BX !== 'undefined' && BX.SidePanel) {
+                            BX.SidePanel.Instance.close();
+                        }
+                        break;
+                }
+            }
+        });
     }
 
     function initCalendarCells() {
@@ -337,47 +558,35 @@
 
     // Функции для работы с календарем
     function openEventForm(date) {
-        const modal = document.getElementById('eventFormModal');
-        if (modal) {
-            // Устанавливаем выбранную дату
-            const dateInput = document.getElementById('event-date');
-            if (dateInput) {
-                dateInput.value = date;
-            }
-
-            const timeSelect = document.getElementById('event-time');
-            if (timeSelect) {
-                timeSelect.value = '09:00';
-            }
-
-            const durationSelect = document.getElementById('event-duration');
-            if (durationSelect) {
-                durationSelect.value = '30';
-            }
-
-            modal.style.display = 'block';
-
-            // Фокус на первое поле
-            setTimeout(() => {
-                const titleInput = document.getElementById('event-title');
-                if (titleInput) {
-                    titleInput.focus();
+        // Получаем ID текущего филиала
+        const branchId = document.querySelector('.artmax-calendar').getAttribute('data-branch-id') || '1';
+        
+        // Формируем URL для SidePanel с компонентом event.form
+        const url = `/local/components/artmax/event.form/page.php?BRANCH_ID=${branchId}&DATE=${date}&IFRAME=Y&IFRAME_TYPE=SIDE_SLIDER`;
+        
+        // Открываем SidePanel
+        if (typeof BX !== 'undefined' && BX.SidePanel) {
+            BX.SidePanel.Instance.open(url, {
+                title: 'Создание события',
+                width: 600,
+                cacheable: false,
+                events: {
+                    onClose: function() {
+                        // Обновляем календарь после закрытия SidePanel
+                        refreshCalendarEvents();
+                    }
                 }
-            }, 100);
+            });
+        } else {
+            // Fallback для случаев, когда SidePanel недоступен
+            window.open(url, '_blank', 'width=600,height=800,scrollbars=yes,resizable=yes');
         }
     }
 
     function closeEventForm() {
-        const modal = document.getElementById('eventFormModal');
-        if (modal) {
-            modal.style.display = 'none';
-
-            // Сбрасываем форму
-            const form = document.getElementById('add-event-form');
-            if (form) {
-                form.reset();
-            }
-        }
+        // Эта функция больше не используется, так как форма теперь открывается в SidePanel
+        // Оставляем для совместимости с существующим кодом
+        console.log('closeEventForm() called - no longer needed with SidePanel');
     }
 
     function closeEditEventModal() {
@@ -1173,6 +1382,28 @@
         }
     }
 
+    function openJournalSidePanel() {
+        // Получаем ID текущего события (если есть)
+        let eventId = getCurrentEventId();
+        
+        const url = `/local/components/artmax/journal/page.php?IFRAME=Y&IFRAME_TYPE=SIDE_SLIDER${eventId ? '&EVENT_ID=' + eventId : ''}`;
+        
+        if (typeof BX !== 'undefined' && BX.SidePanel) {
+            BX.SidePanel.Instance.open(url, {
+                title: 'Журнал',
+                width: 800,
+                cacheable: false,
+                events: {
+                    onClose: function() {
+                        // Логика при закрытии будет реализована позже
+                    }
+                }
+            });
+        } else {
+            window.open(url, '_blank', 'width=800,height=600,scrollbars=yes,resizable=yes');
+        }
+    }
+
     function deleteEventFromSidePanel() {
         if (window.currentEventId) {
             if (confirm('Вы уверены, что хотите удалить это событие?')) {
@@ -1183,13 +1414,27 @@
     }
 
     function openClientModal() {
-        const modal = document.getElementById('clientModal');
-        if (modal) {
-            modal.style.display = 'flex';
-            setTimeout(() => {
-                modal.classList.add('show');
-            }, 10);
-            document.body.style.overflow = 'hidden';
+        // Получаем ID текущего события (если есть)
+        let eventId = getCurrentEventId();
+        
+        const url = `/local/components/artmax/client.form/page.php?IFRAME=Y&IFRAME_TYPE=SIDE_SLIDER${eventId ? '&EVENT_ID=' + eventId : ''}`;
+        
+        if (typeof BX !== 'undefined' && BX.SidePanel) {
+            BX.SidePanel.Instance.open(url, {
+                title: 'Добавить или выбрать клиента',
+                width: 600,
+                cacheable: false,
+                events: {
+                    onClose: function() {
+                        // Обновляем календарь при необходимости
+                        if (typeof refreshCalendarEvents === 'function') {
+                            refreshCalendarEvents();
+                        }
+                    }
+                }
+            });
+        } else {
+            window.open(url, '_blank', 'width=600,height=800,scrollbars=yes,resizable=yes');
         }
     }
 
@@ -1233,286 +1478,26 @@
     };
 
     function openEditEventModal(eventId) {
-        // Получаем данные события по AJAX
-        const csrfToken = getCSRFToken();
-        fetch('/local/components/artmax/calendar/ajax.php', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-                'X-Requested-With': 'XMLHttpRequest',
-                'X-Bitrix-Csrf-Token': csrfToken
-            },
-            body: new URLSearchParams({
-                action: 'getEvent',
-                eventId: eventId,
-                sessid: csrfToken
-            })
-        })
-        .then(response => response.json())
-        .then(data => {
-            console.log('showEventDetails: Получены данные события:', data);
-            
-            if (data.success && data.event) {
-                const event = data.event;
-                console.log('showEventDetails: Данные события для заполнения формы:', event);
-                console.log('showEventDetails: DATE_FROM:', event.DATE_FROM, 'тип:', typeof event.DATE_FROM);
-                console.log('showEventDetails: DATE_TO:', event.DATE_TO, 'тип:', typeof event.DATE_TO);
-                console.log('showEventDetails: Длина DATE_FROM:', event.DATE_FROM ? event.DATE_FROM.length : 'undefined');
-                console.log('showEventDetails: Длина DATE_TO:', event.DATE_TO ? event.DATE_TO.length : 'undefined');
-                
-                // Заполняем форму данными события
-                const titleInput = document.getElementById('edit-event-title');
-                const dateInput = document.getElementById('edit-event-date');
-                const timeInput = document.getElementById('edit-event-time');
-                const durationInput = document.getElementById('edit-event-duration');
-                const descriptionInput = document.getElementById('edit-event-description');
-                const colorInput = document.getElementById('edit-selected-color');
-                const employeeSelect = document.getElementById('edit-event-employee');
-                
-                // Проверяем, что все поля найдены
-                console.log('showEventDetails: Заполняем форму события:', event.TITLE);
-                console.log('showEventDetails: Найденные поля:');
-                console.log('  - titleInput:', titleInput);
-                console.log('  - dateInput:', dateInput);
-                console.log('  - timeInput:', timeInput);
-                console.log('  - durationInput:', durationInput);
-                console.log('  - descriptionInput:', descriptionInput);
-                console.log('  - colorInput:', colorInput);
-                
-                if (titleInput) titleInput.value = event.TITLE || '';
-                if (dateInput) {
-                    try {
-                        console.log('showEventDetails: Извлекаем дату из DATE_FROM:', event.DATE_FROM);
-                        
-                        // Извлекаем дату из строки, избегая проблем с часовыми поясами
-                        let dateMatch;
-                        let dateSet = false;
-                        
-                        if (event.DATE_FROM.includes(' ')) {
-                            // Проверяем российский формат: "04.08.2025 12:00:00"
-                            dateMatch = event.DATE_FROM.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})/);
-                            if (dateMatch) {
-                                console.log('showEventDetails: Найден российский формат даты:', dateMatch);
-                                const [, day, month, year] = dateMatch;
-                                const formattedDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
-                                console.log('showEventDetails: Преобразованная дата:', formattedDate);
-                                dateInput.value = formattedDate;
-                                console.log('showEventDetails: Дата установлена из российского формата:', dateInput.value);
-                                dateSet = true;
-                            } else {
-                                // Проверяем стандартный формат: "2025-08-04 12:00:00"
-                                dateMatch = event.DATE_FROM.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
-                                console.log('showEventDetails: Ищем дату с пробелом, результат:', dateMatch);
-                            }
-                        } else {
-                            // Если дата без пробела, проверяем ISO формат
-                            dateMatch = event.DATE_FROM.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
-                            console.log('showEventDetails: Ищем дату без пробела, результат:', dateMatch);
-                        }
-                        
-                        if (!dateSet && dateMatch) {
-                            const year = dateMatch[1];
-                            const month = dateMatch[2].padStart(2, '0');
-                            const day = dateMatch[3].padStart(2, '0');
-                            dateInput.value = `${year}-${month}-${day}`;
-                            console.log('showEventDetails: Дата извлечена:', dateInput.value);
-                            dateSet = true;
-                        }
-                        
-                        if (!dateSet) {
-                            console.error('showEventDetails: Не удалось извлечь дату из строки:', event.DATE_FROM);
-                            // Устанавливаем текущую дату без конвертации в UTC
-                            const today = new Date();
-                            const year = today.getFullYear();
-                            const month = String(today.getMonth() + 1).padStart(2, '0');
-                            const day = String(today.getDate()).padStart(2, '0');
-                            dateInput.value = `${year}-${month}-${day}`;
-                            console.log('showEventDetails: Установлена текущая дата:', dateInput.value);
-                        }
-                    } catch (e) {
-                        console.error('showEventDetails: Ошибка при обработке даты DATE_FROM:', e);
-                        // Устанавливаем текущую дату без конвертации в UTC
-                        const today = new Date();
-                        const year = today.getFullYear();
-                        const month = String(today.getMonth() + 1).padStart(2, '0');
-                        const day = String(today.getDate()).padStart(2, '0');
-                        dateInput.value = `${year}-${month}-${day}`;
-                    }
-                    
-                    // Логируем финальное значение поля даты
-                    console.log('showEventDetails: Финальное значение поля даты:', dateInput.value);
-                }
-                if (timeInput) {
-                    try {
-                        console.log('showEventDetails: Извлекаем время из DATE_FROM:', event.DATE_FROM);
-                        
-                        // Извлекаем время из строки DATE_FROM, избегая проблем с часовыми поясами
-                        let timeMatch;
-                        if (event.DATE_FROM.includes(' ')) {
-                            // Если дата в формате "2025-08-04 12:00:00"
-                            timeMatch = event.DATE_FROM.match(/\s+(\d{1,2}):(\d{1,2}):(\d{1,2})$/);
-                            console.log('showEventDetails: Ищем время с пробелом, результат:', timeMatch);
-                        } else {
-                            // Если дата в ISO формате (с T)
-                            timeMatch = event.DATE_FROM.match(/T(\d{1,2}):(\d{1,2}):(\d{1,2})/);
-                            console.log('showEventDetails: Ищем время с T, результат:', timeMatch);
-                        }
-                        
-                        if (timeMatch) {
-                            const hours = timeMatch[1].padStart(2, '0');
-                            const minutes = timeMatch[2].padStart(2, '0');
-                            timeInput.value = `${hours}:${minutes}`;
-                            console.log('showEventDetails: Время установлено:', timeInput.value);
-                        } else {
-                            console.error('showEventDetails: Не удалось извлечь время из строки:', event.DATE_FROM);
-                            timeInput.value = '09:00';
-                        }
-                    } catch (e) {
-                        console.error('showEventDetails: Ошибка при обработке времени DATE_FROM:', e);
-                        timeInput.value = '09:00';
-                    }
-                }
-                if (durationInput) {
-                    try {
-                        console.log('showEventDetails: Рассчитываем длительность из DATE_FROM:', event.DATE_FROM, 'и DATE_TO:', event.DATE_TO);
-                        
-                        // Извлекаем время начала и окончания для расчета длительности
-                        let startTimeMatch, endTimeMatch;
-                        
-                        if (event.DATE_FROM.includes(' ')) {
-                            // Если дата в формате "2025-08-04 12:00:00"
-                            startTimeMatch = event.DATE_FROM.match(/\s+(\d{1,2}):(\d{1,2}):(\d{1,2})$/);
-                            console.log('showEventDetails: Время начала с пробелом:', startTimeMatch);
-                        } else {
-                            // Если дата в ISO формате (с T)
-                            startTimeMatch = event.DATE_FROM.match(/T(\d{1,2}):(\d{1,2}):(\d{1,2})/);
-                            console.log('showEventDetails: Время начала с T:', startTimeMatch);
-                        }
-                        
-                        if (event.DATE_TO.includes(' ')) {
-                            // Если дата в формате "2025-08-04 12:00:00"
-                            endTimeMatch = event.DATE_TO.match(/\s+(\d{1,2}):(\d{1,2}):(\d{1,2})$/);
-                            console.log('showEventDetails: Время окончания с пробелом:', endTimeMatch);
-                        } else {
-                            // Если дата в ISO формате (с T)
-                            endTimeMatch = event.DATE_TO.match(/T(\d{1,2}):(\d{1,2}):(\d{1,2})/);
-                            console.log('showEventDetails: Время окончания с T:', endTimeMatch);
-                        }
-                        
-                        if (startTimeMatch && endTimeMatch) {
-                            const startHours = parseInt(startTimeMatch[1]);
-                            const startMinutes = parseInt(startTimeMatch[2]);
-                            const endHours = parseInt(endTimeMatch[1]);
-                            const endMinutes = parseInt(endTimeMatch[2]);
-                            
-                            console.log('showEventDetails: Время начала:', startHours + ':' + startMinutes, 'Время окончания:', endHours + ':' + endMinutes);
-                            
-                            // Рассчитываем разницу в минутах
-                            const startTotalMinutes = startHours * 60 + startMinutes;
-                            const endTotalMinutes = endHours * 60 + endMinutes;
-                            const durationMinutes = endTotalMinutes - startTotalMinutes;
-                            
-                            if (durationMinutes > 0) {
-                                durationInput.value = durationMinutes;
-                                console.log('showEventDetails: Длительность рассчитана:', durationMinutes, 'минут');
-                            } else {
-                                console.error('showEventDetails: Некорректная длительность:', durationMinutes);
-                                durationInput.value = '30';
-                            }
-                        } else {
-                            console.error('showEventDetails: Не удалось извлечь время для расчета длительности');
-                            durationInput.value = '30';
-                        }
-                    } catch (e) {
-                        console.error('showEventDetails: Ошибка при расчете длительности:', e);
-                        durationInput.value = '30';
-                    }
-                }
-                if (descriptionInput) descriptionInput.value = event.DESCRIPTION || '';
-                if (employeeSelect) {
-                    setSelectedEmployee('edit-event-employee', event.EMPLOYEE_ID);
-                }
-                if (colorInput) {
-                    const eventColor = event.EVENT_COLOR || '#3498db';
-                    console.log('showEventDetails: Устанавливаем цвет события:', eventColor);
-                    colorInput.value = eventColor;
-                    
-                    // Обновляем цветовой пикер
-                    const customColorInput = document.getElementById('edit-custom-color-input');
-                    const selectedColorInput = document.getElementById('edit-selected-color');
-                    
-                    console.log('showEventDetails: Найденные элементы цветового пикера:');
-                    console.log('  - customColorInput:', customColorInput);
-                    console.log('  - selectedColorInput:', selectedColorInput);
-                    
-                    if (customColorInput) {
-                        customColorInput.value = eventColor;
-                        console.log('showEventDetails: Установлен customColorInput:', customColorInput.value);
-                    }
-                    if (selectedColorInput) {
-                        selectedColorInput.value = eventColor;
-                        console.log('showEventDetails: Установлен selectedColorInput:', selectedColorInput.value);
-                    }
-                    
-                    // Убираем активный класс со всех пресетов
-                    const editModal = document.getElementById('editEventModal');
-                    if (editModal) {
-                        const colorPresets = editModal.querySelectorAll('.color-preset');
-                        console.log('showEventDetails: Найдено пресетов цветов:', colorPresets.length);
-                        
-                        colorPresets.forEach(preset => {
-                            preset.classList.remove('active');
-                        });
-                        
-                        // Находим и активируем соответствующий пресет
-                        const matchingPreset = editModal.querySelector(`[data-color="${eventColor}"]`);
-                        console.log('showEventDetails: Найденный пресет для цвета', eventColor, ':', matchingPreset);
-                        
-                        if (matchingPreset) {
-                            matchingPreset.classList.add('active');
-                            console.log('showEventDetails: Активирован пресет цвета:', eventColor);
-                        } else {
-                            console.log('showEventDetails: Пресет для цвета', eventColor, 'не найден, активируем кастомный цвет');
-                            // Если пресет не найден, активируем кастомный цвет
-                            if (customColorInput) {
-                                customColorInput.focus();
-                            }
+        // Открываем форму редактирования в SidePanel
+        const url = `/local/components/artmax/event.edit/page.php?EVENT_ID=${eventId}&IFRAME=Y&IFRAME_TYPE=SIDE_SLIDER`;
+        
+        if (typeof BX !== 'undefined' && BX.SidePanel) {
+            BX.SidePanel.Instance.open(url, {
+                title: 'Редактировать событие',
+                width: 600,
+                cacheable: false,
+                events: {
+                    onClose: function() {
+                        // Обновляем календарь при закрытии
+                        if (typeof refreshCalendarEvents === 'function') {
+                            refreshCalendarEvents();
                         }
                     }
-                } else {
-                    console.error('showEventDetails: Поле colorInput не найдено');
                 }
-                
-                // Устанавливаем ID события для формы
-                const editForm = document.getElementById('edit-event-form');
-                if (editForm) {
-                    editForm.setAttribute('data-event-id', eventId);
-                }
-                
-                // Показываем модальное окно
-                const modal = document.getElementById('editEventModal');
-                if (modal) {
-                    modal.style.display = 'block';
-                    document.body.style.overflow = 'hidden';
-                }
-                
-                // Обновляем занятые временные слоты
-                updateOccupiedTimeSlots(event.EMPLOYEE_ID, eventId);
-                
-                // Добавляем обработчик изменения даты
-                if (dateInput) {
-                    dateInput.addEventListener('change', () => {
-                        updateOccupiedTimeSlots(event.EMPLOYEE_ID, eventId);
-                    });
-                }
-            } else {
-                showNotification('Ошибка при загрузке события', 'error');
-            }
-        })
-        .catch(error => {
-            console.error('Ошибка при загрузке события:', error);
-            showNotification('Ошибка при загрузке события', 'error');
-        });
+            });
+        } else {
+            window.open(url, '_blank', 'width=600,height=800,scrollbars=yes,resizable=yes');
+        }
     }
 
     function getBranchId() {
@@ -1521,142 +1506,81 @@
         return branchElement ? branchElement.getAttribute('data-branch-id') : 0;
     }
 
-    // Функции для работы с модальным окном создания филиала
+    // Функции для работы с формой филиала в SidePanel
     function openAddBranchModal() {
-        const modal = document.getElementById('addBranchModal');
-        if (modal) {
-            // Сбрасываем форму
-            document.getElementById('add-branch-form').reset();
-            
-            modal.style.display = 'block';
-            document.body.style.overflow = 'hidden';
-        }
-    }
-
-    function closeAddBranchModal() {
-        const modal = document.getElementById('addBranchModal');
-        if (modal) {
-            modal.style.display = 'none';
-            document.body.style.overflow = 'auto';
-        }
-    }
-
-    // Обработка формы создания филиала
-    function handleAddBranchSubmit(event) {
-        event.preventDefault();
+        // Формируем URL для SidePanel с компонентом branch.form
+        const url = `/local/components/artmax/branch.form/page.php?IFRAME=Y&IFRAME_TYPE=SIDE_SLIDER`;
         
-        const formData = new FormData(event.target);
-        const branchData = {
-            name: formData.get('name'),
-            address: formData.get('address'),
-            phone: formData.get('phone'),
-            email: formData.get('email')
-        };
-
-        // Валидация
-        if (!branchData.name.trim()) {
-            showFieldError('branch-name', 'Заполните название филиала.');
-            return;
+        // Открываем SidePanel
+        if (typeof BX !== 'undefined' && BX.SidePanel) {
+            BX.SidePanel.Instance.open(url, {
+                title: 'Создание филиала',
+                width: 600,
+                cacheable: false,
+                events: {
+                    onClose: function() {
+                        // Обновляем страницу для обновления переключателя филиалов
+                        // Bitrix автоматически обновит переключатель через postMessage
+                        if (window.location) {
+                            // Можно сделать мягкое обновление через AJAX
+                        }
+                    }
+                }
+            });
+        } else {
+            // Fallback для случаев, когда SidePanel недоступен
+            window.open(url, '_blank', 'width=600,height=800,scrollbars=yes,resizable=yes');
         }
+    }
+    
+    // Экспортируем функцию в глобальную область видимости для использования в onclick и других местах
+    window.openAddBranchModal = openAddBranchModal;
 
-        // Отправляем запрос на создание филиала
-        const csrfToken = getCSRFToken();
-        fetch('/local/components/artmax/calendar/ajax.php', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-                'X-Requested-With': 'XMLHttpRequest',
-                'X-Bitrix-Csrf-Token': csrfToken
-            },
-            body: new URLSearchParams({
-                action: 'addBranch',
-                name: branchData.name,
-                address: branchData.address,
-                phone: branchData.phone,
-                email: branchData.email,
-                sessid: csrfToken
-            })
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                showNotification('Филиал успешно создан! Переключатель филиалов обновится автоматически.', 'success');
-                closeAddBranchModal();
-                // Не перезагружаем страницу - Bitrix обновит переключатель автоматически
-            } else {
-                showNotification('Ошибка создания филиала: ' + (data.error || 'Неизвестная ошибка'), 'error');
-            }
-        })
-        .catch(error => {
-            console.error('Ошибка при создании филиала:', error);
-            showNotification('Ошибка соединения с сервером', 'error');
-        });
+    // Функция closeAddBranchModal больше не нужна, так как форма теперь в SidePanel
+    // Оставлена для обратной совместимости
+    function closeAddBranchModal() {
+        // Если SidePanel открыт, закрываем его
+        if (typeof BX !== 'undefined' && BX.SidePanel && BX.SidePanel.Instance) {
+            BX.SidePanel.Instance.close();
+        }
     }
 
-    // Функции для работы с модальным окном расписания
+
+    // Функции для работы с формой расписания в SidePanel
     function openScheduleModal() {
-        const modal = document.getElementById('scheduleModal');
-        if (modal) {
-            // Устанавливаем текущую дату по умолчанию
-            const today = new Date();
-            // Форматируем дату в локальном формате, избегая проблем с часовыми поясами
-            const year = today.getFullYear();
-            const month = String(today.getMonth() + 1).padStart(2, '0');
-            const day = String(today.getDate()).padStart(2, '0');
-            const todayString = `${year}-${month}-${day}`;
-            
-            const dateInput = document.getElementById('schedule-date');
-            if (dateInput) {
-                dateInput.value = todayString;
-            }
-
-            // Устанавливаем текущее время по умолчанию
-            const timeInput = document.getElementById('schedule-time');
-            if (timeInput) {
-                const now = new Date();
-                const hours = now.getHours().toString().padStart(2, '0');
-                const minutes = now.getMinutes().toString().padStart(2, '0');
-                timeInput.value = `${hours}:${minutes}`;
-            }
-
-            // Сбрасываем форму
-            document.getElementById('scheduleForm').reset();
-            document.getElementById('schedule-repeat').checked = false;
-            document.getElementById('repeat-fields').style.display = 'none';
-            
-            // Устанавливаем галочки по умолчанию
-            const excludeWeekendsCheckbox = document.getElementById('exclude-weekends');
-            const excludeHolidaysCheckbox = document.getElementById('exclude-holidays');
-            const includeEndDateCheckbox = document.getElementById('include-end-date');
-            
-            if (excludeWeekendsCheckbox) excludeWeekendsCheckbox.checked = true;
-            if (excludeHolidaysCheckbox) excludeHolidaysCheckbox.checked = true;
-            if (includeEndDateCheckbox) includeEndDateCheckbox.checked = true;
-            
-            // Скрываем галочку "Включая дату окончания" по умолчанию
-            const includeEndDateContainer = document.getElementById('include-end-date-container');
-            if (includeEndDateContainer) includeEndDateContainer.style.display = 'none';
-            
-            // Скрываем дополнительные поля
-            const weeklyDays = document.getElementById('weekly-days');
-            if (weeklyDays) weeklyDays.style.display = 'none';
-            
-            // Инициализируем поля окончания повторения
-            window.toggleEndFields();
-
-            // Загружаем сотрудников текущего филиала для селектора
-            loadBranchEmployeesForSchedule();
-
-            modal.style.display = 'block';
-            document.body.style.overflow = 'hidden';
+        // Получаем ID текущего филиала
+        const branchId = document.querySelector('.artmax-calendar').getAttribute('data-branch-id') || '1';
+        
+        // Формируем URL для SidePanel с компонентом schedule.form
+        const url = `/local/components/artmax/schedule.form/page.php?BRANCH_ID=${branchId}&DATE=${new Date().toISOString().split('T')[0]}&IFRAME=Y&IFRAME_TYPE=SIDE_SLIDER`;
+        
+        // Открываем SidePanel
+        if (typeof BX !== 'undefined' && BX.SidePanel) {
+            BX.SidePanel.Instance.open(url, {
+                title: 'Создание расписания',
+                width: 600,
+                cacheable: false,
+                events: {
+                    onClose: function() {
+                        // Обновляем календарь после закрытия SidePanel
+                        if (typeof refreshCalendarEvents === 'function') {
+                            refreshCalendarEvents();
+                        }
+                    }
+                }
+            });
+        } else {
+            // Fallback для случаев, когда SidePanel недоступен
+            window.open(url, '_blank', 'width=600,height=800,scrollbars=yes,resizable=yes');
         }
     }
 
+    // Функция closeScheduleModal больше не нужна, так как форма теперь в SidePanel
+    // Оставлена для обратной совместимости
     function closeScheduleModal() {
-        const modal = document.getElementById('scheduleModal');
-        if (modal) {
-            modal.style.display = 'none';
-            document.body.style.overflow = 'auto';
+        // Если SidePanel открыт, закрываем его
+        if (typeof BX !== 'undefined' && BX.SidePanel && BX.SidePanel.Instance) {
+            BX.SidePanel.Instance.close();
         }
     }
 
@@ -3320,6 +3244,16 @@
             dealStatusElement.style.color = '#6c757d';
         }
         
+        // Убираем класс --confirmed с иконки в deal-card
+        const dealCard = document.getElementById('deal-card');
+        if (dealCard) {
+            const iconElement = dealCard.querySelector('.card-icon > .booking-actions-popup-item-icon');
+            if (iconElement) {
+                iconElement.classList.remove('--confirmed');
+                console.log('resetDealInfoInSidePanel: Убран класс --confirmed с иконки сделки');
+            }
+        }
+        
         // Сбрасываем иконку сделки только для текущего события
         if (window.currentEventId) {
             const eventElement = document.querySelector(`[data-event-id="${window.currentEventId}"]`);
@@ -3990,34 +3924,38 @@
         });
     }
 
-    // Функции для работы с модальным окном настроек филиала
+    // Функции для работы с модальным окном настроек филиала (перенесено в SidePanel)
     function openBranchModal() {
-        const modal = document.getElementById('branchModal');
-        if (modal) {
-            modal.style.display = 'flex';
-            setTimeout(() => {
-                modal.classList.add('show');
-            }, 10);
-            
-            // Получаем ID филиала из скрытого поля формы
-            const branchIdInput = document.querySelector('input[name="branch_id"]');
-            const branchId = branchIdInput ? branchIdInput.value : null;
-            
-            // Загружаем всех сотрудников и выбранных сотрудников филиала
-            loadEmployees();
-            if (branchId) {
-                loadBranchEmployees(branchId);
-            }
+        // Получаем ID филиала из текущего календаря
+        const branchId = document.querySelector('.artmax-calendar')?.getAttribute('data-branch-id') || 
+                         document.querySelector('input[name="branch_id"]')?.value ||
+                         '1';
+        
+        const url = `/local/components/artmax/branch.settings/page.php?BRANCH_ID=${branchId}&IFRAME=Y&IFRAME_TYPE=SIDE_SLIDER`;
+        
+        if (typeof BX !== 'undefined' && BX.SidePanel) {
+            BX.SidePanel.Instance.open(url, {
+                title: 'Настройки филиала',
+                width: 600,
+                cacheable: false,
+                events: {
+                    onClose: function() {
+                        // Обновляем страницу при необходимости
+                        if (window.location) {
+                            // Можно сделать мягкое обновление через AJAX
+                        }
+                    }
+                }
+            });
+        } else {
+            window.open(url, '_blank', 'width=600,height=800,scrollbars=yes,resizable=yes');
         }
     }
 
     function closeBranchModal() {
-        const modal = document.getElementById('branchModal');
-        if (modal) {
-            modal.classList.remove('show');
-            setTimeout(() => {
-                modal.style.display = 'none';
-            }, 300);
+        // Если SidePanel открыт, закрываем его
+        if (typeof BX !== 'undefined' && BX.SidePanel && BX.SidePanel.Instance) {
+            BX.SidePanel.Instance.close();
         }
     }
 
@@ -4126,31 +4064,29 @@
         }
     }
 
-    // Функции для работы с модальным окном врача
+    // Функции для работы с SidePanel врача
     window.openEmployeeModal = function() {
-        const modal = document.getElementById('employeeModal');
-        if (modal) {
-            modal.style.display = 'flex';
-            document.body.style.overflow = 'hidden';
-            
-            // Загружаем сотрудников в селектор только если они еще не загружены
-            const selector = document.getElementById('employee-select');
-            if (selector && selector.children.length <= 1) {
-                loadEmployeesForEmployeeModal();
-            } else {
-                // Если сотрудники уже загружены, просто устанавливаем текущего врача
-                if (window.currentEventEmployee) {
-                    selector.value = window.currentEventEmployee.ID;
-                }
-            }
+        let eventId = getCurrentEventId();
+        if (!eventId) {
+            showNotification('Ошибка: не удалось определить событие', 'error');
+            return;
         }
-    }
-
-    window.closeEmployeeModal = function() {
-        const modal = document.getElementById('employeeModal');
-        if (modal) {
-            modal.style.display = 'none';
-            document.body.style.overflow = 'auto';
+        
+        const url = `/local/components/artmax/employee.form/page.php?EVENT_ID=${eventId}&IFRAME=Y&IFRAME_TYPE=SIDE_SLIDER`;
+        if (typeof BX !== 'undefined' && BX.SidePanel) {
+            BX.SidePanel.Instance.open(url, {
+                width: 600,
+                cacheable: false,
+                allowChangeHistory: false,
+                events: {
+                    onClose: function() {
+                        // Можно добавить логику при закрытии, если нужно
+                    }
+                }
+            });
+        } else {
+            // Fallback для старых версий
+            window.open(url, '_blank', 'width=600,height=400');
         }
     }
 
@@ -4310,36 +4246,41 @@
         });
     }
 
-    function updateEmployeeCard(employeeId) {
-        // Находим врача по ID и обновляем карточку
-        const csrfToken = getCSRFToken();
-        fetch('/local/components/artmax/calendar/ajax.php', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-                'X-Requested-With': 'XMLHttpRequest',
-                'X-Bitrix-Csrf-Token': csrfToken
-            },
-            body: new URLSearchParams({
-                action: 'getEmployees',
-                sessid: csrfToken
-            })
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success && data.employees) {
-                const employee = data.employees.find(emp => emp.ID === employeeId);
-                if (employee) {
-                    const statusElement = document.getElementById('employee-status');
-                    if (statusElement) {
-                        statusElement.textContent = `${employee.NAME} ${employee.LAST_NAME}`.trim() || employee.LOGIN;
+    function updateEmployeeCard(employeeId, employeeName) {
+        const statusElement = document.getElementById('employee-status');
+        if (statusElement) {
+            if (employeeName) {
+                // Если имя передано напрямую, используем его
+                statusElement.textContent = employeeName;
+            } else {
+                // Иначе загружаем данные о враче через AJAX
+                const csrfToken = getCSRFToken();
+                fetch('/local/components/artmax/calendar/ajax.php', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'X-Bitrix-Csrf-Token': csrfToken
+                    },
+                    body: new URLSearchParams({
+                        action: 'getEmployees',
+                        sessid: csrfToken
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.employees) {
+                        const employee = data.employees.find(emp => emp.ID === employeeId);
+                        if (employee) {
+                            statusElement.textContent = `${employee.NAME} ${employee.LAST_NAME}`.trim() || employee.LOGIN;
+                        }
                     }
-                }
+                })
+                .catch(error => {
+                    console.error('Ошибка при получении данных врача:', error);
+                });
             }
-        })
-        .catch(error => {
-            console.error('Ошибка при получении данных врача:', error);
-        });
+        }
     }
 
     window.openEmployeeDetails = function() {
@@ -4850,19 +4791,76 @@
         }
     }
 
-    // Функции для работы с модальным окном сделок
+    // Функции для работы с модальным окном сделок (перенесено в SidePanel)
     function openDealModal() {
-        const modal = document.getElementById('dealModal');
-        if (modal) {
-            modal.style.display = 'flex';
-            setTimeout(() => {
-                modal.classList.add('show');
-            }, 10);
-            document.body.style.overflow = 'hidden';
-            
-            // Инициализируем обработчики для модального окна сделок
-            initDealModal();
+        // Получаем ID текущего события (если есть)
+        let eventId = getCurrentEventId();
+        
+        if (!eventId) {
+            showNotification('Ошибка: не удалось определить событие', 'error');
+            return;
         }
+        
+        // Проверяем, привязан ли контакт к событию
+        checkEventContactAndOpenDealModal(eventId);
+    }
+    
+    // Функция проверки контакта и открытия формы выбора сделки
+    function checkEventContactAndOpenDealModal(eventId) {
+        const csrfToken = getCSRFToken();
+        
+        // Получаем данные события для проверки контакта
+        fetch('/local/components/artmax/calendar/ajax.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-Bitrix-Csrf-Token': csrfToken
+            },
+            body: new URLSearchParams({
+                action: 'getEvent',
+                eventId: eventId,
+                sessid: csrfToken
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.event) {
+                const event = data.event;
+                
+                if (!event.CONTACT_ENTITY_ID) {
+                    showNotification('Сначала нужно привязать контакт к событию, а затем можно будет выбрать сделку', 'warning');
+                    return;
+                }
+                
+                // Контакт привязан, открываем форму выбора сделки
+                const url = `/local/components/artmax/deal.form/page.php?IFRAME=Y&IFRAME_TYPE=SIDE_SLIDER&EVENT_ID=${eventId}`;
+                
+                if (typeof BX !== 'undefined' && BX.SidePanel) {
+                    BX.SidePanel.Instance.open(url, {
+                        title: 'Добавить или выбрать сделку',
+                        width: 600,
+                        cacheable: false,
+                        events: {
+                            onClose: function() {
+                                // Обновляем календарь при необходимости
+                                if (typeof refreshCalendarEvents === 'function') {
+                                    refreshCalendarEvents();
+                                }
+                            }
+                        }
+                    });
+                } else {
+                    window.open(url, '_blank', 'width=600,height=800,scrollbars=yes,resizable=yes');
+                }
+            } else {
+                showNotification('Ошибка при получении данных события', 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Ошибка при проверке контакта:', error);
+            showNotification('Ошибка соединения с сервером', 'error');
+        });
     }
 
     window.closeDealModal = function() {
@@ -4978,10 +4976,28 @@
 
     // Функция обновления информации о сделке в боковом окне
     function updateDealInfoInSidePanel(deal) {
+        console.log('updateDealInfoInSidePanel: Вызвана с данными:', deal);
+        
         const dealStatus = document.getElementById('deal-status');
+        console.log('updateDealInfoInSidePanel: deal-status элемент найден?', !!dealStatus);
+        
         if (dealStatus) {
+            const oldText = dealStatus.textContent;
             dealStatus.textContent = deal.title;
             dealStatus.style.color = '#28a745';
+            console.log('updateDealInfoInSidePanel: Обновлен deal-status с "' + oldText + '" на "' + deal.title + '"');
+        } else {
+            console.error('updateDealInfoInSidePanel: Элемент deal-status не найден!');
+        }
+        
+        // Добавляем класс --confirmed к иконке в deal-card
+        const dealCard = document.getElementById('deal-card');
+        if (dealCard) {
+            const iconElement = dealCard.querySelector('.card-icon > .booking-actions-popup-item-icon');
+            if (iconElement) {
+                iconElement.classList.add('--confirmed');
+                console.log('updateDealInfoInSidePanel: Добавлен класс --confirmed к иконке сделки');
+            }
         }
         
         // Обновляем иконку сделки только для текущего события
@@ -4991,6 +5007,7 @@
                 const dealIcon = eventElement.querySelector('.deal-icon');
                 if (dealIcon) {
                     dealIcon.classList.add('active');
+                    console.log('updateDealInfoInSidePanel: Обновлена иконка сделки в календаре');
                 }
             }
         }
@@ -5023,6 +5040,7 @@
     window.clearAllEvents = clearAllEvents;
     window.showEventSidePanel = showEventSidePanel;
     window.closeEventSidePanel = closeEventSidePanel;
+    window.openJournalSidePanel = openJournalSidePanel;
     window.openEditEventModalFromSidePanel = openEditEventModalFromSidePanel;
     window.deleteEventFromSidePanel = deleteEventFromSidePanel;
 
@@ -5066,20 +5084,39 @@
         
         if (!statusElement || !dropdown) return;
         
+        // Находим action-card для подтверждения
+        const actionCard = dropdown.closest('.action-card');
+        const iconElement = actionCard ? actionCard.querySelector('.card-icon > .booking-actions-popup-item-icon') : null;
+        
         // Обновляем текст статуса
         if (status === 'confirmed') {
             statusElement.textContent = 'Подтверждено';
             statusElement.classList.add('confirmed');
+            // Добавляем класс --confirmed к иконке
+            if (iconElement) {
+                iconElement.classList.add('--confirmed');
+            }
         } else if (status === 'not_confirmed') {
             statusElement.textContent = 'Не подтверждено';
             statusElement.classList.remove('confirmed');
+            // Удаляем класс --confirmed с иконки
+            if (iconElement) {
+                iconElement.classList.remove('--confirmed');
+            }
+        } else {
+            // pending
+            statusElement.textContent = 'Ожидается подтверждение';
+            statusElement.classList.remove('confirmed');
+            // Удаляем класс --confirmed с иконки
+            if (iconElement) {
+                iconElement.classList.remove('--confirmed');
+            }
         }
         
         // Закрываем выпадающее меню
         dropdown.classList.remove('show');
         
         // Удаляем класс dropdown-open с родительского action-card
-        const actionCard = dropdown.closest('.action-card');
         if (actionCard) {
             actionCard.classList.remove('dropdown-open');
         }
@@ -5191,14 +5228,19 @@
 
     function updateConfirmationStatusDisplay(status) {
         const statusElement = document.getElementById('confirmation-status');
-        const iconElement = document.querySelector('.booking-actions-popup-item-icon');
+        const confirmationDropdown = document.getElementById('confirmation-dropdown');
         
         if (!statusElement) return;
+        
+        // Находим action-card для подтверждения и иконку внутри него
+        const actionCard = confirmationDropdown ? confirmationDropdown.closest('.action-card') : null;
+        const iconElement = actionCard ? actionCard.querySelector('.card-icon > .booking-actions-popup-item-icon') : null;
         
         switch (status) {
             case 'confirmed':
                 statusElement.textContent = 'Подтверждено';
                 statusElement.classList.add('confirmed');
+                // Добавляем класс --confirmed к иконке
                 if (iconElement) {
                     iconElement.classList.add('--confirmed');
                 }
@@ -5206,6 +5248,7 @@
             case 'not_confirmed':
                 statusElement.textContent = 'Не подтверждено';
                 statusElement.classList.remove('confirmed');
+                // Удаляем класс --confirmed с иконки
                 if (iconElement) {
                     iconElement.classList.remove('--confirmed');
                 }
@@ -5214,6 +5257,7 @@
             default:
                 statusElement.textContent = 'Ожидается подтверждение';
                 statusElement.classList.remove('confirmed');
+                // Удаляем класс --confirmed с иконки
                 if (iconElement) {
                     iconElement.classList.remove('--confirmed');
                 }
@@ -5246,21 +5290,36 @@
         const dropdown = document.getElementById('visit-dropdown');
         const actionCard = dropdown.closest('.action-card');
         
+        // Находим иконку внутри action-card для визита
+        const iconElement = actionCard ? actionCard.querySelector('.card-icon > .booking-actions-popup-item-icon') : null;
+        
         // Обновляем текст статуса
         switch (status) {
             case 'not_specified':
                 statusElement.textContent = 'Не указано';
                 statusElement.classList.remove('came', 'did-not-come');
+                // Удаляем класс --confirmed с иконки (если был)
+                if (iconElement) {
+                    iconElement.classList.remove('--confirmed');
+                }
                 break;
             case 'client_came':
                 statusElement.textContent = 'Клиент пришел';
                 statusElement.classList.remove('did-not-come');
                 statusElement.classList.add('came');
+                // Добавляем класс --confirmed к иконке
+                if (iconElement) {
+                    iconElement.classList.add('--confirmed');
+                }
                 break;
             case 'client_did_not_come':
                 statusElement.textContent = 'Клиент не пришел';
                 statusElement.classList.remove('came');
                 statusElement.classList.add('did-not-come');
+                // Удаляем класс --confirmed с иконки
+                if (iconElement) {
+                    iconElement.classList.remove('--confirmed');
+                }
                 break;
         }
         
@@ -5301,6 +5360,8 @@
         .then(data => {
             if (data.success) {
                 console.log('Статус визита обновлен:', status);
+                // Обновляем отображение статуса визита (включая класс --confirmed)
+                updateVisitStatusDisplay(status);
             } else {
                 console.error('Ошибка при обновлении статуса визита:', data.message);
             }
@@ -5354,22 +5415,40 @@
 
     function updateVisitStatusDisplay(status) {
         const statusElement = document.getElementById('visit-status');
+        const visitDropdown = document.getElementById('visit-dropdown');
+        
         if (!statusElement) return;
+        
+        // Находим action-card для визита и иконку внутри него
+        const actionCard = visitDropdown ? visitDropdown.closest('.action-card') : null;
+        const iconElement = actionCard ? actionCard.querySelector('.card-icon > .booking-actions-popup-item-icon') : null;
         
         switch (status) {
             case 'not_specified':
                 statusElement.textContent = 'Не указано';
                 statusElement.classList.remove('came', 'did-not-come');
+                // Удаляем класс --confirmed с иконки (если был)
+                if (iconElement) {
+                    iconElement.classList.remove('--confirmed');
+                }
                 break;
             case 'client_came':
                 statusElement.textContent = 'Клиент пришел';
                 statusElement.classList.remove('did-not-come');
                 statusElement.classList.add('came');
+                // Добавляем класс --confirmed к иконке
+                if (iconElement) {
+                    iconElement.classList.add('--confirmed');
+                }
                 break;
             case 'client_did_not_come':
                 statusElement.textContent = 'Клиент не пришел';
                 statusElement.classList.remove('came');
                 statusElement.classList.add('did-not-come');
+                // Удаляем класс --confirmed с иконки
+                if (iconElement) {
+                    iconElement.classList.remove('--confirmed');
+                }
                 break;
         }
         
@@ -6485,136 +6564,135 @@
     }
 
     // Функции навигации по календарю
-    window.previousMonth = function() {
-        const currentMonthElement = document.querySelector('.current-month');
-        if (currentMonthElement) {
-            const currentText = currentMonthElement.textContent;
-            const currentDate = new Date();
+    function previousMonth(event) {
+        console.log('=== previousMonth() ВЫЗВАНА ===', event);
+        
+        // Предотвращаем поведение по умолчанию
+        if (event) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+        
+        // Получаем текущий год и месяц из URL или глобальных переменных
+        const urlParams = new URLSearchParams(window.location.search);
+        const dateParam = urlParams.get('date');
+        
+        console.log('previousMonth: dateParam из URL:', dateParam);
+        console.log('previousMonth: window.currentYear:', window.currentYear, 'window.currentMonth:', window.currentMonth);
+        
+        let currentYear, currentMonth;
+        
+        if (dateParam) {
+            // Если есть дата в URL, парсим её напрямую (избегаем проблем с часовыми поясами)
+            const dateParts = dateParam.split('-');
+            console.log('previousMonth: dateParts:', dateParts);
             
-            // Парсим текущий месяц и год (русские названия)
-            const monthNames = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
-                               'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
-            
-            let currentMonth = currentDate.getMonth();
-            let currentYear = currentDate.getFullYear();
-            
-            // Пытаемся найти месяц в тексте
-            for (let i = 0; i < monthNames.length; i++) {
-                if (currentText.includes(monthNames[i])) {
-                    currentMonth = i;
-                    break;
+            if (dateParts.length === 3) {
+                currentYear = parseInt(dateParts[0], 10);
+                currentMonth = parseInt(dateParts[1], 10) - 1; // Преобразуем 1-12 в 0-11
+                console.log('previousMonth: Парсинг из URL - год:', currentYear, 'месяц (0-11):', currentMonth, 'месяц (1-12):', currentMonth + 1);
+            } else {
+                // Fallback на Date, если формат не распознан
+                const urlDate = new Date(dateParam);
+                if (!isNaN(urlDate.getTime())) {
+                    currentYear = urlDate.getFullYear();
+                    currentMonth = urlDate.getMonth();
+                    console.log('previousMonth: Fallback Date - год:', currentYear, 'месяц:', currentMonth);
+                } else {
+                    const now = new Date();
+                    currentYear = now.getFullYear();
+                    currentMonth = now.getMonth();
+                    console.log('previousMonth: Используем текущую дату - год:', currentYear, 'месяц:', currentMonth);
                 }
             }
-            
-            // Переходим к предыдущему месяцу
-            if (currentMonth === 0) {
-                currentMonth = 11;
-                currentYear--;
-            } else {
-                currentMonth--;
-            }
-            
-            // Обновляем URL и перезагружаем страницу
-            const newDate = new Date(currentYear, currentMonth, 1);
-            // Форматируем дату в локальном формате, избегая проблем с часовыми поясами
-            const year = newDate.getFullYear();
-            const month = String(newDate.getMonth() + 1).padStart(2, '0');
-            const day = String(newDate.getDate()).padStart(2, '0');
-            const newDateString = `${year}-${month}-${day}`;
-            window.location.href = window.location.pathname + '?date=' + newDateString;
+        } else {
+            // Если нет даты в URL, используем глобальные переменные или текущую дату
+            const now = new Date();
+            currentYear = window.currentYear || now.getFullYear();
+            currentMonth = (window.currentMonth || (now.getMonth() + 1)) - 1; // Преобразуем 1-12 в 0-11
+            console.log('previousMonth: Нет dateParam, используем глобальные - год:', currentYear, 'месяц (0-11):', currentMonth);
         }
-    }
-
-    function previousMonth() {
-        const currentMonthElement = document.querySelector('.current-month');
-        if (currentMonthElement) {
-            const currentText = currentMonthElement.textContent;
-            const currentDate = new Date();
-            
-            // Парсим текущий месяц и год (русские названия)
-            const monthNames = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
-                               'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
-            
-            let currentMonth = currentDate.getMonth();
-            let currentYear = currentDate.getFullYear();
-            
-            // Пытаемся найти месяц в тексте
-            for (let i = 0; i < monthNames.length; i++) {
-                if (currentText.includes(monthNames[i])) {
-                    currentMonth = i;
-                    break;
-                }
-            }
-            
-            // Переходим к предыдущему месяцу
-            if (currentMonth === 0) {
-                currentMonth = 11;
-                currentYear--;
-            } else {
-                currentMonth--;
-            }
-            
-            // Обновляем глобальные переменные
-            window.currentYear = currentYear;
-            window.currentMonth = currentMonth + 1;
-            
-            console.log('previousMonth: Обновлены глобальные переменные - year:', window.currentYear, 'month:', window.currentMonth);
-            
-            // Обновляем URL и перезагружаем страницу
-            const newDate = new Date(currentYear, currentMonth, 1);
-            // Форматируем дату в локальном формате, избегая проблем с часовыми поясами
-            const year = newDate.getFullYear();
-            const month = String(newDate.getMonth() + 1).padStart(2, '0');
-            const day = String(newDate.getDate()).padStart(2, '0');
-            const newDateString = `${year}-${month}-${day}`;
-            window.location.href = window.location.pathname + '?date=' + newDateString;
+        
+        console.log('previousMonth: Текущий месяц (1-12):', currentMonth + 1, 'год:', currentYear);
+        
+        // Переходим к предыдущему месяцу
+        if (currentMonth === 0) {
+            currentMonth = 11;
+            currentYear--;
+            console.log('previousMonth: Переход через год назад - декабрь предыдущего года');
+        } else {
+            currentMonth--;
+            console.log('previousMonth: Уменьшаем месяц на 1');
         }
+        
+        // Обновляем глобальные переменные
+        window.currentYear = currentYear;
+        window.currentMonth = currentMonth + 1;
+        
+        console.log('previousMonth: Новый месяц (1-12):', window.currentMonth, 'год:', window.currentYear);
+        
+        // Формируем новую дату
+        const newDateString = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-01`;
+        console.log('previousMonth: Переход на дату:', newDateString);
+        
+        // Обновляем URL и перезагружаем страницу
+        window.location.href = window.location.pathname + '?date=' + newDateString;
     }
 
     function nextMonth() {
-        const currentMonthElement = document.querySelector('.current-month');
-        if (currentMonthElement) {
-            const currentText = currentMonthElement.textContent;
-            const currentDate = new Date();
-            
-            // Парсим текущий месяц и год (русские названия)
-            const monthNames = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
-                               'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
-            
-            let currentMonth = currentDate.getMonth();
-            let currentYear = currentDate.getFullYear();
-            
-            // Пытаемся найти месяц в тексте
-            for (let i = 0; i < monthNames.length; i++) {
-                if (currentText.includes(monthNames[i])) {
-                    currentMonth = i;
-                    break;
+        // Получаем текущий год и месяц из URL или глобальных переменных
+        const urlParams = new URLSearchParams(window.location.search);
+        const dateParam = urlParams.get('date');
+        
+        let currentYear, currentMonth;
+        
+        if (dateParam) {
+            // Если есть дата в URL, парсим её напрямую (избегаем проблем с часовыми поясами)
+            const dateParts = dateParam.split('-');
+            if (dateParts.length === 3) {
+                currentYear = parseInt(dateParts[0], 10);
+                currentMonth = parseInt(dateParts[1], 10) - 1; // Преобразуем 1-12 в 0-11
+            } else {
+                // Fallback на Date, если формат не распознан
+                const urlDate = new Date(dateParam);
+                if (!isNaN(urlDate.getTime())) {
+                    currentYear = urlDate.getFullYear();
+                    currentMonth = urlDate.getMonth();
+                } else {
+                    const now = new Date();
+                    currentYear = now.getFullYear();
+                    currentMonth = now.getMonth();
                 }
             }
-            
-            // Переходим к следующему месяцу
-            if (currentMonth === 11) {
-                currentMonth = 0;
-                currentYear++;
-            } else {
-                currentMonth++;
-            }
-            
-            // Обновляем глобальные переменные
-            window.currentYear = currentYear;
-            window.currentMonth = currentMonth + 1;
-            
-            console.log('nextMonth: Обновлены глобальные переменные - year:', window.currentYear, 'month:', window.currentMonth);
-            
-            // Обновляем URL и перезагружаем страницу
-            const newDate = new Date(currentYear, currentMonth, 1);
-            // Форматируем дату в локальном формате, избегая проблем с часовыми поясами
-            const year = newDate.getFullYear();
-            const month = String(newDate.getMonth() + 1).padStart(2, '0');
-            const day = String(newDate.getDate()).padStart(2, '0');
-            const newDateString = `${year}-${month}-${day}`;
-            window.location.href = window.location.pathname + '?date=' + newDateString;
+        } else {
+            // Если нет даты в URL, используем глобальные переменные или текущую дату
+            const now = new Date();
+            currentYear = window.currentYear || now.getFullYear();
+            currentMonth = (window.currentMonth || (now.getMonth() + 1)) - 1; // Преобразуем 1-12 в 0-11
         }
+        
+        console.log('nextMonth: Текущий месяц:', currentMonth + 1, 'год:', currentYear);
+        
+        // Переходим к следующему месяцу
+        if (currentMonth === 11) {
+            currentMonth = 0;
+            currentYear++;
+        } else {
+            currentMonth++;
+        }
+        
+        // Обновляем глобальные переменные
+        window.currentYear = currentYear;
+        window.currentMonth = currentMonth + 1;
+        
+        console.log('nextMonth: Новый месяц:', window.currentMonth, 'год:', window.currentYear);
+        
+        // Формируем новую дату
+        const newDateString = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-01`;
+        console.log('nextMonth: Переход на дату:', newDateString);
+        
+        // Обновляем URL и перезагружаем страницу
+        window.location.href = window.location.pathname + '?date=' + newDateString;
     }
 
     function goToToday() {
@@ -6816,34 +6894,27 @@
 
     // Функция открытия модального окна переноса записи
     function openMoveEventModal(event) {
-        const modal = document.getElementById('moveEventModal');
-        if (!modal) {
-            console.error('Модальное окно переноса не найдено');
+        if (!event || !event.ID) {
+            showNotification('Ошибка: данные события не найдены', 'error');
             return;
         }
-
-        // Заполняем форму данными события
-        document.getElementById('move-event-id').value = event.ID;
         
-        // Устанавливаем текущую дату события
-        const eventDate = event.DATE_FROM.split(' ')[0];
-        const [day, month, year] = eventDate.split('.');
-        const standardDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
-        document.getElementById('move-event-date').value = standardDate;
-        
-        // Очищаем селекторы
-        const timeSelect = document.getElementById('move-event-time');
-        timeSelect.innerHTML = '<option value="">Выберите время</option>';
-        
-        // Загружаем филиалы и устанавливаем текущий
-        loadBranchesForMove(event.BRANCH_ID, event.EMPLOYEE_ID);
-        
-        // Показываем модальное окно
-        modal.style.display = 'flex';
-        setTimeout(() => {
-            modal.classList.add('show');
-        }, 10);
-        document.body.style.overflow = 'hidden';
+        const url = `/local/components/artmax/move.event/page.php?EVENT_ID=${event.ID}&IFRAME=Y&IFRAME_TYPE=SIDE_SLIDER`;
+        if (typeof BX !== 'undefined' && BX.SidePanel) {
+            BX.SidePanel.Instance.open(url, {
+                width: 600,
+                cacheable: false,
+                allowChangeHistory: false,
+                events: {
+                    onClose: function() {
+                        // Можно добавить логику при закрытии, если нужно
+                    }
+                }
+            });
+        } else {
+            // Fallback для старых версий
+            window.open(url, '_blank', 'width=600,height=400');
+        }
     }
 
     // Функция закрытия модального окна переноса
@@ -7367,6 +7438,60 @@
     }
 
     // Вспомогательная функция для форматирования даты и времени
+    // Функции для навигации по месяцам - делаем их глобальными
+    window.changeMonth = function(month) {
+        console.log('changeMonth v2.2 called with month:', month);
+        
+        // Получаем текущую дату из URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const currentDateStr = urlParams.get('date') || new Date().toISOString().split('T')[0];
+        
+        console.log('Current date from URL:', currentDateStr);
+        
+        // Парсим текущую дату
+        const currentDate = new Date(currentDateStr);
+        const year = currentDate.getFullYear();
+        
+        console.log('Parsed year:', year);
+        
+        // Создаем новую дату с выбранным месяцем (1-е число месяца)
+        // Используем правильный формат: год-месяц-день
+        const dateString = year + '-' + String(month).padStart(2, '0') + '-' + '01';
+        
+        console.log('Changing month to:', month, 'New date:', dateString);
+        
+        // Обновляем URL с новой датой
+        const url = new URL(window.location);
+        url.searchParams.set('date', dateString);
+        window.location.href = url.toString();
+    };
+    
+    // Функция для установки правильного значения в селектор при загрузке страницы
+    window.initMonthSelector = function() {
+        console.log('initMonthSelector v2.2 called');
+        
+        // Получаем текущую дату из URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const currentDateStr = urlParams.get('date') || new Date().toISOString().split('T')[0];
+        
+        console.log('Current date from URL for selector:', currentDateStr);
+        
+        // Парсим дату и получаем месяц
+        const currentDate = new Date(currentDateStr);
+        const month = currentDate.getMonth() + 1; // getMonth() возвращает 0-11, нам нужно 1-12
+        
+        console.log('Setting month selector to:', month);
+        
+        // Устанавливаем значение в селектор
+        const monthSelect = document.getElementById('monthSelect');
+        if (monthSelect) {
+            monthSelect.value = month;
+            console.log('Month selector updated to:', monthSelect.value);
+        } else {
+            console.log('Month selector not found!');
+        }
+    };
+
     function formatLocalDateTime(date) {
         const year = date.getFullYear();
         const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -7424,5 +7549,29 @@
 
     // Делаем showNotification доступной глобально
     window.showNotification = showNotification;
+
+    // Функция для перехода к текущему дню
+    window.goToToday = function() {
+        const today = new Date();
+        const year = today.getFullYear();
+        const month = today.getMonth() + 1;
+        const day = today.getDate();
+        
+        const dateString = year + '-' + String(month).padStart(2, '0') + '-' + String(day).padStart(2, '0');
+        const url = new URL(window.location);
+        url.searchParams.set('date', dateString);
+        window.location.href = url.toString();
+    };
+
+    // Убеждаемся, что функции навигации экспортированы в window
+    // (они уже экспортированы выше, но на всякий случай повторяем)
+    if (typeof previousMonth === 'function') {
+        window.previousMonth = previousMonth;
+        console.log('previousMonth экспортирована в window');
+    }
+    if (typeof nextMonth === 'function') {
+        window.nextMonth = nextMonth;
+        console.log('nextMonth экспортирована в window');
+    }
 
 })();
