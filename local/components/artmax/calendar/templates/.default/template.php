@@ -449,13 +449,21 @@ $totalDays = 42; // 6 недель * 7 дней
                 <!-- Информация о клиенте -->
                 <div class="client-section" onclick="openContactDetails()">
                     <div class="client-info">
-                        <div class="client-icon">👤</div>
+                        <div class="client-icon">
+                            <div class="booking-actions-popup__item-client-icon">
+                                <div class="ui-icon-set --person" style="--ui-icon-set__icon-size: 26px; --ui-icon-set__icon-color: var(--ui-color-palette-gray-20);"></div>
+                            </div>
+                        </div>
                         <div class="client-details">
                             <div class="client-name">Нет клиента</div>
                             <div class="client-placeholder">Добавьте информацию о клиенте</div>
                         </div>
                         <div class="client-actions">
-                            <button class="action-btn add-contact-btn admin-only" title="Добавить" onclick="event.stopPropagation(); openClientModal();">➕</button>
+                            <span data-element="booking-menu-deal-create-button" class="booking-actions-popup-plus-button">
+                                <button class="ui-btn ui-btn-shadow ui-btn-xs ui-btn-light ui-btn-round deal-card-add-btn admin-only" title="Добавить" onclick="event.stopPropagation(); openClientModal();">
+                                    <div class="ui-icon-set --plus-30" style=""></div>
+                                </button>
+                            </span>
                         </div>
                     </div>
                     <div class="add-note-section admin-only">
@@ -473,31 +481,49 @@ $totalDays = 42; // 6 недель * 7 дней
                 <div class="action-cards">
 
                     <div class="action-card" id="deal-card" onclick="openDealDetails()">
-                        <div class="card-icon">🤝</div>
+                        <div class="card-icon">
+                            <div class="booking-actions-popup-item-icon">
+                                <div class="ui-icon-set --deal" style=""></div>
+                            </div>
+                        </div>
                         <div class="card-content">
                             <div class="card-title">Сделка</div>
                             <div class="card-status" id="deal-status">Не добавлена</div>
                         </div>
                         <div class="card-actions" onclick="event.stopPropagation()">
-                            <button class="card-action-btn add-btn admin-only" onclick="createNewDeal()" title="Создать новую сделку">+</button>
+                            <span data-element="booking-menu-deal-create-button" class="booking-actions-popup-plus-button">
+                                <button class="ui-btn ui-btn-shadow ui-btn-xs ui-btn-light ui-btn-round deal-card-add-btn admin-only" onclick="createNewDeal()" title="Создать новую сделку">
+                                    <div class="ui-icon-set --plus-30" style=""></div>
+                                </button>
+                            </span>
                             <button class="card-action-btn select-btn admin-only" onclick="openDealModal()">Выбрать</button>
                         </div>
                     </div>
 
                     <div class="action-card" id="employee-card" onclick="openEmployeeDetails()">
-                        <div class="card-icon">👨‍⚕️</div>
+                        <div class="card-icon">
+                            <div class="booking-actions-popup__item-client-icon">
+                                <div class="ui-icon-set --person" style="--ui-icon-set__icon-size: 26px; --ui-icon-set__icon-color: var(--ui-color-palette-gray-20);"></div>
+                            </div>
+                        ️</div>
                         <div class="card-content">
                             <div class="card-title">Ответственный врач</div>
                             <div class="card-status" id="employee-status">Не назначен</div>
                         </div>
                         <div class="card-actions" onclick="event.stopPropagation()">
-                            <button class="card-action-btn add-btn admin-only" onclick="openEmployeeModal()" title="Назначить врача">+</button>
+                            <span data-element="booking-menu-deal-create-button" class="booking-actions-popup-plus-button">
+                                <button class="ui-btn ui-btn-shadow ui-btn-xs ui-btn-light ui-btn-round deal-card-add-btn admin-only" title="Назначить врача" onclick="event.stopPropagation(); openEmployeeModal();">
+                                    <div class="ui-icon-set --plus-30" style=""></div>
+                                </button>
+                            </span>
                         </div>
                     </div>
 
                     <div class="action-card">
                         <div class="card-icon">
-                            <div class="booking-actions-popup-item-icon">✓</div>
+                            <div class="booking-actions-popup-item-icon">
+                                <div class="ui-icon-set --check"></div>
+                            </div>
                         </div>
                         <div class="card-content">
                             <div class="card-title">Подтверждение</div>
@@ -513,7 +539,11 @@ $totalDays = 42; // 6 недель * 7 дней
                     </div>
 
                     <div class="action-card">
-                        <div class="card-icon">🏥</div>
+                        <div class="card-icon">
+                            <div class="booking-actions-popup-item-icon">
+                                <div class="ui-icon-set --customer-card"></div>
+                            </div>
+                        </div>
                         <div class="card-content">
                             <div class="card-title">Визит</div>
                             <div class="card-status" id="visit-status">Не указано</div>

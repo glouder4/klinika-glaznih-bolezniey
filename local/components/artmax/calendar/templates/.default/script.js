@@ -3222,6 +3222,16 @@
             dealStatusElement.style.color = '#6c757d';
         }
         
+        // Убираем класс --confirmed с иконки в deal-card
+        const dealCard = document.getElementById('deal-card');
+        if (dealCard) {
+            const iconElement = dealCard.querySelector('.card-icon > .booking-actions-popup-item-icon');
+            if (iconElement) {
+                iconElement.classList.remove('--confirmed');
+                console.log('resetDealInfoInSidePanel: Убран класс --confirmed с иконки сделки');
+            }
+        }
+        
         // Сбрасываем иконку сделки только для текущего события
         if (window.currentEventId) {
             const eventElement = document.querySelector(`[data-event-id="${window.currentEventId}"]`);
@@ -4958,6 +4968,16 @@
             console.error('updateDealInfoInSidePanel: Элемент deal-status не найден!');
         }
         
+        // Добавляем класс --confirmed к иконке в deal-card
+        const dealCard = document.getElementById('deal-card');
+        if (dealCard) {
+            const iconElement = dealCard.querySelector('.card-icon > .booking-actions-popup-item-icon');
+            if (iconElement) {
+                iconElement.classList.add('--confirmed');
+                console.log('updateDealInfoInSidePanel: Добавлен класс --confirmed к иконке сделки');
+            }
+        }
+        
         // Обновляем иконку сделки только для текущего события
         if (window.currentEventId) {
             const eventElement = document.querySelector(`[data-event-id="${window.currentEventId}"]`);
@@ -5041,20 +5061,39 @@
         
         if (!statusElement || !dropdown) return;
         
+        // Находим action-card для подтверждения
+        const actionCard = dropdown.closest('.action-card');
+        const iconElement = actionCard ? actionCard.querySelector('.card-icon > .booking-actions-popup-item-icon') : null;
+        
         // Обновляем текст статуса
         if (status === 'confirmed') {
             statusElement.textContent = 'Подтверждено';
             statusElement.classList.add('confirmed');
+            // Добавляем класс --confirmed к иконке
+            if (iconElement) {
+                iconElement.classList.add('--confirmed');
+            }
         } else if (status === 'not_confirmed') {
             statusElement.textContent = 'Не подтверждено';
             statusElement.classList.remove('confirmed');
+            // Удаляем класс --confirmed с иконки
+            if (iconElement) {
+                iconElement.classList.remove('--confirmed');
+            }
+        } else {
+            // pending
+            statusElement.textContent = 'Ожидается подтверждение';
+            statusElement.classList.remove('confirmed');
+            // Удаляем класс --confirmed с иконки
+            if (iconElement) {
+                iconElement.classList.remove('--confirmed');
+            }
         }
         
         // Закрываем выпадающее меню
         dropdown.classList.remove('show');
         
         // Удаляем класс dropdown-open с родительского action-card
-        const actionCard = dropdown.closest('.action-card');
         if (actionCard) {
             actionCard.classList.remove('dropdown-open');
         }
@@ -5166,14 +5205,19 @@
 
     function updateConfirmationStatusDisplay(status) {
         const statusElement = document.getElementById('confirmation-status');
-        const iconElement = document.querySelector('.booking-actions-popup-item-icon');
+        const confirmationDropdown = document.getElementById('confirmation-dropdown');
         
         if (!statusElement) return;
+        
+        // Находим action-card для подтверждения и иконку внутри него
+        const actionCard = confirmationDropdown ? confirmationDropdown.closest('.action-card') : null;
+        const iconElement = actionCard ? actionCard.querySelector('.card-icon > .booking-actions-popup-item-icon') : null;
         
         switch (status) {
             case 'confirmed':
                 statusElement.textContent = 'Подтверждено';
                 statusElement.classList.add('confirmed');
+                // Добавляем класс --confirmed к иконке
                 if (iconElement) {
                     iconElement.classList.add('--confirmed');
                 }
@@ -5181,6 +5225,7 @@
             case 'not_confirmed':
                 statusElement.textContent = 'Не подтверждено';
                 statusElement.classList.remove('confirmed');
+                // Удаляем класс --confirmed с иконки
                 if (iconElement) {
                     iconElement.classList.remove('--confirmed');
                 }
@@ -5189,6 +5234,7 @@
             default:
                 statusElement.textContent = 'Ожидается подтверждение';
                 statusElement.classList.remove('confirmed');
+                // Удаляем класс --confirmed с иконки
                 if (iconElement) {
                     iconElement.classList.remove('--confirmed');
                 }
@@ -5221,21 +5267,36 @@
         const dropdown = document.getElementById('visit-dropdown');
         const actionCard = dropdown.closest('.action-card');
         
+        // Находим иконку внутри action-card для визита
+        const iconElement = actionCard ? actionCard.querySelector('.card-icon > .booking-actions-popup-item-icon') : null;
+        
         // Обновляем текст статуса
         switch (status) {
             case 'not_specified':
                 statusElement.textContent = 'Не указано';
                 statusElement.classList.remove('came', 'did-not-come');
+                // Удаляем класс --confirmed с иконки (если был)
+                if (iconElement) {
+                    iconElement.classList.remove('--confirmed');
+                }
                 break;
             case 'client_came':
                 statusElement.textContent = 'Клиент пришел';
                 statusElement.classList.remove('did-not-come');
                 statusElement.classList.add('came');
+                // Добавляем класс --confirmed к иконке
+                if (iconElement) {
+                    iconElement.classList.add('--confirmed');
+                }
                 break;
             case 'client_did_not_come':
                 statusElement.textContent = 'Клиент не пришел';
                 statusElement.classList.remove('came');
                 statusElement.classList.add('did-not-come');
+                // Удаляем класс --confirmed с иконки
+                if (iconElement) {
+                    iconElement.classList.remove('--confirmed');
+                }
                 break;
         }
         
@@ -5276,6 +5337,8 @@
         .then(data => {
             if (data.success) {
                 console.log('Статус визита обновлен:', status);
+                // Обновляем отображение статуса визита (включая класс --confirmed)
+                updateVisitStatusDisplay(status);
             } else {
                 console.error('Ошибка при обновлении статуса визита:', data.message);
             }
@@ -5329,22 +5392,40 @@
 
     function updateVisitStatusDisplay(status) {
         const statusElement = document.getElementById('visit-status');
+        const visitDropdown = document.getElementById('visit-dropdown');
+        
         if (!statusElement) return;
+        
+        // Находим action-card для визита и иконку внутри него
+        const actionCard = visitDropdown ? visitDropdown.closest('.action-card') : null;
+        const iconElement = actionCard ? actionCard.querySelector('.card-icon > .booking-actions-popup-item-icon') : null;
         
         switch (status) {
             case 'not_specified':
                 statusElement.textContent = 'Не указано';
                 statusElement.classList.remove('came', 'did-not-come');
+                // Удаляем класс --confirmed с иконки (если был)
+                if (iconElement) {
+                    iconElement.classList.remove('--confirmed');
+                }
                 break;
             case 'client_came':
                 statusElement.textContent = 'Клиент пришел';
                 statusElement.classList.remove('did-not-come');
                 statusElement.classList.add('came');
+                // Добавляем класс --confirmed к иконке
+                if (iconElement) {
+                    iconElement.classList.add('--confirmed');
+                }
                 break;
             case 'client_did_not_come':
                 statusElement.textContent = 'Клиент не пришел';
                 statusElement.classList.remove('came');
                 statusElement.classList.add('did-not-come');
+                // Удаляем класс --confirmed с иконки
+                if (iconElement) {
+                    iconElement.classList.remove('--confirmed');
+                }
                 break;
         }
         
