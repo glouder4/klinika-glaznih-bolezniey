@@ -1,7 +1,21 @@
 <?php
 // Редирект на календарь, если нет параметра IFRAME=Y
 if (!isset($_REQUEST["IFRAME"]) || $_REQUEST["IFRAME"] !== "Y") {
-    header('Location: /page/artmax_calendar/calendar_branch_1/');
+    // Используем JavaScript редирект для надежности
+    ?>
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta http-equiv="refresh" content="0;url=/page/artmax_calendar/calendar_branch_1/">
+        <script type="text/javascript">
+            window.location.href = '/page/artmax_calendar/calendar_branch_1/';
+        </script>
+    </head>
+    <body>
+        <p>Перенаправление...</p>
+    </body>
+    </html>
+    <?php
     exit;
 }
 

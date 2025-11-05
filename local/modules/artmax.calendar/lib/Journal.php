@@ -24,9 +24,10 @@ class Journal
      * @param string $action Действие (created, updated, deleted, moved, etc.)
      * @param string|null $initiator Название класса и функции инициатора (например: "Artmax\Calendar\Calendar::addEvent")
      * @param int|null $userId ID пользователя, выполнившего действие
+     * @param string|null $actionValue Значение действия (что записалось, что отвязалось и т.п.)
      * @return int|false ID вставленной записи или false при ошибке
      */
-    public function writeEvent($eventId, $action, $initiator = null, $userId = null)
+    public function writeEvent($eventId, $action, $initiator = null, $userId = null, $actionValue = null)
     {
         // Валидация обязательных полей
         if (empty($eventId) || !is_numeric($eventId)) {
@@ -53,13 +54,22 @@ class Journal
             $userIdSql = (int)$userId;
         }
         
+        // ACTION_VALUE - опциональное поле
+        $actionValueSql = 'NULL';
+        if (!empty($actionValue)) {
+            if (is_array($actionValue) || is_object($actionValue)) {
+                $actionValue = json_encode($actionValue, JSON_UNESCAPED_UNICODE);
+            }
+            $actionValueSql = "'" . $this->connection->getSqlHelper()->forSql((string)$actionValue) . "'";
+        }
+        
         // ACTION_DATE - всегда используем CURRENT_TIMESTAMP (текущая дата/время в момент вызова метода)
 
         // Формируем SQL запрос INSERT
         $sql = "INSERT INTO artmax_calendar_event_journal 
-                (EVENT_ID, ACTION, ACTION_DATE, INITIATOR, USER_ID) 
+                (EVENT_ID, ACTION, ACTION_DATE, ACTION_VALUE, INITIATOR, USER_ID) 
                 VALUES 
-                ({$eventId}, '{$action}', CURRENT_TIMESTAMP, {$initiatorSql}, {$userIdSql})";
+                ({$eventId}, '{$action}', CURRENT_TIMESTAMP, {$actionValueSql}, {$initiatorSql}, {$userIdSql})";
 
         // Выполняем запрос
         $result = $this->connection->query($sql);

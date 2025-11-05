@@ -829,7 +829,8 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                             $eventId,
                             'CREATED_BY_SCHEDULE',
                             'Artmax\Calendar\Calendar::addEvent',
-                            $userId
+                            $userId,
+                            'EVENT_ID=' . $eventId
                         );
                         
                         $eventsCreated = 1;
@@ -1148,7 +1149,8 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                                         $recurringEventId,
                                         'CREATED_BY_SCHEDULE',
                                         'Artmax\Calendar\Calendar::addEvent',
-                                        $userId
+                                        $userId,
+                                        'EVENT_ID=' . $recurringEventId
                                     );
                                     
                                     $eventsCreated++;
@@ -1282,7 +1284,8 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                                 $recurringEventId,
                                 'CREATED_BY_SCHEDULE',
                                 'Artmax\Calendar\Calendar::addEvent',
-                                $userId
+                                $userId,
+                                'EVENT_ID=' . $recurringEventId
                             );
                             
                             $eventsCreated++;
@@ -2287,7 +2290,8 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                     $eventId,
                     'CONTACT_DETACHED',
                     'Artmax\Calendar\Calendar::updateEventContact',
-                    $userId
+                    $userId,
+                    'CONTACT_ID=' . $oldContactId
                 );
             }
             
@@ -2300,7 +2304,8 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                     $eventId,
                     'CONTACT_ATTACHED',
                     'Artmax\Calendar\Calendar::updateEventContact',
-                    $userId
+                    $userId,
+                    'CONTACT_ID=' . $newContactId
                 );
                 
                 return [

@@ -120,6 +120,7 @@ class artmax_calendar extends CModule
             EVENT_ID INT(11) NOT NULL COMMENT 'ID события',
             ACTION VARCHAR(100) NOT NULL COMMENT 'Действие (created, updated, deleted, moved, etc.)',
             ACTION_DATE DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'Дата и время действия',
+            ACTION_VALUE TEXT DEFAULT NULL COMMENT 'Значение действия (что записалось, что отвязалось и т.п.)',
             INITIATOR VARCHAR(255) DEFAULT NULL COMMENT 'Название класса и функции инициатора',
             USER_ID INT(11) DEFAULT NULL COMMENT 'ID пользователя, выполнившего действие',
             PRIMARY KEY (ID),

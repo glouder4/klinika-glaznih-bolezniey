@@ -153,7 +153,8 @@ switch ($action) {
                 $eventId,
                 'CREATED_BY_CUSTOM',
                 'Artmax\Calendar\Calendar::addEvent',
-                $userId
+                $userId,
+                'EVENT_ID=' . $eventId
             );
             
             die(json_encode(['success' => true, 'eventId' => $eventId]));
