@@ -385,6 +385,16 @@ function initializeScheduleForm() {
     if (document.getElementById('schedule-repeat')) {
         toggleEndFields();
     }
+
+    // Предотвращаем стандартную отправку формы
+    const scheduleForm = document.getElementById('schedule-form');
+    if (scheduleForm) {
+        scheduleForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            return false;
+        });
+    }
 }
 
 // Инициализируем форму

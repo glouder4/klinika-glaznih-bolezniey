@@ -278,6 +278,16 @@ function initializeEventEditForm() {
         dateInput.addEventListener('change', updateOccupiedSlots);
         employeeSelect.addEventListener('change', updateOccupiedSlots);
     }
+
+    // Предотвращаем стандартную отправку формы
+    const editEventForm = document.getElementById('edit-event-form');
+    if (editEventForm) {
+        editEventForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            return false;
+        });
+    }
 }
 
 // Инициализируем форму

@@ -47,7 +47,7 @@ $eventColor = $event['EVENT_COLOR'] ?? '#2fc6f6';
 
 <div class="side-panel-content-container">
     <div class="artmax-event-form">
-        <form id="edit-event-form" novalidate>
+        <form id="edit-event-form" novalidate onsubmit="event.preventDefault(); return false;">
             <?= bitrix_sessid_post() ?>
             <input type="hidden" name="event_id" id="edit-event-id" value="<?= htmlspecialchars($arResult['EVENT']['ID']) ?>">
             <input type="hidden" name="branch_id" value="<?= htmlspecialchars($arResult['BRANCH_ID']) ?>">

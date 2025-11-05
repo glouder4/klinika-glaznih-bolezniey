@@ -17,7 +17,7 @@ CJSCore::Init(['ui.buttons']);
 
 <div class="side-panel-content-container">
     <div class="artmax-event-form">
-        <form id="branch-settings-form" novalidate>
+        <form id="branch-settings-form" novalidate onsubmit="event.preventDefault(); saveBranchSettings(); return false;">
             <?= bitrix_sessid_post() ?>
             <input type="hidden" name="branch_id" value="<?= $arResult['BRANCH_ID'] ?>">
             

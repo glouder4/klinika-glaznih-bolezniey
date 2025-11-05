@@ -147,6 +147,15 @@ switch ($action) {
         $eventId = $calendarObj->addEvent($title, $description, $dateFrom, $dateTo, $userId, $branchId, $eventColor, $employeeId);
 
         if ($eventId) {
+            // Записываем в журнал событие создания
+            $journal = new \Artmax\Calendar\Journal();
+            $journal->writeEvent(
+                $eventId,
+                'CREATED_BY_CUSTOM',
+                'Artmax\Calendar\Calendar::addEvent',
+                $userId
+            );
+            
             die(json_encode(['success' => true, 'eventId' => $eventId]));
         } else {
             die(json_encode(['success' => false, 'error' => 'Ошибка добавления события']));

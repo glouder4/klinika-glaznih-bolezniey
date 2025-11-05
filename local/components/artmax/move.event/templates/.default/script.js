@@ -344,6 +344,16 @@ function initializeMoveEventForm() {
     if (currentEmployeeId && dateInput && dateInput.value) {
         loadDoctorSchedule(currentEmployeeId, dateInput.value);
     }
+
+    // Предотвращаем стандартную отправку формы
+    const moveEventForm = document.getElementById('move-event-form');
+    if (moveEventForm) {
+        moveEventForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            return false;
+        });
+    }
 }
 
 // Инициализируем форму

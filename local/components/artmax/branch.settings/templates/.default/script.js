@@ -412,6 +412,17 @@ function initializeBranchSettingsForm() {
         });
     };
 
+    // Предотвращаем стандартную отправку формы
+    const form = document.getElementById('branch-settings-form');
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            saveBranchSettings();
+            return false;
+        });
+    }
+
     // Инициализация формы
     loadEmployees();
     initMultiselect();

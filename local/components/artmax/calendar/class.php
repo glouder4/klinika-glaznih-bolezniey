@@ -818,6 +818,15 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                 if ($calendarObj->isTimeAvailableForDoctor($dateFrom->format('Y-m-d H:i:s'), $dateTo->format('Y-m-d H:i:s'), $employeeId, null, $branchId)) {
                     $eventId = $calendarObj->addEvent($title, '', $dateFrom->format('Y-m-d H:i:s'), $dateTo->format('Y-m-d H:i:s'), $userId, $branchId, $eventColor, $employeeId);
                     if ($eventId) {
+                        // Записываем в журнал событие создания из расписания
+                        $journal = new \Artmax\Calendar\Journal();
+                        $journal->writeEvent(
+                            $eventId,
+                            'CREATED_BY_SCHEDULE',
+                            'Artmax\Calendar\Calendar::addEvent',
+                            $userId
+                        );
+                        
                         $eventsCreated = 1;
                         $event = $calendarObj->getEvent($eventId);
                         if ($event) {
@@ -1219,6 +1228,15 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                         );
 
                         if ($recurringEventId) {
+                            // Записываем в журнал событие создания из расписания
+                            $journal = new \Artmax\Calendar\Journal();
+                            $journal->writeEvent(
+                                $recurringEventId,
+                                'CREATED_BY_SCHEDULE',
+                                'Artmax\Calendar\Calendar::addEvent',
+                                $userId
+                            );
+                            
                             $eventsCreated++;
                             $createdEventIds[] = $recurringEventId;
                         }

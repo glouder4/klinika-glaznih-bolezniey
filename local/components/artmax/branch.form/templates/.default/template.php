@@ -17,7 +17,7 @@ CJSCore::Init(['ui.buttons']);
 
 <div class="side-panel-content-container">
     <div class="artmax-event-form">
-        <form id="add-branch-form" novalidate>
+        <form id="add-branch-form" novalidate onsubmit="event.preventDefault(); return false;">
             <?= bitrix_sessid_post() ?>
             
             <!-- Название филиала - большое поле сверху -->

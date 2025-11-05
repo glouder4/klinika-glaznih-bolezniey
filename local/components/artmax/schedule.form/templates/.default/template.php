@@ -17,7 +17,7 @@ CJSCore::Init(['ui.buttons']);
 
 <div class="side-panel-content-container">
     <div class="artmax-event-form">
-        <form id="schedule-form" novalidate>
+        <form id="schedule-form" novalidate onsubmit="event.preventDefault(); return false;">
             <?= bitrix_sessid_post() ?>
             <input type="hidden" name="branch_id" value="<?= htmlspecialchars($arResult['BRANCH']['ID']) ?>">
             

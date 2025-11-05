@@ -180,6 +180,16 @@ function initializeEmployeeForm() {
             }
         });
     };
+
+    // Предотвращаем стандартную отправку формы
+    const employeeForm = document.getElementById('employee-form');
+    if (employeeForm) {
+        employeeForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            return false;
+        });
+    }
 }
 
 // Вспомогательная функция для trim
