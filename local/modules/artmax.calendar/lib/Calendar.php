@@ -473,8 +473,12 @@ class Calendar
     /**
      * Обновить статус события
      */
-    public function updateEventStatus($eventId, $status)
+    public function updateEventStatus($eventId, $status, $userId = null)
     {
+        // Получаем старое значение статуса для логирования
+        $oldEvent = $this->getEvent($eventId);
+        $oldStatus = $oldEvent ? ($oldEvent['STATUS'] ?? 'active') : null;
+        
         $sql = "
             UPDATE artmax_calendar_events 
             SET STATUS = '" . $this->connection->getSqlHelper()->forSql($status) . "',
@@ -486,6 +490,37 @@ class Calendar
         // Если запись отменена, переводим сделку в "Проиграна"
         if ($result && $status === 'cancelled') {
             $this->updateDealStatusOnCancel($eventId);
+        }
+        
+        // Логируем изменение статуса
+        if ($result && $oldStatus && $oldStatus != $status) {
+            $journal = new \Artmax\Calendar\Journal();
+            
+            if ($status === 'cancelled') {
+                $journal->writeEvent(
+                    $eventId,
+                    'EVENT_CANCELLED',
+                    'Artmax\Calendar\Calendar::updateEventStatus',
+                    $userId,
+                    'STATUS=' . $oldStatus . '->' . $status
+                );
+            } elseif ($oldStatus === 'cancelled' && $status === 'active') {
+                $journal->writeEvent(
+                    $eventId,
+                    'EVENT_RESTORED',
+                    'Artmax\Calendar\Calendar::updateEventStatus',
+                    $userId,
+                    'STATUS=' . $oldStatus . '->' . $status
+                );
+            } else {
+                $journal->writeEvent(
+                    $eventId,
+                    'EVENT_STATUS_CHANGED',
+                    'Artmax\Calendar\Calendar::updateEventStatus',
+                    $userId,
+                    'STATUS=' . $oldStatus . '->' . $status
+                );
+            }
         }
         
         return $result;

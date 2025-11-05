@@ -681,7 +681,7 @@ switch ($action) {
                 }
             }
             
-            $result = $calendarObj->updateEventStatus($eventId, $status);
+            $result = $calendarObj->updateEventStatus($eventId, $status, $GLOBALS['USER']->GetID());
             if ($result) {
                 die(json_encode(['success' => true]));
             } else {
