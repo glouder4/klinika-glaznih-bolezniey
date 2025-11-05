@@ -301,8 +301,8 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                 padding: 0 20px;
             ">
                 <div class="nav-left" style="display: flex; align-items: center; gap: 8px;">
-                <button class="ui-btn ui-btn-icon-angle-down ui-btn-empty nav-btn prev-month" 
-                        onclick="previousMonth()">
+                <button type="button" class="ui-btn ui-btn-icon-angle-down ui-btn-empty nav-btn prev-month" 
+                        onclick="previousMonth(); return false;">
                 </button>
                 
                 <div class="current-month" style="position: relative;">
@@ -330,8 +330,8 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                     </select>
                 </div>
                 
-                <button class="ui-btn ui-btn-icon-angle-down ui-btn-empty nav-btn next-month"  
-                        onclick="nextMonth()">
+                <button type="button" class="ui-btn ui-btn-icon-angle-down ui-btn-empty nav-btn next-month"  
+                        onclick="nextMonth(); return false;">
                 </button>
                 
                 <button class="ui-btn ui-btn-empty nav-btn today-btn" 
@@ -3085,22 +3085,15 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
         // Временное решение: добавляем функцию changeMonth прямо в class.php
         $APPLICATION->AddHeadString('<script>
             window.changeMonth = function(month) {
-                console.log("changeMonth v2.3 called with month:", month);
+                console.log("changeMonth v2.4 called with month:", month);
                 
-                // Получаем текущую дату из URL
-                const urlParams = new URLSearchParams(window.location.search);
-                const currentDateStr = urlParams.get("date") || new Date().toISOString().split("T")[0];
+                // ВСЕГДА используем текущий год, независимо от URL
+                const currentYear = new Date().getFullYear();
                 
-                console.log("Current date from URL:", currentDateStr);
+                console.log("Using current year:", currentYear, "for month:", month);
                 
-                // Парсим текущую дату
-                const currentDate = new Date(currentDateStr);
-                const year = currentDate.getFullYear();
-                
-                console.log("Parsed year:", year);
-                
-                // Создаем новую дату с выбранным месяцем (1-е число месяца)
-                const dateString = year + "-" + String(month).padStart(2, "0") + "-" + "01";
+                // Создаем новую дату с выбранным месяцем и текущим годом (1-е число месяца)
+                const dateString = currentYear + "-" + String(month).padStart(2, "0") + "-" + "01";
                 
                 console.log("Changing month to:", month, "New date:", dateString);
                 

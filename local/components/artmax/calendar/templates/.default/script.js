@@ -6460,136 +6460,135 @@
     }
 
     // Функции навигации по календарю
-    window.previousMonth = function() {
-        const currentMonthElement = document.querySelector('.current-month');
-        if (currentMonthElement) {
-            const currentText = currentMonthElement.textContent;
-            const currentDate = new Date();
+    function previousMonth(event) {
+        console.log('=== previousMonth() ВЫЗВАНА ===', event);
+        
+        // Предотвращаем поведение по умолчанию
+        if (event) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+        
+        // Получаем текущий год и месяц из URL или глобальных переменных
+        const urlParams = new URLSearchParams(window.location.search);
+        const dateParam = urlParams.get('date');
+        
+        console.log('previousMonth: dateParam из URL:', dateParam);
+        console.log('previousMonth: window.currentYear:', window.currentYear, 'window.currentMonth:', window.currentMonth);
+        
+        let currentYear, currentMonth;
+        
+        if (dateParam) {
+            // Если есть дата в URL, парсим её напрямую (избегаем проблем с часовыми поясами)
+            const dateParts = dateParam.split('-');
+            console.log('previousMonth: dateParts:', dateParts);
             
-            // Парсим текущий месяц и год (русские названия)
-            const monthNames = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
-                               'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
-            
-            let currentMonth = currentDate.getMonth();
-            let currentYear = currentDate.getFullYear();
-            
-            // Пытаемся найти месяц в тексте
-            for (let i = 0; i < monthNames.length; i++) {
-                if (currentText.includes(monthNames[i])) {
-                    currentMonth = i;
-                    break;
+            if (dateParts.length === 3) {
+                currentYear = parseInt(dateParts[0], 10);
+                currentMonth = parseInt(dateParts[1], 10) - 1; // Преобразуем 1-12 в 0-11
+                console.log('previousMonth: Парсинг из URL - год:', currentYear, 'месяц (0-11):', currentMonth, 'месяц (1-12):', currentMonth + 1);
+            } else {
+                // Fallback на Date, если формат не распознан
+                const urlDate = new Date(dateParam);
+                if (!isNaN(urlDate.getTime())) {
+                    currentYear = urlDate.getFullYear();
+                    currentMonth = urlDate.getMonth();
+                    console.log('previousMonth: Fallback Date - год:', currentYear, 'месяц:', currentMonth);
+                } else {
+                    const now = new Date();
+                    currentYear = now.getFullYear();
+                    currentMonth = now.getMonth();
+                    console.log('previousMonth: Используем текущую дату - год:', currentYear, 'месяц:', currentMonth);
                 }
             }
-            
-            // Переходим к предыдущему месяцу
-            if (currentMonth === 0) {
-                currentMonth = 11;
-                currentYear--;
-            } else {
-                currentMonth--;
-            }
-            
-            // Обновляем URL и перезагружаем страницу
-            const newDate = new Date(currentYear, currentMonth, 1);
-            // Форматируем дату в локальном формате, избегая проблем с часовыми поясами
-            const year = newDate.getFullYear();
-            const month = String(newDate.getMonth() + 1).padStart(2, '0');
-            const day = String(newDate.getDate()).padStart(2, '0');
-            const newDateString = `${year}-${month}-${day}`;
-            window.location.href = window.location.pathname + '?date=' + newDateString;
+        } else {
+            // Если нет даты в URL, используем глобальные переменные или текущую дату
+            const now = new Date();
+            currentYear = window.currentYear || now.getFullYear();
+            currentMonth = (window.currentMonth || (now.getMonth() + 1)) - 1; // Преобразуем 1-12 в 0-11
+            console.log('previousMonth: Нет dateParam, используем глобальные - год:', currentYear, 'месяц (0-11):', currentMonth);
         }
-    }
-
-    function previousMonth() {
-        const currentMonthElement = document.querySelector('.current-month');
-        if (currentMonthElement) {
-            const currentText = currentMonthElement.textContent;
-            const currentDate = new Date();
-            
-            // Парсим текущий месяц и год (русские названия)
-            const monthNames = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
-                               'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
-            
-            let currentMonth = currentDate.getMonth();
-            let currentYear = currentDate.getFullYear();
-            
-            // Пытаемся найти месяц в тексте
-            for (let i = 0; i < monthNames.length; i++) {
-                if (currentText.includes(monthNames[i])) {
-                    currentMonth = i;
-                    break;
-                }
-            }
-            
-            // Переходим к предыдущему месяцу
-            if (currentMonth === 0) {
-                currentMonth = 11;
-                currentYear--;
-            } else {
-                currentMonth--;
-            }
-            
-            // Обновляем глобальные переменные
-            window.currentYear = currentYear;
-            window.currentMonth = currentMonth + 1;
-            
-            console.log('previousMonth: Обновлены глобальные переменные - year:', window.currentYear, 'month:', window.currentMonth);
-            
-            // Обновляем URL и перезагружаем страницу
-            const newDate = new Date(currentYear, currentMonth, 1);
-            // Форматируем дату в локальном формате, избегая проблем с часовыми поясами
-            const year = newDate.getFullYear();
-            const month = String(newDate.getMonth() + 1).padStart(2, '0');
-            const day = String(newDate.getDate()).padStart(2, '0');
-            const newDateString = `${year}-${month}-${day}`;
-            window.location.href = window.location.pathname + '?date=' + newDateString;
+        
+        console.log('previousMonth: Текущий месяц (1-12):', currentMonth + 1, 'год:', currentYear);
+        
+        // Переходим к предыдущему месяцу
+        if (currentMonth === 0) {
+            currentMonth = 11;
+            currentYear--;
+            console.log('previousMonth: Переход через год назад - декабрь предыдущего года');
+        } else {
+            currentMonth--;
+            console.log('previousMonth: Уменьшаем месяц на 1');
         }
+        
+        // Обновляем глобальные переменные
+        window.currentYear = currentYear;
+        window.currentMonth = currentMonth + 1;
+        
+        console.log('previousMonth: Новый месяц (1-12):', window.currentMonth, 'год:', window.currentYear);
+        
+        // Формируем новую дату
+        const newDateString = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-01`;
+        console.log('previousMonth: Переход на дату:', newDateString);
+        
+        // Обновляем URL и перезагружаем страницу
+        window.location.href = window.location.pathname + '?date=' + newDateString;
     }
 
     function nextMonth() {
-        const currentMonthElement = document.querySelector('.current-month');
-        if (currentMonthElement) {
-            const currentText = currentMonthElement.textContent;
-            const currentDate = new Date();
-            
-            // Парсим текущий месяц и год (русские названия)
-            const monthNames = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
-                               'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
-            
-            let currentMonth = currentDate.getMonth();
-            let currentYear = currentDate.getFullYear();
-            
-            // Пытаемся найти месяц в тексте
-            for (let i = 0; i < monthNames.length; i++) {
-                if (currentText.includes(monthNames[i])) {
-                    currentMonth = i;
-                    break;
+        // Получаем текущий год и месяц из URL или глобальных переменных
+        const urlParams = new URLSearchParams(window.location.search);
+        const dateParam = urlParams.get('date');
+        
+        let currentYear, currentMonth;
+        
+        if (dateParam) {
+            // Если есть дата в URL, парсим её напрямую (избегаем проблем с часовыми поясами)
+            const dateParts = dateParam.split('-');
+            if (dateParts.length === 3) {
+                currentYear = parseInt(dateParts[0], 10);
+                currentMonth = parseInt(dateParts[1], 10) - 1; // Преобразуем 1-12 в 0-11
+            } else {
+                // Fallback на Date, если формат не распознан
+                const urlDate = new Date(dateParam);
+                if (!isNaN(urlDate.getTime())) {
+                    currentYear = urlDate.getFullYear();
+                    currentMonth = urlDate.getMonth();
+                } else {
+                    const now = new Date();
+                    currentYear = now.getFullYear();
+                    currentMonth = now.getMonth();
                 }
             }
-            
-            // Переходим к следующему месяцу
-            if (currentMonth === 11) {
-                currentMonth = 0;
-                currentYear++;
-            } else {
-                currentMonth++;
-            }
-            
-            // Обновляем глобальные переменные
-            window.currentYear = currentYear;
-            window.currentMonth = currentMonth + 1;
-            
-            console.log('nextMonth: Обновлены глобальные переменные - year:', window.currentYear, 'month:', window.currentMonth);
-            
-            // Обновляем URL и перезагружаем страницу
-            const newDate = new Date(currentYear, currentMonth, 1);
-            // Форматируем дату в локальном формате, избегая проблем с часовыми поясами
-            const year = newDate.getFullYear();
-            const month = String(newDate.getMonth() + 1).padStart(2, '0');
-            const day = String(newDate.getDate()).padStart(2, '0');
-            const newDateString = `${year}-${month}-${day}`;
-            window.location.href = window.location.pathname + '?date=' + newDateString;
+        } else {
+            // Если нет даты в URL, используем глобальные переменные или текущую дату
+            const now = new Date();
+            currentYear = window.currentYear || now.getFullYear();
+            currentMonth = (window.currentMonth || (now.getMonth() + 1)) - 1; // Преобразуем 1-12 в 0-11
         }
+        
+        console.log('nextMonth: Текущий месяц:', currentMonth + 1, 'год:', currentYear);
+        
+        // Переходим к следующему месяцу
+        if (currentMonth === 11) {
+            currentMonth = 0;
+            currentYear++;
+        } else {
+            currentMonth++;
+        }
+        
+        // Обновляем глобальные переменные
+        window.currentYear = currentYear;
+        window.currentMonth = currentMonth + 1;
+        
+        console.log('nextMonth: Новый месяц:', window.currentMonth, 'год:', window.currentYear);
+        
+        // Формируем новую дату
+        const newDateString = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-01`;
+        console.log('nextMonth: Переход на дату:', newDateString);
+        
+        // Обновляем URL и перезагружаем страницу
+        window.location.href = window.location.pathname + '?date=' + newDateString;
     }
 
     function goToToday() {
@@ -7459,5 +7458,16 @@
         url.searchParams.set('date', dateString);
         window.location.href = url.toString();
     };
+
+    // Убеждаемся, что функции навигации экспортированы в window
+    // (они уже экспортированы выше, но на всякий случай повторяем)
+    if (typeof previousMonth === 'function') {
+        window.previousMonth = previousMonth;
+        console.log('previousMonth экспортирована в window');
+    }
+    if (typeof nextMonth === 'function') {
+        window.nextMonth = nextMonth;
+        console.log('nextMonth экспортирована в window');
+    }
 
 })();
