@@ -374,8 +374,24 @@ switch ($action) {
         }
 
         try {
+            $oldEmployeeId = !empty($event['EMPLOYEE_ID']) ? (int)$event['EMPLOYEE_ID'] : null;
+            $newEmployeeId = (int)$employeeId;
+            
             $result = $calendarObj->assignDoctor($eventId, $employeeId);
             if ($result) {
+                // Записываем в журнал изменение ответственного врача
+                $journal = new \Artmax\Calendar\Journal();
+                $userId = $GLOBALS['USER']->GetID();
+                
+                $actionValue = 'EMPLOYEE_ID=' . ($oldEmployeeId ? $oldEmployeeId : 'null') . '->' . $newEmployeeId;
+                $journal->writeEvent(
+                    $eventId,
+                    'EMPLOYEE_CHANGED',
+                    'Artmax\Calendar\Calendar::assignDoctor',
+                    $userId,
+                    $actionValue
+                );
+                
                 die(json_encode(['success' => true]));
             } else {
                 die(json_encode(['success' => false, 'error' => 'Ошибка назначения врача']));
@@ -1036,10 +1052,26 @@ switch ($action) {
                 die(json_encode(['success' => false, 'error' => 'Нет прав на редактирование']));
             }
 
+            // Получаем старое значение статуса подтверждения
+            $oldConfirmationStatus = !empty($event['CONFIRMATION_STATUS']) ? $event['CONFIRMATION_STATUS'] : 'pending';
+            
             // Обновляем статус подтверждения в базе данных
             $result = $calendarObj->updateEventConfirmationStatus($eventId, $confirmationStatus);
 
             if ($result) {
+                // Записываем в журнал изменение статуса подтверждения
+                $journal = new \Artmax\Calendar\Journal();
+                $userId = $GLOBALS['USER']->GetID();
+                
+                $actionValue = 'CONFIRMATION_STATUS=' . $oldConfirmationStatus . '->' . $confirmationStatus;
+                $journal->writeEvent(
+                    $eventId,
+                    'CONFIRMATION_STATUS_CHANGED',
+                    'Artmax\Calendar\Calendar::updateEventConfirmationStatus',
+                    $userId,
+                    $actionValue
+                );
+                
                 die(json_encode(['success' => true, 'message' => 'Статус подтверждения обновлен']));
             } else {
                 die(json_encode(['success' => false, 'error' => 'Ошибка обновления статуса подтверждения']));
@@ -1100,10 +1132,26 @@ switch ($action) {
                 die(json_encode(['success' => false, 'error' => 'Нет прав на редактирование']));
             }
             
+            // Получаем старое значение статуса визита
+            $oldVisitStatus = !empty($event['VISIT_STATUS']) ? $event['VISIT_STATUS'] : 'not_specified';
+            
             // Обновляем статус визита в базе данных
             $result = $calendarObj->updateEventVisitStatus($eventId, $visitStatus);
             
             if ($result) {
+                // Записываем в журнал изменение статуса визита
+                $journal = new \Artmax\Calendar\Journal();
+                $userId = $GLOBALS['USER']->GetID();
+                
+                $actionValue = 'VISIT_STATUS=' . $oldVisitStatus . '->' . $visitStatus;
+                $journal->writeEvent(
+                    $eventId,
+                    'VISIT_STATUS_CHANGED',
+                    'Artmax\Calendar\Calendar::updateEventVisitStatus',
+                    $userId,
+                    $actionValue
+                );
+                
                 die(json_encode(['success' => true, 'message' => 'Статус визита обновлен']));
             } else {
                 die(json_encode(['success' => false, 'error' => 'Ошибка обновления статуса визита']));

@@ -1763,10 +1763,36 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                 return ['success' => false, 'error' => 'Неверные данные сделки'];
             }
             
+            $journal = new \Artmax\Calendar\Journal();
+            $userId = $USER->GetID();
+            
+            $oldDealId = !empty($event['DEAL_ENTITY_ID']) ? (int)$event['DEAL_ENTITY_ID'] : null;
+            $newDealId = (int)$dealDataArray['id'];
+            
+            // Если был привязан другой deal, сначала записываем отвязку старого
+            if ($oldDealId && $oldDealId !== $newDealId) {
+                $journal->writeEvent(
+                    $eventId,
+                    'DEAL_DETACHED',
+                    'Artmax\Calendar\Calendar::updateEventDeal',
+                    $userId,
+                    'DEAL_ID=' . $oldDealId
+                );
+            }
+            
             // Обновляем событие, добавляя ID сделки
             $result = $calendar->updateEventDeal($eventId, $dealDataArray['id']);
-
+            
             if ($result) {
+                // Записываем в журнал привязку новой сделки
+                $journal->writeEvent(
+                    $eventId,
+                    'DEAL_ATTACHED',
+                    'Artmax\Calendar\Calendar::updateEventDeal',
+                    $userId,
+                    'DEAL_ID=' . $newDealId
+                );
+                
                 // Создаем или обновляем активность в сделке
                 $dealId = $dealDataArray['id'];
                 
@@ -2134,8 +2160,34 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
             $dealId = $deal->Add($dealFields);
             
             if ($dealId) {
+                $journal = new \Artmax\Calendar\Journal();
+                $userId = $USER->GetID();
+                
+                // Проверяем, был ли уже привязан deal
+                $oldDealId = !empty($event['DEAL_ENTITY_ID']) ? (int)$event['DEAL_ENTITY_ID'] : null;
+                
+                // Если был привязан другой deal, сначала записываем отвязку старого
+                if ($oldDealId && $oldDealId !== $dealId) {
+                    $journal->writeEvent(
+                        $eventId,
+                        'DEAL_DETACHED',
+                        'Artmax\Calendar\Calendar::updateEventDeal',
+                        $userId,
+                        'DEAL_ID=' . $oldDealId
+                    );
+                }
+                
                 // Привязываем сделку к событию
                 $calendar->updateEventDeal($eventId, $dealId);
+                
+                // Записываем в журнал привязку новой сделки
+                $journal->writeEvent(
+                    $eventId,
+                    'DEAL_ATTACHED',
+                    'Artmax\Calendar\Calendar::updateEventDeal',
+                    $userId,
+                    'DEAL_ID=' . $dealId
+                );
                 
                 // Создаем активность (бронирование) в сделке с датой и временем события
                 $activityId = $calendar->createCrmActivity(
