@@ -1329,7 +1329,7 @@ class Calendar
     /**
      * Переносит событие на новое время с обменом местами
      */
-    public function moveEvent($eventId, $newDateFrom, $newDateTo, $employeeId = null, $branchId = null)
+    public function moveEvent($eventId, $newDateFrom, $newDateTo, $employeeId = null, $branchId = null, $userId = null)
     {
         try {
             // Получаем данные о переносимом событии
@@ -1343,19 +1343,51 @@ class Calendar
             $newTimeFrom = date('H:i:s', strtotime($newDateFrom));
             $newTimeTo = date('H:i:s', strtotime($newDateTo));
 
-            // Ищем событие на новом месте (в том же временном интервале)
+            // Ищем событие на новом месте (начинается в то же время)
+            // Если найдем - просто меняемся местами
+            $safeNewDateFrom = $this->connection->getSqlHelper()->forSql($newDateFrom);
+            
             $sql = "
                 SELECT ID, TITLE, DESCRIPTION, DATE_FROM, DATE_TO, EVENT_COLOR, 
                        CONTACT_ENTITY_ID, DEAL_ENTITY_ID, EMPLOYEE_ID, BRANCH_ID
                 FROM artmax_calendar_events 
-                WHERE DATE_FROM = '$newDateFrom' 
-                  AND DATE_TO = '$newDateTo'
+                WHERE DATE_FROM = '$safeNewDateFrom'
                   AND STATUS != 'cancelled'
                   AND ID != " . (int)$eventId;
+            
+            // Если указан employeeId, ищем среди событий этого врача
+            if ($employeeId) {
+                $sql .= " AND EMPLOYEE_ID = " . (int)$employeeId;
+            }
+            
+            // Если указан branchId, ищем среди событий этого филиала
+            if ($branchId) {
+                $sql .= " AND BRANCH_ID = " . (int)$branchId;
+            }
 
             $result = $this->connection->query($sql);
             $targetEvent = $result->fetch();
+            
+            // Логируем результат поиска
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "MOVE_EVENT: Поиск события на новом месте:\n" . 
+                "  - newDateFrom: $newDateFrom\n" . 
+                "  - employeeId: " . ($employeeId ?? 'null') . "\n" . 
+                "  - branchId: " . ($branchId ?? 'null') . "\n" . 
+                "  - SQL: $sql\n" . 
+                "  - Найдено событие: " . ($targetEvent ? 'да (ID=' . $targetEvent['ID'] . ', DATE_FROM=' . $targetEvent['DATE_FROM'] . ', DATE_TO=' . $targetEvent['DATE_TO'] . ')' : 'нет') . "\n", 
+                FILE_APPEND | LOCK_EX);
 
+            // Сохраняем старые значения для логирования
+            $oldMovingDateFrom = $this->convertRussianDateToStandard($movingEvent['DATE_FROM']);
+            $oldMovingDateTo = $this->convertRussianDateToStandard($movingEvent['DATE_TO']);
+            $oldMovingEmployeeId = !empty($movingEvent['EMPLOYEE_ID']) ? (int)$movingEvent['EMPLOYEE_ID'] : null;
+            $oldMovingBranchId = (int)$movingEvent['BRANCH_ID'];
+            
+            // Нормализуем новые значения
+            $newMovingEmployeeId = $employeeId ? (int)$employeeId : null;
+            $newMovingBranchId = $branchId ? (int)$branchId : $oldMovingBranchId;
+            
             // Начинаем транзакцию (Bitrix method)
             file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
                 "MOVE_EVENT: Начинаем транзакцию\n", 
@@ -1366,12 +1398,26 @@ class Calendar
             if ($targetEvent) {
                 // Если на новом месте есть событие - обмениваемся местами
                 
+                // Сохраняем старые значения целевого события для логирования
+                $oldTargetDateFrom = $targetEvent['DATE_FROM'];
+                $oldTargetDateTo = $targetEvent['DATE_TO'];
+                $oldTargetEmployeeId = !empty($targetEvent['EMPLOYEE_ID']) ? (int)$targetEvent['EMPLOYEE_ID'] : null;
+                $oldTargetBranchId = (int)$targetEvent['BRANCH_ID'];
+                
+                // Вычисляем длительность целевого события (в секундах)
+                $targetDateFromObj = new \DateTime($oldTargetDateFrom);
+                $targetDateToObj = new \DateTime($oldTargetDateTo);
+                $targetDuration = $targetDateToObj->getTimestamp() - $targetDateFromObj->getTimestamp();
+                
                 // 1. Обновляем событие на новом месте (становится переносимым)
-                // Оно получает старое время, старого врача и старый филиал от переносимого события
-                $oldDateFrom = $this->convertRussianDateToStandard($movingEvent['DATE_FROM']);
-                $oldDateTo = $this->convertRussianDateToStandard($movingEvent['DATE_TO']);
-                $oldEmployeeId = $movingEvent['EMPLOYEE_ID'];
-                $oldBranchId = $movingEvent['BRANCH_ID'];
+                // Оно получает старое время начала от переносимого события, но сохраняет свою длительность
+                $oldDateFrom = $oldMovingDateFrom;
+                $oldDateFromObj = new \DateTime($oldDateFrom);
+                $oldDateToObj = clone $oldDateFromObj;
+                $oldDateToObj->add(new \DateInterval('PT' . $targetDuration . 'S'));
+                $oldDateTo = $oldDateToObj->format('Y-m-d H:i:s');
+                $oldEmployeeId = $oldMovingEmployeeId;
+                $oldBranchId = $oldMovingBranchId;
                 
                 // Логируем для отладки
                 file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
@@ -1411,10 +1457,21 @@ class Calendar
                 $updateTargetSql = "UPDATE artmax_calendar_events SET " . implode(', ', $targetSet) . " WHERE ID = " . (int)$targetEvent['ID'];
                 $this->connection->query($updateTargetSql);
 
-                // 2. Обновляем переносимое событие (получает новое время и флаг изменения)
+                // 2. Обновляем переносимое событие (получает новое время начала, но сохраняет свою длительность)
+                // Вычисляем длительность переносимого события (в секундах)
+                $movingDateFromObj = new \DateTime($oldMovingDateFrom);
+                $movingDateToObj = new \DateTime($oldMovingDateTo);
+                $movingDuration = $movingDateToObj->getTimestamp() - $movingDateFromObj->getTimestamp();
+                
+                // Применяем длительность к новому времени начала
+                $newDateFromObj = new \DateTime($newDateFrom);
+                $newDateToObj = clone $newDateFromObj;
+                $newDateToObj->add(new \DateInterval('PT' . $movingDuration . 'S'));
+                $calculatedNewDateTo = $newDateToObj->format('Y-m-d H:i:s');
+                
                 $movingSet = [];
                 $movingSet[] = "DATE_FROM = '" . $this->connection->getSqlHelper()->forSql($newDateFrom) . "'";
-                $movingSet[] = "DATE_TO = '" . $this->connection->getSqlHelper()->forSql($newDateTo) . "'";
+                $movingSet[] = "DATE_TO = '" . $this->connection->getSqlHelper()->forSql($calculatedNewDateTo) . "'";
                 $movingSet[] = "TIME_IS_CHANGED = 1";
                 if ($employeeId) {
                     $movingSet[] = "EMPLOYEE_ID = " . (int)$employeeId;
@@ -1429,12 +1486,16 @@ class Calendar
 
             } else {
                 // Если на новом месте пусто - просто переносим событие
+                // Логирование для этого случая будет добавлено после COMMIT
                 $movingSet = [];
                 $movingSet[] = "DATE_FROM = '" . $this->connection->getSqlHelper()->forSql($newDateFrom) . "'";
                 $movingSet[] = "DATE_TO = '" . $this->connection->getSqlHelper()->forSql($newDateTo) . "'";
                 $movingSet[] = "TIME_IS_CHANGED = 1";
                 if ($employeeId) {
                     $movingSet[] = "EMPLOYEE_ID = " . (int)$employeeId;
+                } else {
+                    // Если employeeId не передан, но был в событии, он может быть NULL
+                    $movingSet[] = "EMPLOYEE_ID = " . ($oldMovingEmployeeId ? (int)$oldMovingEmployeeId : 'NULL');
                 }
                 if ($branchId) {
                     $movingSet[] = "BRANCH_ID = " . (int)$branchId;
@@ -1455,6 +1516,109 @@ class Calendar
 
             // Подтверждаем транзакцию
             $this->connection->query("COMMIT");
+            
+            // Записываем в журнал изменения для переносимого события
+            if ($userId) {
+                $journal = new \Artmax\Calendar\Journal();
+                
+                // Логируем изменения переносимого события
+                // DATE_FROM
+                if ($oldMovingDateFrom != $newDateFrom) {
+                    $journal->writeEvent(
+                        $eventId,
+                        'EVENT_MOVED_DATE_FROM',
+                        'Artmax\Calendar\Calendar::moveEvent',
+                        $userId,
+                        'DATE_FROM=' . $movingEvent['DATE_FROM'] . '->' . $newDateFrom
+                    );
+                }
+                
+                // DATE_TO
+                if ($oldMovingDateTo != $newDateTo) {
+                    $journal->writeEvent(
+                        $eventId,
+                        'EVENT_MOVED_DATE_TO',
+                        'Artmax\Calendar\Calendar::moveEvent',
+                        $userId,
+                        'DATE_TO=' . $movingEvent['DATE_TO'] . '->' . $newDateTo
+                    );
+                }
+                
+                // EMPLOYEE_ID - определяем финальное значение в зависимости от наличия обмена местами
+                $finalMovingEmployeeId = $targetEvent ? $newMovingEmployeeId : ($employeeId ? (int)$employeeId : $oldMovingEmployeeId);
+                if ($oldMovingEmployeeId != $finalMovingEmployeeId) {
+                    $journal->writeEvent(
+                        $eventId,
+                        'EVENT_MOVED_EMPLOYEE',
+                        'Artmax\Calendar\Calendar::moveEvent',
+                        $userId,
+                        'EMPLOYEE_ID=' . ($oldMovingEmployeeId ?? 'null') . '->' . ($finalMovingEmployeeId ?? 'null')
+                    );
+                }
+                
+                // BRANCH_ID - определяем финальное значение в зависимости от наличия обмена местами
+                $finalMovingBranchId = $targetEvent ? $newMovingBranchId : ($branchId ? (int)$branchId : $oldMovingBranchId);
+                if ($oldMovingBranchId != $finalMovingBranchId) {
+                    $journal->writeEvent(
+                        $eventId,
+                        'EVENT_MOVED_BRANCH',
+                        'Artmax\Calendar\Calendar::moveEvent',
+                        $userId,
+                        'BRANCH_ID=' . $oldMovingBranchId . '->' . $finalMovingBranchId
+                    );
+                }
+                
+                // Если был обмен местами, логируем изменения целевого события
+                if ($targetEvent) {
+                    // Даты из SQL запроса в формате Y-m-d H:i:s, нормализуем для сравнения
+                    $oldTargetDateFromNormalized = $oldTargetDateFrom;
+                    $oldTargetDateToNormalized = $oldTargetDateTo;
+                    
+                    // DATE_FROM целевого события
+                    if ($oldTargetDateFromNormalized != $oldDateFrom) {
+                        $journal->writeEvent(
+                            $targetEvent['ID'],
+                            'EVENT_MOVED_DATE_FROM',
+                            'Artmax\Calendar\Calendar::moveEvent',
+                            $userId,
+                            'DATE_FROM=' . $oldTargetDateFrom . '->' . $oldDateFrom
+                        );
+                    }
+                    
+                    // DATE_TO целевого события
+                    if ($oldTargetDateToNormalized != $oldDateTo) {
+                        $journal->writeEvent(
+                            $targetEvent['ID'],
+                            'EVENT_MOVED_DATE_TO',
+                            'Artmax\Calendar\Calendar::moveEvent',
+                            $userId,
+                            'DATE_TO=' . $oldTargetDateTo . '->' . $oldDateTo
+                        );
+                    }
+                    
+                    // EMPLOYEE_ID целевого события
+                    if ($oldTargetEmployeeId != $oldEmployeeId) {
+                        $journal->writeEvent(
+                            $targetEvent['ID'],
+                            'EVENT_MOVED_EMPLOYEE',
+                            'Artmax\Calendar\Calendar::moveEvent',
+                            $userId,
+                            'EMPLOYEE_ID=' . ($oldTargetEmployeeId ?? 'null') . '->' . ($oldEmployeeId ?? 'null')
+                        );
+                    }
+                    
+                    // BRANCH_ID целевого события
+                    if ($oldTargetBranchId != $oldBranchId) {
+                        $journal->writeEvent(
+                            $targetEvent['ID'],
+                            'EVENT_MOVED_BRANCH',
+                            'Artmax\Calendar\Calendar::moveEvent',
+                            $userId,
+                            'BRANCH_ID=' . $oldTargetBranchId . '->' . $oldBranchId
+                        );
+                    }
+                }
+            }
             
             file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
                 "MOVE_EVENT: Транзакция успешно завершена\n", 

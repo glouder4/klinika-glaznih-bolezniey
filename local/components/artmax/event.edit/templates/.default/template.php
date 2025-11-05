@@ -188,7 +188,7 @@ $eventColor = $event['EVENT_COLOR'] ?? '#2fc6f6';
     <?php if ($arResult['IS_IFRAME']): ?>
     <!-- Кнопки для iframe режима -->
     <div class="webform-buttons calendar-form-buttons-fixed">
-        <input type="button" class="ui-btn ui-btn-danger" id="delete-event-btn" value="Удалить" onclick="deleteEvent()">
+        <!--<input type="button" class="ui-btn ui-btn-danger" id="delete-event-btn" value="Удалить" onclick="deleteEvent()">-->
         <input type="button" class="ui-btn ui-btn-success" id="save-event-btn" value="Сохранить" onclick="saveEditEvent()">
         <input type="button" class="ui-btn ui-btn-link" id="cancel-event-btn" value="Отмена" onclick="closeSidePanel()">
     </div>

@@ -2829,7 +2829,8 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                 $dateFrom,
                 $dateTo,
                 $employeeId ?? (int)$event['EMPLOYEE_ID'],
-                $branchId ?? (int)$event['BRANCH_ID']
+                $branchId ?? (int)$event['BRANCH_ID'],
+                $USER->GetID()
             );
             
             file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
