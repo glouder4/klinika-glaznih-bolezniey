@@ -89,8 +89,8 @@ if (!CModule::IncludeModule('artmax.calendar')) {
     die(json_encode(['success' => false, 'error' => 'Модуль artmax.calendar не установлен']));
 }
 
-// Получаем действие
-$action = $_POST['action'] ?? '';
+// Получаем действие из POST или GET (для совместимости)
+$action = $_POST['action'] ?? $_GET['action'] ?? '';
 
 // Логируем входящий запрос
 file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
@@ -101,6 +101,9 @@ file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
     FILE_APPEND | LOCK_EX);
 file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
     "POST data: " . json_encode($_POST) . "\n", 
+    FILE_APPEND | LOCK_EX);
+file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+    "Raw input: " . file_get_contents('php://input') . "\n", 
     FILE_APPEND | LOCK_EX);
 
 // Создаем объект календаря

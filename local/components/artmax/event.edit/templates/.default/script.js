@@ -156,6 +156,12 @@ function initializeEventEditForm() {
         formData.append('dateTo', dateTo);
         formData.append('sessid', getCSRFToken());
         
+        // Конвертируем FormData в URLSearchParams для корректной отправки
+        const postData = new URLSearchParams();
+        for (const [key, value] of formData.entries()) {
+            postData.append(key, value);
+        }
+        
         fetch('/local/components/artmax/calendar/ajax.php', {
             method: 'POST',
             headers: {
@@ -163,7 +169,7 @@ function initializeEventEditForm() {
                 'X-Requested-With': 'XMLHttpRequest',
                 'X-Bitrix-Csrf-Token': getCSRFToken()
             },
-            body: formData
+            body: postData
         })
         .then(response => response.text())
         .then(text => {
