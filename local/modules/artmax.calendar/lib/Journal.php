@@ -81,5 +81,48 @@ class Journal
 
         return false;
     }
+
+    /**
+     * Получить записи журнала для события
+     * 
+     * @param int $eventId ID события
+     * @return array Массив записей журнала, отсортированных по ACTION_DATE (от новых к старым)
+     */
+    public function getEventJournal($eventId)
+    {
+        if (empty($eventId) || !is_numeric($eventId)) {
+            return [];
+        }
+
+        $eventId = (int)$eventId;
+
+        $sql = "
+            SELECT 
+                ID,
+                EVENT_ID,
+                ACTION,
+                DATE_FORMAT(ACTION_DATE, '%d.%m.%Y %H:%i:%s') AS ACTION_DATE_FORMATTED,
+                ACTION_DATE,
+                ACTION_VALUE,
+                INITIATOR,
+                USER_ID
+            FROM artmax_calendar_event_journal 
+            WHERE EVENT_ID = {$eventId}
+            ORDER BY ACTION_DATE ASC
+        ";
+
+        $result = $this->connection->query($sql);
+        
+        if (!$result) {
+            return [];
+        }
+
+        $entries = [];
+        while ($row = $result->fetch()) {
+            $entries[] = $row;
+        }
+
+        return $entries;
+    }
 }
 
