@@ -51,7 +51,7 @@ function initializeScheduleForm() {
                 // Скрываем дни недели при отключении повторения
                 const weeklyDays = document.getElementById('weekly-days');
                 if (weeklyDays) {
-                    weeklyDays.style.display = 'none';
+                    weeklyDays.style.setProperty('display', 'none', 'important');
                 }
             }
         }
@@ -63,10 +63,11 @@ function initializeScheduleForm() {
         const weeklyDays = document.getElementById('weekly-days');
         
         if (frequency && weeklyDays) {
+            // Блок скрывается всегда, если выбрано НЕ "weekly"
             if (frequency.value === 'weekly') {
-                weeklyDays.style.display = 'block';
+                weeklyDays.style.setProperty('display', 'flex', 'important');
             } else {
-                weeklyDays.style.display = 'none';
+                weeklyDays.style.setProperty('display', 'none', 'important');
             }
         }
     };
@@ -390,6 +391,16 @@ function initializeScheduleForm() {
     
     // Инициализируем состояние weekly-days (должен быть скрыт по умолчанию)
     toggleWeeklyDays();
+
+    // Добавляем обработчик события на select для гарантированного скрытия блока
+    const frequencySelect = document.getElementById('schedule-frequency');
+    if (frequencySelect) {
+        // Удаляем старый обработчик, если есть, и добавляем новый
+        frequencySelect.removeEventListener('change', toggleWeeklyDays);
+        frequencySelect.addEventListener('change', toggleWeeklyDays);
+        // Также обрабатываем событие input для большей надежности
+        frequencySelect.addEventListener('input', toggleWeeklyDays);
+    }
 
     // Предотвращаем стандартную отправку формы
     const scheduleForm = document.getElementById('schedule-form');

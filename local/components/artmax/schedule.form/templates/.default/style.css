@@ -8,6 +8,7 @@
     margin: 15px;
     border-radius: 12px;
     max-width: 100%;
+    overflow-y: scroll;
 }
 
 /* Секция названия расписания - большое поле сверху */
@@ -278,6 +279,11 @@
     margin-top: 16px;
     padding-top: 16px;
     border-top: 1px solid #e6e9ec;
+}
+
+/* Блок выбора дней недели скрыт по умолчанию */
+#weekly-days {
+    display: none !important;
 }
 
 /* Color Picker */

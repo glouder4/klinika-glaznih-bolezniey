@@ -103,9 +103,9 @@ CJSCore::Init(['ui.buttons']);
                     
                     <!-- Дни недели для еженедельного повторения -->
                     <div id="weekly-days" class="artmax-form-field" style="display: none;">
-                        <label class="artmax-field-label">Дни недели</label>
+                        <label class="artmax-field-label" for="weekday-checkboxes">Дни недели</label>
                         <div class="artmax-field-content">
-                            <div class="weekday-checkboxes">
+                            <div class="weekday-checkboxes" id="weekday-checkboxes">
                                 <label class="weekday-checkbox">
                                     <input type="checkbox" name="weekdays[]" value="1" class="artmax-checkbox">
                                     <span>ПН</span>

@@ -803,7 +803,7 @@ switch ($action) {
             'event_color' => $_POST['eventColor'] ?? '#3498db',
             'exclude_weekends' => $_POST['excludeWeekends'] === 'on' || $_POST['excludeWeekends'] === 'true' || false,
             'exclude_holidays' => $_POST['excludeHolidays'] === 'on' || $_POST['excludeHolidays'] === 'true' || false,
-            'include_end_date' => $_POST['includeEndDate'] === 'on' || $_POST['includeEndDate'] === 'true'
+            'include_end_date' => $_POST['includeEndDate'] === 'on' || $_POST['includeEndDate'] === 'true' || $_POST['includeEndDate'] === 'Y' || $_POST['includeEndDate'] === 'y'
         ];
         
         $result = $component->addScheduleAction($params);
