@@ -1215,7 +1215,9 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                     FILE_APPEND | LOCK_EX);
                 $i = 0;
                 $eventsCreated = 0;
-                while ($eventsCreated < $maxEvents) {
+                // Цикл идет по количеству повторений (maxEvents), а не по количеству созданных событий
+                // Это гарантирует, что события создаются на конкретных датах (01.12, 02.12, 03.12...)
+                while ($i < $maxEvents) {
                     $newDateFrom = clone $eventDateFrom;
                     $newDateTo = clone $eventDateTo;
 

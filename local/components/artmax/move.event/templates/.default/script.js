@@ -211,8 +211,29 @@ function initializeMoveEventForm() {
 
     // Функция вычисления длительности события в минутах
     function getEventDuration(dateFrom, dateTo) {
-        const start = new Date(dateFrom);
-        const end = new Date(dateTo);
+        // Конвертируем российский формат "DD.MM.YYYY HH:MM:SS" в стандартный
+        const convertRussianDate = (dateStr) => {
+            // Пробуем российский формат "DD.MM.YYYY HH:MM:SS"
+            const russianMatch = dateStr.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})\s+(\d{1,2}):(\d{1,2}):(\d{1,2})$/);
+            if (russianMatch) {
+                const [, day, month, year, hour, minute, second] = russianMatch;
+                return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')} ${hour.padStart(2, '0')}:${minute.padStart(2, '0')}:${second.padStart(2, '0')}`;
+            }
+            // Если не российский формат, возвращаем как есть
+            return dateStr;
+        };
+        
+        const standardDateFrom = convertRussianDate(dateFrom);
+        const standardDateTo = convertRussianDate(dateTo);
+        
+        const start = new Date(standardDateFrom);
+        const end = new Date(standardDateTo);
+        
+        if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+            console.error('Invalid dates:', { dateFrom, dateTo, standardDateFrom, standardDateTo });
+            return NaN;
+        }
+        
         return Math.round((end - start) / (1000 * 60));
     }
 
@@ -231,7 +252,7 @@ function initializeMoveEventForm() {
     window.saveMoveEvent = function() {
         const branchId = document.getElementById('move-event-branch').value;
         const employeeId = document.getElementById('move-event-employee').value;
-        const date = document.getElementById('move-event-date').value;
+        const date = document.getElementById('move-event-date').value; // '2025-11-11'
         const time = document.getElementById('move-event-time').value;
         
         // Валидация
@@ -281,13 +302,28 @@ function initializeMoveEventForm() {
             showNotification('Ошибка: данные события не найдены', 'error');
             return;
         }
-        
-        const duration = getEventDuration(event.DATE_FROM, event.DATE_TO);
+
+        const duration = getEventDuration(event.DATE_FROM_RAW || event.DATE_FROM, event.DATE_TO_RAW || event.DATE_TO);
+         
+        if (isNaN(duration) || duration <= 0) {
+            showNotification('Ошибка: не удалось вычислить длительность события', 'error');
+            return;
+        }
         
         // Вычисляем новое время окончания
         const startTime = new Date(newDateTime);
+        if (isNaN(startTime.getTime())) {
+            showNotification('Ошибка: неверный формат даты начала', 'error');
+            return;
+        }
+        
         const endTime = new Date(startTime.getTime() + duration * 60 * 1000);
         const newEndDateTime = formatLocalDateTime(endTime);
+        
+        if (!newEndDateTime || newEndDateTime.includes('NaN')) {
+            showNotification('Ошибка: не удалось вычислить время окончания', 'error');
+            return;
+        }
         
         // Переносим событие
         fetch('/local/components/artmax/calendar/ajax.php', {

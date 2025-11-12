@@ -2,6 +2,54 @@
  * ArtMax Schedule Form Component JavaScript
  */
 
+// Функция показа уведомлений
+function showNotification(message, type) {
+    const notification = document.createElement('div');
+    notification.className = `artmax-calendar-notification artmax-calendar-${type}`;
+    notification.textContent = message;
+
+    // Стили для уведомления
+    notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        padding: 15px 20px;
+        border-radius: 8px;
+        color: white;
+        font-weight: 600;
+        z-index: 10001;
+        max-width: 300px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+        transform: translateX(100%);
+        transition: transform 0.3s ease;
+    `;
+
+    if (type === 'error') {
+        notification.style.background = 'linear-gradient(135deg, #ff6b6b, #ee5a24)';
+    } else if (type === 'warning') {
+        notification.style.background = 'linear-gradient(135deg, #f39c12, #e67e22)';
+    } else {
+        notification.style.background = 'linear-gradient(135deg, #00b894, #00a085)';
+    }
+
+    document.body.appendChild(notification);
+
+    // Анимация появления
+    setTimeout(() => {
+        notification.style.transform = 'translateX(0)';
+    }, 100);
+
+    // Автоматическое удаление
+    setTimeout(() => {
+        notification.style.transform = 'translateX(100%)';
+        setTimeout(() => {
+            if (document.body.contains(notification)) {
+                document.body.removeChild(notification);
+            }
+        }, 300);
+    }, 5000);
+}
+
 // Функция инициализации после загрузки BX или сразу если BX недоступен
 function initializeScheduleForm() {
     // Функции для работы с цветами
@@ -63,6 +111,12 @@ function initializeScheduleForm() {
         const weeklyDays = document.getElementById('weekly-days');
         
         if (frequency && weeklyDays) {
+            // Сбрасываем все чекбоксы дней недели при любом изменении частоты
+            const weekdaysCheckboxes = weeklyDays.querySelectorAll('input[name="weekdays[]"]');
+            weekdaysCheckboxes.forEach(checkbox => {
+                checkbox.checked = false;
+            });
+            
             // Блок скрывается всегда, если выбрано НЕ "weekly"
             if (frequency.value === 'weekly') {
                 weeklyDays.style.setProperty('display', 'flex', 'important');
@@ -302,42 +356,24 @@ function initializeScheduleForm() {
                 }
                 
                 // Показываем уведомление об успехе
-                if (typeof BX !== 'undefined' && BX.UI && BX.UI.Notification) {
-                    const eventsCount = response.eventsCreated || 1;
-                    const message = eventsCount > 1 
-                        ? `Расписание успешно создано! Создано ${eventsCount} событий.`
-                        : 'Расписание успешно создано!';
-                    BX.UI.Notification.Center.notify({
-                        content: message,
-                        position: 'top-right'
-                    });
-                }
+                const eventsCount = response.eventsCreated || 1;
+                const message = eventsCount > 1 
+                    ? `Расписание успешно создано! Создано ${eventsCount} событий.`
+                    : 'Расписание успешно создано!';
+                showNotification(message, 'success');
                 
                 // Закрываем SidePanel
                 closeSidePanel();
             } else {
                 // Показываем уведомление об ошибке
-                if (typeof BX !== 'undefined' && BX.UI && BX.UI.Notification) {
-                    BX.UI.Notification.Center.notify({
-                        content: 'Ошибка при создании расписания: ' + (response.error || 'Неизвестная ошибка'),
-                        position: 'top-right'
-                    });
-                } else {
-                    alert('Ошибка при создании расписания: ' + (response.error || 'Неизвестная ошибка'));
-                }
+                const errorMessage = 'Ошибка при создании расписания: ' + (response.error || 'Неизвестная ошибка');
+                showNotification(errorMessage, 'error');
             }
         })
         .catch(function(error) {
             console.error('Error:', error);
             // Показываем уведомление об ошибке
-            if (typeof BX !== 'undefined' && BX.UI && BX.UI.Notification) {
-                BX.UI.Notification.Center.notify({
-                    content: 'Произошла ошибка при отправке данных',
-                    position: 'top-right'
-                });
-            } else {
-                alert('Произошла ошибка при отправке данных');
-            }
+            showNotification('Произошла ошибка при отправке данных', 'error');
         })
         .finally(function() {
             // Восстанавливаем кнопку
