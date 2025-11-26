@@ -3429,15 +3429,27 @@
         });
     }
 
-    // Функция открытия сделки в боковом окне
+    // Функция открытия сделки в кастомном боковом окне
     function openDealInSidePanel(dealId) {
-        const dealUrl = `/crm/deal/details/${dealId}/?IFRAME=Y&IFRAME_TYPE=SIDE_SLIDER`;
-        
-        // Открываем штатное Bitrix окно в боковом слайдере
+        const params = new URLSearchParams({
+            IFRAME: 'Y',
+            IFRAME_TYPE: 'SIDE_SLIDER',
+            DEAL_ID: dealId
+        });
+
+        const currentEventId = getCurrentEventId();
+        if (currentEventId) {
+            params.append('EVENT_ID', currentEventId);
+        }
+
+        const dealUrl = `/local/components/artmax/deal.details/page.php?${params.toString()}`;
+
         if (typeof BX !== 'undefined' && BX.SidePanel) {
-            BX.SidePanel.Instance.open(dealUrl);
+            BX.SidePanel.Instance.open(dealUrl, {
+                width: 640,
+                cacheable: false
+            });
         } else {
-            // Fallback для случаев, когда BX.SidePanel недоступен
             window.open(dealUrl, '_blank', 'width=800,height=600,scrollbars=yes,resizable=yes');
         }
     }

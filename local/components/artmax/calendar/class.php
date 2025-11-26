@@ -1949,6 +1949,112 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
     }
     
     /**
+     * Сохранение кастомных полей сделки
+     */
+    public function saveDealCustomFieldsAction($dealId, array $fields = [])
+    {
+        global $USER;
+        if (!$USER || !$USER->IsAuthorized()) {
+            return ['success' => false, 'error' => 'Необходима авторизация'];
+        }
+
+        $dealId = (int)$dealId;
+        if ($dealId <= 0) {
+            return ['success' => false, 'error' => 'Некорректный ID сделки'];
+        }
+
+        if (!\CModule::IncludeModule('crm')) {
+            return ['success' => false, 'error' => 'Модуль CRM не установлен'];
+        }
+
+        $deal = \CCrmDeal::GetListEx([], ['=ID' => $dealId], false, false, ['ID', 'TITLE'])->Fetch();
+        if (!$deal) {
+            return ['success' => false, 'error' => 'Сделка не найдена'];
+        }
+
+        $fieldCodes = $this->getDealFieldCodes();
+        $updateFields = [];
+
+        if (array_key_exists('service', $fields) && $fieldCodes['SERVICE']) {
+            $serviceValue = trim((string)$fields['service']);
+            $updateFields[$fieldCodes['SERVICE']] = $serviceValue === '' ? null : (int)$serviceValue;
+        }
+
+        if (array_key_exists('source', $fields) && $fieldCodes['SOURCE']) {
+            $sourceValue = trim((string)$fields['source']);
+            $updateFields[$fieldCodes['SOURCE']] = $sourceValue === '' ? null : (int)$sourceValue;
+        }
+
+        if (array_key_exists('branch', $fields) && $fieldCodes['BRANCH']) {
+            $branchValue = trim((string)$fields['branch']);
+            $updateFields[$fieldCodes['BRANCH']] = $branchValue === '' ? null : (int)$branchValue;
+        }
+
+        if (array_key_exists('amountValue', $fields) && $fieldCodes['AMOUNT']) {
+            $amountValue = trim((string)$fields['amountValue']);
+            $currency = isset($fields['amountCurrency']) && $fields['amountCurrency'] !== ''
+                ? strtoupper($fields['amountCurrency'])
+                : 'RUB';
+
+            if ($amountValue === '') {
+                $updateFields[$fieldCodes['AMOUNT']] = '';
+            } else {
+                $normalizedAmount = str_replace(',', '.', $amountValue);
+                $updateFields[$fieldCodes['AMOUNT']] = $normalizedAmount . '|' . $currency;
+            }
+        }
+
+        if (array_key_exists('title', $fields)) {
+            $title = trim((string)$fields['title']);
+            if ($title !== '') {
+                $updateFields['TITLE'] = $title;
+            }
+        }
+
+        if (empty($updateFields)) {
+            return ['success' => false, 'error' => 'Нет данных для обновления'];
+        }
+
+        $dealEntity = new \CCrmDeal(false);
+        $updateResult = $dealEntity->Update($dealId, $updateFields, true, true, [
+            'DISABLE_USER_FIELD_CHECK' => false,
+            'REGISTER_SONET_EVENT' => false
+        ]);
+
+        if (!$updateResult) {
+            return ['success' => false, 'error' => $dealEntity->LAST_ERROR ?: 'Не удалось обновить сделку'];
+        }
+
+        $updatedDeal = \CCrmDeal::GetListEx([], ['=ID' => $dealId], false, false, ['ID', 'TITLE'])->Fetch();
+
+        return [
+            'success' => true,
+            'dealId' => $dealId,
+            'dealTitle' => $updatedDeal['TITLE'] ?? ($updateFields['TITLE'] ?? $deal['TITLE']),
+            'fields' => [
+                'service' => $fields['service'] ?? null,
+                'source' => $fields['source'] ?? null,
+                'branch' => $fields['branch'] ?? null,
+                'amountValue' => $fields['amountValue'] ?? '',
+                'amountCurrency' => $fields['amountCurrency'] ?? 'RUB',
+            ]
+        ];
+    }
+
+    /**
+     * Возвращает коды пользовательских полей сделки
+     */
+    private function getDealFieldCodes(): array
+    {
+        return [
+            'SERVICE' => \Bitrix\Main\Config\Option::get('artmax.calendar', 'deal_service_field', 'UF_CRM_CALENDAR_SERVICE'),
+            'SOURCE' => \Bitrix\Main\Config\Option::get('artmax.calendar', 'deal_source_field', 'UF_CRM_CALENDAR_SOURCE'),
+            'AMOUNT' => \Bitrix\Main\Config\Option::get('artmax.calendar', 'deal_amount_field', 'UF_CRM_CALENDAR_AMOUNT'),
+            'BRANCH' => \Bitrix\Main\Config\Option::get('artmax.calendar', 'deal_branch_field', 'UF_CRM_CALENDAR_BRANCH'),
+        ];
+    }
+    
+    /**
      * Получение контакта для события
      */
     public function getEventContactsAction($eventId)

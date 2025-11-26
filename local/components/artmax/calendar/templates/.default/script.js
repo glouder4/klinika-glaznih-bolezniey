@@ -236,58 +236,12 @@
                     
                     case 'calendar:dealSaved':
                         console.log('Deal saved via postMessage:', event.data);
-                        // Обновляем календарь
-                        setTimeout(() => {
-                            if (typeof refreshCalendarEvents === 'function') {
-                                refreshCalendarEvents();
-                            }
-                            // Обновляем информацию о сделке в боковой панели если она открыта
-                            if (event.data && event.data.dealId && event.data.eventId) {
-                                console.log('calendar:dealSaved: Проверяем обновление deal-status');
-                                // Проверяем, действительно ли боковая панель события открыта
-                                const eventSidePanel = document.getElementById('eventSidePanel');
-                                const isSidePanelOpen = eventSidePanel && eventSidePanel.classList.contains('open') && eventSidePanel.style.display !== 'none';
-                                
-                                console.log('calendar:dealSaved: eventSidePanel существует?', !!eventSidePanel);
-                                console.log('calendar:dealSaved: isSidePanelOpen?', isSidePanelOpen);
-                                
-                                if (isSidePanelOpen) {
-                                    const currentEventId = getCurrentEventId();
-                                    console.log('calendar:dealSaved: currentEventId =', currentEventId, 'event.data.eventId =', event.data.eventId);
-                                    
-                                    if (currentEventId && String(currentEventId) === String(event.data.eventId)) {
-                                        // Боковая панель открыта для этого события, просто обновляем данные о сделке
-                                        // Используем данные, которые уже есть в postMessage
-                                        console.log('calendar:dealSaved: Вызываем updateDealInfoInSidePanel');
-                                        console.log('calendar:dealSaved: dealTitle =', event.data.dealTitle);
-                                        
-                                        // Проверяем наличие элемента перед обновлением
-                                        const dealStatusElement = document.getElementById('deal-status');
-                                        console.log('calendar:dealSaved: deal-status элемент найден?', !!dealStatusElement);
-                                        
-                                        if (typeof updateDealInfoInSidePanel === 'function') {
-                                            updateDealInfoInSidePanel({
-                                                title: event.data.dealTitle || 'Сделка #' + event.data.dealId
-                                            });
-                                        } else {
-                                            console.error('calendar:dealSaved: функция updateDealInfoInSidePanel не найдена!');
-                                            // Fallback - обновляем напрямую
-                                            if (dealStatusElement) {
-                                                dealStatusElement.textContent = event.data.dealTitle || 'Сделка #' + event.data.dealId;
-                                                dealStatusElement.style.color = '#28a745';
-                                                console.log('calendar:dealSaved: deal-status обновлен напрямую');
-                                            }
-                                        }
-                                    } else {
-                                        console.log('calendar:dealSaved: ID события не совпадают, пропускаем обновление');
-                                    }
-                                } else {
-                                    console.log('calendar:dealSaved: Боковая панель не открыта, пропускаем обновление');
-                                }
-                            } else {
-                                console.log('calendar:dealSaved: Недостаточно данных для обновления');
-                            }
-                        }, 100);
+                        handleDealUpdateMessage(event.data);
+                        break;
+
+                    case 'calendar:dealCustomFieldsSaved':
+                        console.log('Deal custom fields saved via postMessage:', event.data);
+                        handleDealUpdateMessage(event.data);
                         break;
                     
                     case 'calendar:eventUpdated':
@@ -358,6 +312,45 @@
                 }
             }
         });
+    }
+
+    function handleDealUpdateMessage(messageData) {
+        setTimeout(() => {
+            if (typeof refreshCalendarEvents === 'function') {
+                refreshCalendarEvents();
+            }
+
+            if (!messageData || !messageData.dealId || !messageData.eventId) {
+                console.log('handleDealUpdateMessage: Недостаточно данных для обновления');
+                return;
+            }
+
+            const eventSidePanel = document.getElementById('eventSidePanel');
+            const isSidePanelOpen = eventSidePanel && eventSidePanel.classList.contains('open') && eventSidePanel.style.display !== 'none';
+
+            if (!isSidePanelOpen) {
+                console.log('handleDealUpdateMessage: Боковая панель закрыта');
+                return;
+            }
+
+            const currentEventId = getCurrentEventId();
+            if (!currentEventId || String(currentEventId) !== String(messageData.eventId)) {
+                console.log('handleDealUpdateMessage: ID события не совпадают');
+                return;
+            }
+
+            if (typeof updateDealInfoInSidePanel === 'function') {
+                updateDealInfoInSidePanel({
+                    title: messageData.dealTitle || 'Сделка #' + messageData.dealId
+                });
+            } else {
+                const dealStatusElement = document.getElementById('deal-status');
+                if (dealStatusElement) {
+                    dealStatusElement.textContent = messageData.dealTitle || 'Сделка #' + messageData.dealId;
+                    dealStatusElement.style.color = '#28a745';
+                }
+            }
+        }, 100);
     }
 
     function initCalendarCells() {
@@ -3465,15 +3458,27 @@
         });
     }
 
-    // Функция открытия сделки в боковом окне
+    // Функция открытия сделки в кастомном боковом окне
     function openDealInSidePanel(dealId) {
-        const dealUrl = `/crm/deal/details/${dealId}/?IFRAME=Y&IFRAME_TYPE=SIDE_SLIDER`;
-        
-        // Открываем штатное Bitrix окно в боковом слайдере
+        const params = new URLSearchParams({
+            IFRAME: 'Y',
+            IFRAME_TYPE: 'SIDE_SLIDER',
+            DEAL_ID: dealId
+        });
+
+        const currentEventId = getCurrentEventId();
+        if (currentEventId) {
+            params.append('EVENT_ID', currentEventId);
+        }
+
+        const dealUrl = `/local/components/artmax/deal.details/page.php?${params.toString()}`;
+
         if (typeof BX !== 'undefined' && BX.SidePanel) {
-            BX.SidePanel.Instance.open(dealUrl);
+            BX.SidePanel.Instance.open(dealUrl, {
+                width: 640,
+                cacheable: false
+            });
         } else {
-            // Fallback для случаев, когда BX.SidePanel недоступен
             window.open(dealUrl, '_blank', 'width=800,height=600,scrollbars=yes,resizable=yes');
         }
     }

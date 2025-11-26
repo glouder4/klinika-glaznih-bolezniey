@@ -150,6 +150,10 @@ class artmax_calendar extends CModule
         // Создаем пользовательские поля "Подтверждение" и "Визит" для сделки
         $this->createDealConfirmationField();
         $this->createDealVisitField();
+        $this->createDealServiceField();
+        $this->createDealSourceField();
+        $this->createDealAmountField();
+        $this->createDealBranchField();
     }
     
     /**
@@ -229,6 +233,10 @@ class artmax_calendar extends CModule
         // Удаляем пользовательские поля
         $this->deleteDealConfirmationField();
         $this->deleteDealVisitField();
+        $this->deleteDealServiceField();
+        $this->deleteDealSourceField();
+        $this->deleteDealAmountField();
+        $this->deleteDealBranchField();
         
         // Удаляем настройки модуля
         \Bitrix\Main\Config\Option::delete('artmax.calendar', ['name' => 'menu_item_id']);
@@ -236,6 +244,10 @@ class artmax_calendar extends CModule
         \Bitrix\Main\Config\Option::delete('artmax.calendar', ['name' => 'deal_booking_field']);
         \Bitrix\Main\Config\Option::delete('artmax.calendar', ['name' => 'deal_confirmation_field']);
         \Bitrix\Main\Config\Option::delete('artmax.calendar', ['name' => 'deal_visit_field']);
+        \Bitrix\Main\Config\Option::delete('artmax.calendar', ['name' => 'deal_service_field']);
+        \Bitrix\Main\Config\Option::delete('artmax.calendar', ['name' => 'deal_source_field']);
+        \Bitrix\Main\Config\Option::delete('artmax.calendar', ['name' => 'deal_amount_field']);
+        \Bitrix\Main\Config\Option::delete('artmax.calendar', ['name' => 'deal_branch_field']);
     }
     
     /**
@@ -319,6 +331,183 @@ class artmax_calendar extends CModule
             
             // Сохраняем код поля в настройках модуля
             \Bitrix\Main\Config\Option::set('artmax.calendar', 'deal_confirmation_field', $fieldCode);
+        }
+    }
+
+    /**
+     * Создание пользовательского поля "Услуга" (список)
+     */
+    private function createDealServiceField(): void
+    {
+        $this->createEnumerationField([
+            'fieldCode' => 'UF_CRM_CALENDAR_SERVICE',
+            'optionKey' => 'deal_service_field',
+            'sort' => 530,
+            'labels' => [
+                'ru' => 'Услуга',
+                'en' => 'Service',
+            ],
+            'values' => [
+                'n1' => [
+                    'VALUE' => 'Не выбрано',
+                    'DEF' => 'Y',
+                    'SORT' => 100,
+                    'XML_ID' => 'not_selected_service',
+                ],
+            ],
+        ]);
+    }
+
+    /**
+     * Создание пользовательского поля "Источник" (список)
+     */
+    private function createDealSourceField(): void
+    {
+        $this->createEnumerationField([
+            'fieldCode' => 'UF_CRM_CALENDAR_SOURCE',
+            'optionKey' => 'deal_source_field',
+            'sort' => 540,
+            'labels' => [
+                'ru' => 'Источник',
+                'en' => 'Source',
+            ],
+            'values' => [
+                'n1' => [
+                    'VALUE' => 'Не указан',
+                    'DEF' => 'Y',
+                    'SORT' => 100,
+                    'XML_ID' => 'not_selected_source',
+                ],
+            ],
+        ]);
+    }
+
+    /**
+     * Создание пользовательского поля "Сумма" (деньги)
+     */
+    private function createDealAmountField(): void
+    {
+        if (!\Bitrix\Main\Loader::includeModule('crm')) {
+            return;
+        }
+
+        $fieldCode = 'UF_CRM_CALENDAR_AMOUNT';
+        $existingField = \CUserTypeEntity::GetList([], [
+            'ENTITY_ID' => 'CRM_DEAL',
+            'FIELD_NAME' => $fieldCode,
+        ])->Fetch();
+
+        if ($existingField) {
+            \Bitrix\Main\Config\Option::set('artmax.calendar', 'deal_amount_field', $fieldCode);
+            return;
+        }
+
+        $userTypeEntity = new \CUserTypeEntity();
+        $settings = [
+            'DEFAULT_VALUE' => '',
+        ];
+
+        $fieldId = $userTypeEntity->Add([
+            'ENTITY_ID' => 'CRM_DEAL',
+            'FIELD_NAME' => $fieldCode,
+            'USER_TYPE_ID' => 'money',
+            'SORT' => 550,
+            'MULTIPLE' => 'N',
+            'MANDATORY' => 'N',
+            'SHOW_FILTER' => 'N',
+            'SHOW_IN_LIST' => 'Y',
+            'EDIT_IN_LIST' => 'Y',
+            'IS_SEARCHABLE' => 'N',
+            'SETTINGS' => $settings,
+            'EDIT_FORM_LABEL' => [
+                'ru' => 'Сумма услуги',
+                'en' => 'Service Amount',
+            ],
+            'LIST_COLUMN_LABEL' => [
+                'ru' => 'Сумма',
+                'en' => 'Amount',
+            ],
+            'LIST_FILTER_LABEL' => [
+                'ru' => 'Сумма',
+                'en' => 'Amount',
+            ],
+        ]);
+
+        if ($fieldId) {
+            \Bitrix\Main\Config\Option::set('artmax.calendar', 'deal_amount_field', $fieldCode);
+        }
+    }
+
+    /**
+     * Создание пользовательского поля "Филиал" (список)
+     */
+    private function createDealBranchField(): void
+    {
+        $this->createEnumerationField([
+            'fieldCode' => 'UF_CRM_CALENDAR_BRANCH',
+            'optionKey' => 'deal_branch_field',
+            'sort' => 560,
+            'labels' => [
+                'ru' => 'Филиал',
+                'en' => 'Branch',
+            ],
+            'values' => [
+                'n1' => [
+                    'VALUE' => 'По умолчанию',
+                    'DEF' => 'Y',
+                    'SORT' => 100,
+                    'XML_ID' => 'default_branch',
+                ],
+            ],
+        ]);
+    }
+
+    /**
+     * Хелпер создания пользовательского поля типа "список"
+     *
+     * @param array{fieldCode:string, optionKey:string, sort:int, labels:array, values:array} $params
+     */
+    private function createEnumerationField(array $params): void
+    {
+        if (!\Bitrix\Main\Loader::includeModule('crm')) {
+            return;
+        }
+
+        $fieldCode = $params['fieldCode'];
+        $existingField = \CUserTypeEntity::GetList([], [
+            'ENTITY_ID' => 'CRM_DEAL',
+            'FIELD_NAME' => $fieldCode,
+        ])->Fetch();
+
+        if ($existingField) {
+            \Bitrix\Main\Config\Option::set('artmax.calendar', $params['optionKey'], $fieldCode);
+            return;
+        }
+
+        $userTypeEntity = new \CUserTypeEntity();
+        $fieldId = $userTypeEntity->Add([
+            'ENTITY_ID' => 'CRM_DEAL',
+            'FIELD_NAME' => $fieldCode,
+            'USER_TYPE_ID' => 'enumeration',
+            'SORT' => $params['sort'],
+            'MULTIPLE' => 'N',
+            'MANDATORY' => 'N',
+            'SHOW_FILTER' => 'Y',
+            'SHOW_IN_LIST' => 'Y',
+            'EDIT_IN_LIST' => 'Y',
+            'IS_SEARCHABLE' => 'N',
+            'EDIT_FORM_LABEL' => $params['labels'],
+            'LIST_COLUMN_LABEL' => $params['labels'],
+            'LIST_FILTER_LABEL' => $params['labels'],
+        ]);
+
+        if ($fieldId) {
+            if (!empty($params['values'])) {
+                $obEnum = new \CUserFieldEnum();
+                $obEnum->SetEnumValues($fieldId, $params['values']);
+            }
+
+            \Bitrix\Main\Config\Option::set('artmax.calendar', $params['optionKey'], $fieldCode);
         }
     }
     
@@ -478,6 +667,57 @@ class artmax_calendar extends CModule
             ]
         )->Fetch();
         
+        if ($existingField) {
+            $userTypeEntity = new \CUserTypeEntity();
+            $userTypeEntity->Delete($existingField['ID']);
+        }
+    }
+
+    private function deleteDealServiceField(): void
+    {
+        $this->deleteDealEnumField('deal_service_field', 'UF_CRM_CALENDAR_SERVICE');
+    }
+
+    private function deleteDealSourceField(): void
+    {
+        $this->deleteDealEnumField('deal_source_field', 'UF_CRM_CALENDAR_SOURCE');
+    }
+
+    private function deleteDealAmountField(): void
+    {
+        if (!\Bitrix\Main\Loader::includeModule('crm')) {
+            return;
+        }
+
+        $fieldCode = \Bitrix\Main\Config\Option::get('artmax.calendar', 'deal_amount_field', 'UF_CRM_CALENDAR_AMOUNT');
+        $existingField = \CUserTypeEntity::GetList([], [
+            'ENTITY_ID' => 'CRM_DEAL',
+            'FIELD_NAME' => $fieldCode,
+        ])->Fetch();
+
+        if ($existingField) {
+            $userTypeEntity = new \CUserTypeEntity();
+            $userTypeEntity->Delete($existingField['ID']);
+        }
+    }
+
+    private function deleteDealBranchField(): void
+    {
+        $this->deleteDealEnumField('deal_branch_field', 'UF_CRM_CALENDAR_BRANCH');
+    }
+
+    private function deleteDealEnumField(string $optionKey, string $defaultCode): void
+    {
+        if (!\Bitrix\Main\Loader::includeModule('crm')) {
+            return;
+        }
+
+        $fieldCode = \Bitrix\Main\Config\Option::get('artmax.calendar', $optionKey, $defaultCode);
+        $existingField = \CUserTypeEntity::GetList([], [
+            'ENTITY_ID' => 'CRM_DEAL',
+            'FIELD_NAME' => $fieldCode,
+        ])->Fetch();
+
         if ($existingField) {
             $userTypeEntity = new \CUserTypeEntity();
             $userTypeEntity->Delete($existingField['ID']);

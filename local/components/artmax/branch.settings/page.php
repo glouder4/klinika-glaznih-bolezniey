@@ -1,21 +1,12 @@
 <?php
+$branchId = (int)($_REQUEST['BRANCH_ID'] ?? 0);
+$redirectUrl = $branchId > 0
+    ? "/page/artmax_calendar/calendar_branch_{$branchId}/"
+    : "/page/artmax_calendar/";
+
 // Редирект на календарь, если нет параметра IFRAME=Y
 if (!isset($_REQUEST["IFRAME"]) || $_REQUEST["IFRAME"] !== "Y") {
-    // Используем JavaScript редирект для надежности
-    ?>
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <meta http-equiv="refresh" content="0;url=/page/artmax_calendar/calendar_branch_1/">
-        <script type="text/javascript">
-            window.location.href = '/page/artmax_calendar/calendar_branch_1/';
-        </script>
-    </head>
-    <body>
-        <p>Перенаправление...</p>
-    </body>
-    </html>
-    <?php
+    header('Location: ' . $redirectUrl);
     exit;
 }
 
@@ -58,8 +49,8 @@ if (isset($_REQUEST["IFRAME"]) && $_REQUEST["IFRAME"] === "Y") {
                     // 1. Мы не в iframe И
                     // 2. Нет параметра IFRAME=Y И
                     // 3. Не идет процесс закрытия SidePanel
-                    if (!isInIframe && !hasIframeParam && !isClosing) {
-                        var redirectUrl = "<?=CUtil::JSEscape($APPLICATION->GetCurPageParam('', array('IFRAME'))); ?>";
+                if (!isInIframe && !hasIframeParam && !isClosing) {
+                        var redirectUrl = "<?=CUtil::JSEscape($redirectUrl); ?>";
                         // Добавляем небольшую задержку, чтобы избежать конфликтов с закрытием SidePanel
                         setTimeout(function() {
                             if (!window._isClosingSidePanel) {

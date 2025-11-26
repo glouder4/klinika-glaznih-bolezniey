@@ -1104,6 +1104,39 @@ switch ($action) {
         }
         break;
 
+    case 'saveDealCustomFields':
+        $dealId = (int)($_POST['dealId'] ?? 0);
+        $fieldsRaw = $_POST['fields'] ?? [];
+
+        if ($dealId <= 0) {
+            die(json_encode(['success' => false, 'error' => 'ID сделки не указан']));
+        }
+
+        if (is_string($fieldsRaw)) {
+            $decodedFields = json_decode($fieldsRaw, true);
+            $fields = is_array($decodedFields) ? $decodedFields : [];
+        } elseif (is_array($fieldsRaw)) {
+            $fields = $fieldsRaw;
+        } else {
+            $fields = [];
+        }
+
+        if (empty($fields)) {
+            die(json_encode(['success' => false, 'error' => 'Нет данных для сохранения']));
+        }
+
+        try {
+            $component = new ArtmaxCalendarComponent();
+            $result = $component->saveDealCustomFieldsAction($dealId, $fields);
+            die(json_encode($result));
+        } catch (\Throwable $e) {
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
+                "Save deal custom fields error: " . $e->getMessage() . "\n",
+                FILE_APPEND | LOCK_EX);
+            die(json_encode(['success' => false, 'error' => 'Ошибка сохранения: ' . $e->getMessage()]));
+        }
+        break;
+
     case 'get_confirmation_status':
         $eventId = (int)($_POST['event_id'] ?? 0);
 
