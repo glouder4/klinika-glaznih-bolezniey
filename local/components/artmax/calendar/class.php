@@ -472,12 +472,23 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
         switch ($action) {
             case 'addEvent':
                 
+                // Поддерживаем оба варианта: branchId (camelCase) и branch_id (snake_case)
+                // Приоритет: branch_id, затем branchId, затем значение по умолчанию
+                $branchId = null;
+                if (isset($_POST['branch_id']) && $_POST['branch_id'] !== '' && $_POST['branch_id'] !== '0') {
+                    $branchId = (int)$_POST['branch_id'];
+                } elseif (isset($_POST['branchId']) && $_POST['branchId'] !== '' && $_POST['branchId'] !== '0') {
+                    $branchId = (int)$_POST['branchId'];
+                } else {
+                    $branchId = 1;
+                }
+                
                 $result = $this->addEventAction(
                     $_POST['title'] ?? '',
                     $_POST['description'] ?? '',
                     $_POST['dateFrom'] ?? '',
                     $_POST['dateTo'] ?? '',
-                    (int)($_POST['branchId'] ?? 1),
+                    $branchId,
                     $_POST['eventColor'] ?? '#3498db',
                     isset($_POST['employee_id']) ? (int)$_POST['employee_id'] : null
                 );
@@ -1967,12 +1978,32 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
             return ['success' => false, 'error' => 'Модуль CRM не установлен'];
         }
 
-        $deal = \CCrmDeal::GetListEx([], ['=ID' => $dealId], false, false, ['ID', 'TITLE'])->Fetch();
+        if (!\CModule::IncludeModule('artmax.calendar')) {
+            return ['success' => false, 'error' => 'Модуль artmax.calendar не установлен'];
+        }
+
+        // Получаем старые значения полей сделки для сравнения
+        $fieldCodes = $this->getDealFieldCodes();
+        $selectFields = array_filter(array_values($fieldCodes));
+        $select = array_merge(['ID', 'TITLE', 'OPPORTUNITY', 'CURRENCY_ID'], $selectFields);
+        $select = array_unique($select);
+        
+        $deal = \CCrmDeal::GetListEx([], ['=ID' => $dealId], false, false, $select)->Fetch();
         if (!$deal) {
             return ['success' => false, 'error' => 'Сделка не найдена'];
         }
 
-        $fieldCodes = $this->getDealFieldCodes();
+        // Сохраняем старые значения для сравнения
+        $oldValues = [
+            'TITLE' => $deal['TITLE'] ?? '',
+            'SERVICE' => $deal[$fieldCodes['SERVICE']] ?? null,
+            'SOURCE' => $deal[$fieldCodes['SOURCE']] ?? null,
+            'BRANCH' => $deal[$fieldCodes['BRANCH']] ?? null,
+            'AMOUNT' => $deal[$fieldCodes['AMOUNT']] ?? '',
+            'OPPORTUNITY' => $deal['OPPORTUNITY'] ?? 0,
+            'CURRENCY_ID' => $deal['CURRENCY_ID'] ?? 'RUB',
+        ];
+
         $updateFields = [];
 
         if (array_key_exists('service', $fields) && $fieldCodes['SERVICE']) {
@@ -1998,9 +2029,15 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
 
             if ($amountValue === '') {
                 $updateFields[$fieldCodes['AMOUNT']] = '';
+                // Очищаем штатные поля суммы
+                $updateFields['OPPORTUNITY'] = 0;
             } else {
                 $normalizedAmount = str_replace(',', '.', $amountValue);
                 $updateFields[$fieldCodes['AMOUNT']] = $normalizedAmount . '|' . $currency;
+                
+                // Сохраняем сумму в штатные поля сделки
+                $updateFields['OPPORTUNITY'] = (float)$normalizedAmount;
+                $updateFields['CURRENCY_ID'] = $currency;
             }
         }
 
@@ -2023,6 +2060,96 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
 
         if (!$updateResult) {
             return ['success' => false, 'error' => $dealEntity->LAST_ERROR ?: 'Не удалось обновить сделку'];
+        }
+
+        // Находим событие, связанное со сделкой, для записи в журнал
+        $eventId = null;
+        $connection = \Bitrix\Main\Application::getConnection();
+        $sql = "SELECT ID FROM artmax_calendar_events WHERE DEAL_ENTITY_ID = " . (int)$dealId . " LIMIT 1";
+        $result = $connection->query($sql);
+        if ($result && ($row = $result->fetch())) {
+            $eventId = (int)$row['ID'];
+        }
+
+        // Записываем изменения в журнал, если найдено событие
+        if ($eventId) {
+            $journal = new \Artmax\Calendar\Journal();
+            $userId = $USER->GetID();
+
+            // Сравниваем и записываем изменения для каждого поля
+            if (isset($updateFields['TITLE']) && $oldValues['TITLE'] !== $updateFields['TITLE']) {
+                $journal->writeEvent(
+                    $eventId,
+                    'DEAL_TITLE_CHANGED',
+                    'Artmax\Calendar\Calendar::saveDealCustomFieldsAction',
+                    $userId,
+                    'TITLE=' . $oldValues['TITLE'] . '->' . $updateFields['TITLE']
+                );
+            }
+
+            if (isset($updateFields[$fieldCodes['SERVICE']])) {
+                $oldService = $oldValues['SERVICE'];
+                $newService = $updateFields[$fieldCodes['SERVICE']];
+                if ($oldService != $newService) {
+                    $journal->writeEvent(
+                        $eventId,
+                        'DEAL_SERVICE_CHANGED',
+                        'Artmax\Calendar\Calendar::saveDealCustomFieldsAction',
+                        $userId,
+                        'SERVICE=' . ($oldService ?? 'null') . '->' . ($newService ?? 'null')
+                    );
+                }
+            }
+
+            if (isset($updateFields[$fieldCodes['SOURCE']])) {
+                $oldSource = $oldValues['SOURCE'];
+                $newSource = $updateFields[$fieldCodes['SOURCE']];
+                if ($oldSource != $newSource) {
+                    $journal->writeEvent(
+                        $eventId,
+                        'DEAL_SOURCE_CHANGED',
+                        'Artmax\Calendar\Calendar::saveDealCustomFieldsAction',
+                        $userId,
+                        'SOURCE=' . ($oldSource ?? 'null') . '->' . ($newSource ?? 'null')
+                    );
+                }
+            }
+
+            if (isset($updateFields[$fieldCodes['BRANCH']])) {
+                $oldBranch = $oldValues['BRANCH'];
+                $newBranch = $updateFields[$fieldCodes['BRANCH']];
+                if ($oldBranch != $newBranch) {
+                    $journal->writeEvent(
+                        $eventId,
+                        'DEAL_BRANCH_CHANGED',
+                        'Artmax\Calendar\Calendar::saveDealCustomFieldsAction',
+                        $userId,
+                        'BRANCH=' . ($oldBranch ?? 'null') . '->' . ($newBranch ?? 'null')
+                    );
+                }
+            }
+
+            if (isset($updateFields[$fieldCodes['AMOUNT']]) || isset($updateFields['OPPORTUNITY'])) {
+                $oldAmount = $oldValues['AMOUNT'];
+                $oldOpportunity = $oldValues['OPPORTUNITY'];
+                $oldCurrency = $oldValues['CURRENCY_ID'];
+                
+                $newAmount = $updateFields[$fieldCodes['AMOUNT']] ?? $oldAmount;
+                $newOpportunity = $updateFields['OPPORTUNITY'] ?? $oldOpportunity;
+                $newCurrency = $updateFields['CURRENCY_ID'] ?? $oldCurrency;
+                
+                if ($oldAmount != $newAmount || $oldOpportunity != $newOpportunity || $oldCurrency != $newCurrency) {
+                    $oldAmountStr = $oldAmount ?: ($oldOpportunity . ' ' . $oldCurrency);
+                    $newAmountStr = $newAmount ?: ($newOpportunity . ' ' . $newCurrency);
+                    $journal->writeEvent(
+                        $eventId,
+                        'DEAL_AMOUNT_CHANGED',
+                        'Artmax\Calendar\Calendar::saveDealCustomFieldsAction',
+                        $userId,
+                        'AMOUNT=' . $oldAmountStr . '->' . $newAmountStr
+                    );
+                }
+            }
         }
 
         $updatedDeal = \CCrmDeal::GetListEx([], ['=ID' => $dealId], false, false, ['ID', 'TITLE'])->Fetch();
@@ -2052,6 +2179,65 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
             'AMOUNT' => \Bitrix\Main\Config\Option::get('artmax.calendar', 'deal_amount_field', 'UF_CRM_CALENDAR_AMOUNT'),
             'BRANCH' => \Bitrix\Main\Config\Option::get('artmax.calendar', 'deal_branch_field', 'UF_CRM_CALENDAR_BRANCH'),
         ];
+    }
+    
+    /**
+     * Добавляет филиал в перечисление пользовательского поля сделки
+     */
+    private function addBranchToDealFieldEnum(int $branchId, string $branchName): void
+    {
+        if ($branchId <= 0 || $branchName === '') {
+            return;
+        }
+
+        if (!\CModule::IncludeModule('crm')) {
+            return;
+        }
+
+        $fieldCode = \Bitrix\Main\Config\Option::get('artmax.calendar', 'deal_branch_field', 'UF_CRM_CALENDAR_BRANCH');
+        if (!$fieldCode) {
+            return;
+        }
+
+        $field = \CUserTypeEntity::GetList(
+            [],
+            ['ENTITY_ID' => 'CRM_DEAL', 'FIELD_NAME' => $fieldCode]
+        )->Fetch();
+
+        if (!$field) {
+            return;
+        }
+
+        $enum = new \CUserFieldEnum();
+        $existingValues = [];
+        $alreadyExists = false;
+
+        $rsEnum = $enum->GetList(['SORT' => 'ASC'], ['USER_FIELD_ID' => $field['ID']]);
+        while ($item = $rsEnum->Fetch()) {
+            $existingValues[$item['ID']] = [
+                'VALUE' => $item['VALUE'],
+                'DEF' => $item['DEF'],
+                'SORT' => $item['SORT'],
+                'XML_ID' => $item['XML_ID'],
+            ];
+
+            if ($item['XML_ID'] === 'branch_' . $branchId || (int)$item['XML_ID'] === $branchId) {
+                $alreadyExists = true;
+            }
+        }
+
+        if ($alreadyExists) {
+            return;
+        }
+
+        $existingValues['n' . $branchId] = [
+            'VALUE' => $branchName,
+            'DEF' => 'N',
+            'SORT' => 100 + count($existingValues) * 10,
+            'XML_ID' => 'branch_' . $branchId,
+        ];
+
+        $enum->SetEnumValues($field['ID'], $existingValues);
     }
     
     /**
@@ -2275,6 +2461,49 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                 "CREATE_DEAL: Формируем бронирование - Field: $bookingFieldCode, Value: $bookingValue\n", 
                 FILE_APPEND | LOCK_EX);
             
+            // Получаем enum ID филиала для установки в сделку
+            $branchEnumId = null;
+            $branchFieldCode = \Bitrix\Main\Config\Option::get('artmax.calendar', 'deal_branch_field', 'UF_CRM_CALENDAR_BRANCH');
+            if ($branchFieldCode && !empty($event['BRANCH_ID'])) {
+                $field = \CUserTypeEntity::GetList(
+                    [],
+                    [
+                        'ENTITY_ID' => 'CRM_DEAL',
+                        'FIELD_NAME' => $branchFieldCode,
+                    ]
+                )->Fetch();
+                
+                if ($field) {
+                    $enum = new \CUserFieldEnum();
+                    $xmlId = 'branch_' . $event['BRANCH_ID'];
+                    $rsEnum = $enum->GetList(
+                        [],
+                        [
+                            'USER_FIELD_ID' => $field['ID'],
+                            'XML_ID' => $xmlId
+                        ]
+                    );
+                    $enumItem = $rsEnum->Fetch();
+                    
+                    if ($enumItem) {
+                        $branchEnumId = (int)$enumItem['ID'];
+                    } else {
+                        // Пробуем найти по числовому XML_ID (для старых записей)
+                        $rsEnum = $enum->GetList(
+                            [],
+                            [
+                                'USER_FIELD_ID' => $field['ID'],
+                                'XML_ID' => (string)$event['BRANCH_ID']
+                            ]
+                        );
+                        $enumItem = $rsEnum->Fetch();
+                        if ($enumItem) {
+                            $branchEnumId = (int)$enumItem['ID'];
+                        }
+                    }
+                }
+            }
+            
             // Создаем сделку
             $deal = new \CCrmDeal(true);
             $dealFields = [
@@ -2288,6 +2517,11 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                 // Добавляем бронирование
                 $bookingFieldCode => [$bookingValue]
             ];
+            
+            // Добавляем филиал, если найден enum ID
+            if ($branchEnumId && $branchFieldCode) {
+                $dealFields[$branchFieldCode] = $branchEnumId;
+            }
 
             $dealId = $deal->Add($dealFields);
             
@@ -2343,6 +2577,8 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                     'success' => true, 
                     'dealId' => $dealId,
                     'activityId' => $activityId ?? null,
+                    'eventId' => $eventId,
+                    'branchId' => $event['BRANCH_ID'] ?? null,
                     'message' => 'Сделка успешно создана и привязана к событию'
                 ];
             } else {
@@ -2843,6 +3079,8 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
             $branchId = $branchObj->addBranch($name, $address, $phone, $email);
 
             if ($branchId) {
+                $this->addBranchToDealFieldEnum((int)$branchId, (string)$name);
+
                 // Обновляем страницы раздела для отображения нового филиала
                 try {
                     \Artmax\Calendar\EventHandlers::updateSectionPages();

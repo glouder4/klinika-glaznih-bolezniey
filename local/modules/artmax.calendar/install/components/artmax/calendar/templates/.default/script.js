@@ -7,7 +7,25 @@
 
     // Универсальная функция для получения CSRF токена
     function getCSRFToken() {
-        return BX.bitrix_sessid();
+        // Пробуем получить токен через BX
+        if (typeof BX !== 'undefined' && typeof BX.bitrix_sessid === 'function') {
+            return BX.bitrix_sessid();
+        }
+        
+        // Fallback: пробуем найти токен в форме
+        const tokenInput = document.querySelector('input[name="sessid"]');
+        if (tokenInput) {
+            return tokenInput.value;
+        }
+        
+        // Fallback: пробуем найти токен в meta теге
+        const metaToken = document.querySelector('meta[name="csrf-token"]');
+        if (metaToken) {
+            return metaToken.getAttribute('content');
+        }
+        
+        console.warn('getCSRFToken: CSRF токен не найден');
+        return '';
     }
 
     // Инициализация модуля
@@ -109,16 +127,29 @@
         // refreshCalendarEvents() будет вызываться только при необходимости (изменения, обновления)
     }
 
+    // Глобальный флаг для предотвращения множественных обновлений календаря
+    let isRefreshingCalendar = false;
+
     // Инициализация обработчиков SidePanel
     function initSidePanelHandlers() {
         if (typeof BX !== 'undefined' && BX.SidePanel) {
             // Обработчик события закрытия SidePanel
+            // Используем глобальный флаг, чтобы избежать множественных вызовов
             BX.addCustomEvent('SidePanel.Slider:onClose', function(event) {
                 console.log('SidePanel closed, refreshing calendar...');
                 // Обновляем календарь после закрытия SidePanel
+                // Увеличиваем задержку, чтобы страница успела вернуться в нормальное состояние
                 setTimeout(() => {
-                    refreshCalendarEvents();
-                }, 100);
+                    // Проверяем, что страница готова к запросам
+                    if (document.readyState === 'complete' && typeof BX !== 'undefined') {
+                        refreshCalendarEvents();
+                    } else {
+                        // Если страница еще не готова, ждем еще
+                        setTimeout(() => {
+                            refreshCalendarEvents();
+                        }, 200);
+                    }
+                }, 300);
             });
             
             // Обработчик события успешного создания события
@@ -146,25 +177,30 @@
                     case 'calendar:scheduleCreated':
                         console.log('Schedule created via postMessage:', event.data);
                         // Обновляем календарь после создания расписания
+                        // Используем задержку, чтобы дать время SidePanel закрыться
                         setTimeout(() => {
                             refreshCalendarEvents();
-                        }, 100);
+                        }, 500);
                         break;
                     
                     case 'calendar:branchCreated':
                         console.log('Branch created via postMessage:', event.data);
-                        // Перезагружаем страницу для обновления переключателя филиалов
+                        // Обновляем календарь после создания филиала
                         setTimeout(() => {
-                            window.location.reload();
-                        }, 500);
+                            if (typeof refreshCalendarEvents === 'function') {
+                                refreshCalendarEvents();
+                            }
+                        }, 100);
                         break;
                     
                     case 'calendar:branchSettingsSaved':
                         console.log('Branch settings saved via postMessage:', event.data);
-                        // Перезагружаем страницу для обновления названия филиала и настроек
+                        // Обновляем календарь после сохранения настроек филиала
                         setTimeout(() => {
-                            window.location.reload();
-                        }, 500);
+                            if (typeof refreshCalendarEvents === 'function') {
+                                refreshCalendarEvents();
+                            }
+                        }, 100);
                         break;
                     
                     case 'calendar:contactSaved':
@@ -200,58 +236,12 @@
                     
                     case 'calendar:dealSaved':
                         console.log('Deal saved via postMessage:', event.data);
-                        // Обновляем календарь
-                        setTimeout(() => {
-                            if (typeof refreshCalendarEvents === 'function') {
-                                refreshCalendarEvents();
-                            }
-                            // Обновляем информацию о сделке в боковой панели если она открыта
-                            if (event.data && event.data.dealId && event.data.eventId) {
-                                console.log('calendar:dealSaved: Проверяем обновление deal-status');
-                                // Проверяем, действительно ли боковая панель события открыта
-                                const eventSidePanel = document.getElementById('eventSidePanel');
-                                const isSidePanelOpen = eventSidePanel && eventSidePanel.classList.contains('open') && eventSidePanel.style.display !== 'none';
-                                
-                                console.log('calendar:dealSaved: eventSidePanel существует?', !!eventSidePanel);
-                                console.log('calendar:dealSaved: isSidePanelOpen?', isSidePanelOpen);
-                                
-                                if (isSidePanelOpen) {
-                                    const currentEventId = getCurrentEventId();
-                                    console.log('calendar:dealSaved: currentEventId =', currentEventId, 'event.data.eventId =', event.data.eventId);
-                                    
-                                    if (currentEventId && String(currentEventId) === String(event.data.eventId)) {
-                                        // Боковая панель открыта для этого события, просто обновляем данные о сделке
-                                        // Используем данные, которые уже есть в postMessage
-                                        console.log('calendar:dealSaved: Вызываем updateDealInfoInSidePanel');
-                                        console.log('calendar:dealSaved: dealTitle =', event.data.dealTitle);
-                                        
-                                        // Проверяем наличие элемента перед обновлением
-                                        const dealStatusElement = document.getElementById('deal-status');
-                                        console.log('calendar:dealSaved: deal-status элемент найден?', !!dealStatusElement);
-                                        
-                                        if (typeof updateDealInfoInSidePanel === 'function') {
-                                            updateDealInfoInSidePanel({
-                                                title: event.data.dealTitle || 'Сделка #' + event.data.dealId
-                                            });
-                                        } else {
-                                            console.error('calendar:dealSaved: функция updateDealInfoInSidePanel не найдена!');
-                                            // Fallback - обновляем напрямую
-                                            if (dealStatusElement) {
-                                                dealStatusElement.textContent = event.data.dealTitle || 'Сделка #' + event.data.dealId;
-                                                dealStatusElement.style.color = '#28a745';
-                                                console.log('calendar:dealSaved: deal-status обновлен напрямую');
-                                            }
-                                        }
-                                    } else {
-                                        console.log('calendar:dealSaved: ID события не совпадают, пропускаем обновление');
-                                    }
-                                } else {
-                                    console.log('calendar:dealSaved: Боковая панель не открыта, пропускаем обновление');
-                                }
-                            } else {
-                                console.log('calendar:dealSaved: Недостаточно данных для обновления');
-                            }
-                        }, 100);
+                        handleDealUpdateMessage(event.data);
+                        break;
+
+                    case 'calendar:dealCustomFieldsSaved':
+                        console.log('Deal custom fields saved via postMessage:', event.data);
+                        handleDealUpdateMessage(event.data);
                         break;
                     
                     case 'calendar:eventUpdated':
@@ -322,6 +312,45 @@
                 }
             }
         });
+    }
+
+    function handleDealUpdateMessage(messageData) {
+        setTimeout(() => {
+            if (typeof refreshCalendarEvents === 'function') {
+                refreshCalendarEvents();
+            }
+
+            if (!messageData || !messageData.dealId || !messageData.eventId) {
+                console.log('handleDealUpdateMessage: Недостаточно данных для обновления');
+                return;
+            }
+
+            const eventSidePanel = document.getElementById('eventSidePanel');
+            const isSidePanelOpen = eventSidePanel && eventSidePanel.classList.contains('open') && eventSidePanel.style.display !== 'none';
+
+            if (!isSidePanelOpen) {
+                console.log('handleDealUpdateMessage: Боковая панель закрыта');
+                return;
+            }
+
+            const currentEventId = getCurrentEventId();
+            if (!currentEventId || String(currentEventId) !== String(messageData.eventId)) {
+                console.log('handleDealUpdateMessage: ID события не совпадают');
+                return;
+            }
+
+            if (typeof updateDealInfoInSidePanel === 'function') {
+                updateDealInfoInSidePanel({
+                    title: messageData.dealTitle || 'Сделка #' + messageData.dealId
+                });
+            } else {
+                const dealStatusElement = document.getElementById('deal-status');
+                if (dealStatusElement) {
+                    dealStatusElement.textContent = messageData.dealTitle || 'Сделка #' + messageData.dealId;
+                    dealStatusElement.style.color = '#28a745';
+                }
+            }
+        }, 100);
     }
 
     function initCalendarCells() {
@@ -5800,6 +5829,13 @@
      * Обновляет события календаря по AJAX
      */
     function refreshCalendarEvents() {
+        // Проверяем флаг, чтобы избежать множественных одновременных вызовов
+        if (isRefreshingCalendar) {
+            console.log('refreshCalendarEvents: Уже идет обновление, пропускаем вызов');
+            return;
+        }
+        
+        isRefreshingCalendar = true;
         const branchId = getBranchId() || 1;
         
         // Сначала пытаемся обновить глобальные переменные из URL
@@ -5821,9 +5857,10 @@
         const startDate = new Date(firstDay);
         startDate.setDate(startDate.getDate() - (firstDayOfWeek - 1));
         
-        // Заканчиваем через 6 недель (42 дня)
+        // Заканчиваем через 6 недель (42 дня) + добавляем еще одну неделю для следующего месяца
+        // Это гарантирует, что события следующего месяца также попадут в диапазон
         const endDate = new Date(startDate);
-        endDate.setDate(endDate.getDate() + 41);
+        endDate.setDate(endDate.getDate() + 48); // 7 недель (49 дней) вместо 6 недель
         
         const dateFrom = startDate.toISOString().split('T')[0];
         const dateTo = endDate.toISOString().split('T')[0];
@@ -5832,6 +5869,13 @@
         console.log('refreshCalendarEvents: startDate =', startDate.toISOString(), 'endDate =', endDate.toISOString());
         
         const csrfToken = getCSRFToken();
+        if (!csrfToken) {
+            console.error('refreshCalendarEvents: CSRF токен не найден');
+            return;
+        }
+        
+        console.log('refreshCalendarEvents: Отправка запроса на обновление событий, branchId =', branchId);
+        
         fetch('/local/components/artmax/calendar/ajax.php', {
             method: 'POST',
             headers: {
@@ -5847,7 +5891,12 @@
                 sessid: csrfToken
             })
         })
-        .then(response => response.json())
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
         .then(data => {
             console.log('DYNAMIC LOAD: Server response:', data);
             if (data.success && data.events) {
@@ -5859,6 +5908,21 @@
         })
         .catch(error => {
             console.error('Ошибка при обновлении событий:', error);
+            console.error('Ошибка при обновлении событий - детали:', {
+                message: error.message,
+                stack: error.stack,
+                branchId: branchId,
+                dateFrom: dateFrom,
+                dateTo: dateTo
+            });
+        })
+        .finally(() => {
+            // Сбрасываем флаг после завершения запроса (успешного или с ошибкой)
+            // Используем небольшую задержку, чтобы избежать race conditions
+            setTimeout(() => {
+                isRefreshingCalendar = false;
+                console.log('refreshCalendarEvents: Флаг сброшен, можно обновлять снова');
+            }, 300);
         });
     }
 

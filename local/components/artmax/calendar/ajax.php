@@ -127,9 +127,23 @@ switch ($action) {
         $description = $_POST['description'] ?? '';
         $dateFrom = $_POST['dateFrom'] ?? '';
         $dateTo = $_POST['dateTo'] ?? '';
-        $branchId = (int)($_POST['branchId'] ?? 1);
+        // Поддерживаем оба варианта: branchId (camelCase) и branch_id (snake_case)
+        // Приоритет: branch_id, затем branchId, затем значение по умолчанию
+        $branchId = null;
+        if (isset($_POST['branch_id']) && $_POST['branch_id'] !== '' && $_POST['branch_id'] !== '0') {
+            $branchId = (int)$_POST['branch_id'];
+        } elseif (isset($_POST['branchId']) && $_POST['branchId'] !== '' && $_POST['branchId'] !== '0') {
+            $branchId = (int)$_POST['branchId'];
+        } else {
+            $branchId = 1;
+        }
         $eventColor = $_POST['eventColor'] ?? '#3498db';
         $employeeId = $_POST['employee_id'] ?? null;
+        
+        // Логируем полученные данные для отладки
+        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+            "AJAX addEvent: POST data - branchId=" . ($_POST['branchId'] ?? 'not set') . ", branch_id=" . ($_POST['branch_id'] ?? 'not set') . ", final branchId=$branchId\n", 
+            FILE_APPEND | LOCK_EX);
 
         if (empty($title) || empty($dateFrom) || empty($dateTo)) {
             http_response_code(400);

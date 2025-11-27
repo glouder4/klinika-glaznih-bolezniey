@@ -47,7 +47,7 @@ $eventColor = $event['EVENT_COLOR'] ?? '#2fc6f6';
 
 <div class="side-panel-content-container">
     <div class="artmax-event-form">
-        <form id="edit-event-form" novalidate>
+        <form id="edit-event-form" novalidate onsubmit="event.preventDefault(); return false;">
             <?= bitrix_sessid_post() ?>
             <input type="hidden" name="event_id" id="edit-event-id" value="<?= htmlspecialchars($arResult['EVENT']['ID']) ?>">
             <input type="hidden" name="branch_id" value="<?= htmlspecialchars($arResult['BRANCH_ID']) ?>">
@@ -188,7 +188,7 @@ $eventColor = $event['EVENT_COLOR'] ?? '#2fc6f6';
     <?php if ($arResult['IS_IFRAME']): ?>
     <!-- Кнопки для iframe режима -->
     <div class="webform-buttons calendar-form-buttons-fixed">
-        <input type="button" class="ui-btn ui-btn-danger" id="delete-event-btn" value="Удалить" onclick="deleteEvent()">
+        <!--<input type="button" class="ui-btn ui-btn-danger" id="delete-event-btn" value="Удалить" onclick="deleteEvent()">-->
         <input type="button" class="ui-btn ui-btn-success" id="save-event-btn" value="Сохранить" onclick="saveEditEvent()">
         <input type="button" class="ui-btn ui-btn-link" id="cancel-event-btn" value="Отмена" onclick="closeSidePanel()">
     </div>

@@ -478,7 +478,8 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                     $_POST['dateFrom'] ?? '',
                     $_POST['dateTo'] ?? '',
                     (int)($_POST['branchId'] ?? 1),
-                    $_POST['eventColor'] ?? '#3498db'
+                    $_POST['eventColor'] ?? '#3498db',
+                    isset($_POST['employee_id']) ? (int)$_POST['employee_id'] : null
                 );
                 break;
                 
@@ -581,7 +582,7 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
     /**
      * Добавление события
      */
-    public function addEventAction($title, $description, $dateFrom, $dateTo, $branchId, $eventColor = '#3498db')
+    public function addEventAction($title, $description, $dateFrom, $dateTo, $branchId, $eventColor = '#3498db', $employeeId = null)
     {
         global $USER;
         if (!$USER || !$USER->IsAuthorized()) {
@@ -602,7 +603,7 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                 return ['success' => false, 'error' => 'Время уже занято для выбранного врача в этом филиале'];
             }
             
-            $eventId = $calendarObj->addEvent($title, $description, $dateFrom, $dateTo, $userId, $branchId, $eventColor);
+            $eventId = $calendarObj->addEvent($title, $description, $dateFrom, $dateTo, $userId, $branchId, $eventColor, $employeeId);
 
             if ($eventId) {
                 return ['success' => true, 'eventId' => $eventId];
@@ -754,6 +755,10 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
         $excludeHolidays = $params['exclude_holidays'] ?? false;
         $includeEndDate = $params['include_end_date'] ?? true;
 
+        // Логируем полученные параметры для отладки
+        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+            "addScheduleAction: repeat = " . ($repeat ? 'true' : 'false') . ", frequency = " . ($frequency ?? 'null') . ", weekdays = " . json_encode($weekdays) . ", repeatCount = " . ($repeatCount ?? 'null') . ", repeatEnd = " . ($repeatEnd ?? 'null') . ", includeEndDate = " . ($includeEndDate ? 'true' : 'false') . "\n", 
+            FILE_APPEND | LOCK_EX);
         
         if (!$USER || !$USER->IsAuthorized()) {
             return ['success' => false, 'error' => 'Необходима авторизация'];
@@ -818,6 +823,16 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                 if ($calendarObj->isTimeAvailableForDoctor($dateFrom->format('Y-m-d H:i:s'), $dateTo->format('Y-m-d H:i:s'), $employeeId, null, $branchId)) {
                     $eventId = $calendarObj->addEvent($title, '', $dateFrom->format('Y-m-d H:i:s'), $dateTo->format('Y-m-d H:i:s'), $userId, $branchId, $eventColor, $employeeId);
                     if ($eventId) {
+                        // Записываем в журнал событие создания из расписания
+                        $journal = new \Artmax\Calendar\Journal();
+                        $journal->writeEvent(
+                            $eventId,
+                            'CREATED_BY_SCHEDULE',
+                            'Artmax\Calendar\Calendar::addEvent',
+                            $userId,
+                            'EVENT_ID=' . $eventId
+                        );
+                        
                         $eventsCreated = 1;
                         $event = $calendarObj->getEvent($eventId);
                         if ($event) {
@@ -946,14 +961,17 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                     $endMonday->sub(new \DateInterval('P' . $endMondayOffset . 'D'));
                     
                     // Считаем количество недель между понедельниками
-                    $weeksDiff = $startMonday->diff($endMonday)->days / 7;
+                    // Используем format('%a') для получения абсолютного количества дней
+                    $daysDiff = (int)$startMonday->diff($endMonday)->format('%a');
+                    $weeksDiff = $daysDiff / 7;
                     
                     // Если конечная дата попадает на выбранный день недели в своей неделе,
                     // то нужно включить эту неделю, даже если includeEndDate=false
                     $endDateDayOfWeek = $endDate->format('N');
                     $includeEndWeek = in_array($endDateDayOfWeek, $weekdays);
                     
-                    $maxWeeks = $weeksDiff + ($includeEndDate || $includeEndWeek ? 1 : 0);
+                    // Округляем вверх, чтобы не пропустить последнюю неделю
+                    $maxWeeks = (int)ceil($weeksDiff) + ($includeEndDate || $includeEndWeek ? 1 : 0);
                     $maxEvents = $maxWeeks * count($weekdays);
                 } elseif ($repeatCount && $repeatCount > 0) {
                     // Для еженедельного повторения используем количество недель
@@ -969,12 +987,21 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                     // Если указана конечная дата, рассчитываем количество событий по датам
                     $startDate = $scheduleStartDate ? new \DateTime($scheduleStartDate) : $eventDateFrom;
                     $endDate = new \DateTime($repeatEndDate);
+                    // Устанавливаем время на 00:00:00 для корректного расчета дней
+                    $startDate->setTime(0, 0, 0);
+                    $endDate->setTime(0, 0, 0);
                     $daysDiff = $startDate->diff($endDate)->days;
+                    
+                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                        "createRecurringEvents: Расчет maxEvents: startDate = " . $startDate->format('Y-m-d') . ", endDate = " . $endDate->format('Y-m-d') . ", daysDiff = $daysDiff, includeEndDate = " . ($includeEndDate ? 'true' : 'false') . "\n", 
+                        FILE_APPEND | LOCK_EX);
                     
                     // Рассчитываем максимальное количество событий в зависимости от частоты
                     switch ($frequency) {
                         case 'daily':
-                            $maxEvents = $daysDiff + ($includeEndDate ? 1 : 0); // +1 если включаем конечную дату
+                            // Для ежедневного: количество дней между датами + 1 (включая обе даты)
+                            // Если includeEndDate = true, то +1, если false, то daysDiff (не включая конечную)
+                            $maxEvents = $includeEndDate ? ($daysDiff + 1) : $daysDiff;
                             break;
                         case 'weekly':
                             $maxEvents = ceil($daysDiff / 7) + ($includeEndDate ? 1 : 0);
@@ -983,7 +1010,7 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                             $maxEvents = $startDate->diff($endDate)->m + ($includeEndDate ? 1 : 0);
                             break;
                         default:
-                            $maxEvents = $daysDiff + ($includeEndDate ? 1 : 0);
+                            $maxEvents = $includeEndDate ? ($daysDiff + 1) : $daysDiff;
                     }
                     
                     file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
@@ -1004,12 +1031,24 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
             file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
                 "createRecurringEvents: repeatEnd = $repeatEnd, repeatCount = $repeatCount, maxEvents = $maxEvents\n", 
                 FILE_APPEND | LOCK_EX);
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "createRecurringEvents: frequency = $frequency, weekdays = " . json_encode($weekdays) . ", is_array = " . (is_array($weekdays) ? 'true' : 'false') . ", empty = " . (empty($weekdays) ? 'true' : 'false') . "\n", 
+                FILE_APPEND | LOCK_EX);
 
             if ($frequency === 'weekly' && !empty($weekdays)) {
                 // Специальная обработка для еженедельного повторения с выбранными днями недели
                 // Используем дату начала расписания как базовую дату
                 $currentDate = clone $startDate;
                 $weekNumber = 0;
+                
+                // Проверяем, что maxWeeks определена
+                if (!isset($maxWeeks)) {
+                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                        "createRecurringEvents: ERROR - maxWeeks не определена! Используем значение по умолчанию.\n", 
+                        FILE_APPEND | LOCK_EX);
+                    $maxWeeks = $repeatCount ? $repeatCount : 3;
+                    $maxEvents = $maxWeeks * count($weekdays);
+                }
                 
                 // Логируем параметры для отладки
                 file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
@@ -1062,18 +1101,30 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                                 if ($includeEndDate) {
                                     // Если включаем конечную дату, проверяем что не превышаем её
                                     if ($eventDate->format('Y-m-d') > $endDate->format('Y-m-d')) {
+                                        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                                            "createRecurringEvents: Date " . $eventDate->format('Y-m-d') . " exceeds endDate " . $endDate->format('Y-m-d') . " (includeEndDate=true) - breaking\n", 
+                                            FILE_APPEND | LOCK_EX);
                                         break 2; // Выходим из обоих циклов
                                     }
                                 } else {
                                     // Если не включаем конечную дату, проверяем что строго меньше её
                                     if ($eventDate->format('Y-m-d') >= $endDate->format('Y-m-d')) {
+                                        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                                            "createRecurringEvents: Date " . $eventDate->format('Y-m-d') . " >= endDate " . $endDate->format('Y-m-d') . " (includeEndDate=false) - breaking\n", 
+                                            FILE_APPEND | LOCK_EX);
                                         break 2; // Выходим из обоих циклов
                                     }
                                 }
+                                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                                    "createRecurringEvents: Date " . $eventDate->format('Y-m-d') . " passed endDate check (endDate=" . $endDate->format('Y-m-d') . ", includeEndDate=" . ($includeEndDate ? 'true' : 'false') . ")\n", 
+                                    FILE_APPEND | LOCK_EX);
                             }
                             
                             // Дополнительная проверка по количеству событий (защита от переполнения)
                             if ($eventsCreated >= $maxEvents) {
+                                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                                    "createRecurringEvents: Max events reached ($eventsCreated >= $maxEvents) - breaking\n", 
+                                    FILE_APPEND | LOCK_EX);
                                 break 2; // Выходим из обоих циклов
                             }
                             
@@ -1082,14 +1133,23 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                             
                             // Проверяем исключения выходных и праздников
                             if ($excludeWeekends && $this->isWeekend($eventDate)) {
+                                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                                    "createRecurringEvents: Date " . $eventDate->format('Y-m-d') . " is weekend - skipping\n", 
+                                    FILE_APPEND | LOCK_EX);
                                 continue; // Пропускаем выходные
                             }
                             
                             if ($excludeHolidays && $this->isHoliday($eventDate)) {
+                                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                                    "createRecurringEvents: Date " . $eventDate->format('Y-m-d') . " is holiday - skipping\n", 
+                                    FILE_APPEND | LOCK_EX);
                                 continue; // Пропускаем праздники
                             }
                             
                             // Проверяем доступность времени для события
+                            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                                "createRecurringEvents: Checking time availability for " . $eventDate->format('Y-m-d H:i:s') . " to " . $eventDateTo->format('Y-m-d H:i:s') . "\n", 
+                                FILE_APPEND | LOCK_EX);
                             if ($calendarObj->isTimeAvailableForDoctor($eventDate->format('Y-m-d H:i:s'), $eventDateTo->format('Y-m-d H:i:s'), $employeeId, null, $branchId)) {
                                 // Создаем событие
                                 file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
@@ -1107,6 +1167,16 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                                 );
 
                                 if ($recurringEventId) {
+                                    // Записываем в журнал событие создания из расписания
+                                    $journal = new \Artmax\Calendar\Journal();
+                                    $journal->writeEvent(
+                                        $recurringEventId,
+                                        'CREATED_BY_SCHEDULE',
+                                        'Artmax\Calendar\Calendar::addEvent',
+                                        $userId,
+                                        'EVENT_ID=' . $recurringEventId
+                                    );
+                                    
                                     $eventsCreated++;
                                     $createdEventIds[] = $recurringEventId;
                                     file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
@@ -1140,9 +1210,14 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                 file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
                     "createRecurringEvents: Начинаем цикл создания событий, maxEvents = $maxEvents, frequency = $frequency\n", 
                     FILE_APPEND | LOCK_EX);
+                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                    "createRecurringEvents: startDate = " . $startDate->format('Y-m-d') . ", endDate = " . ($endDate ? $endDate->format('Y-m-d') : 'null') . ", includeEndDate = " . ($includeEndDate ? 'true' : 'false') . "\n", 
+                    FILE_APPEND | LOCK_EX);
                 $i = 0;
                 $eventsCreated = 0;
-                while ($eventsCreated < $maxEvents) {
+                // Цикл идет по количеству повторений (maxEvents), а не по количеству созданных событий
+                // Это гарантирует, что события создаются на конкретных датах (01.12, 02.12, 03.12...)
+                while ($i < $maxEvents) {
                     $newDateFrom = clone $eventDateFrom;
                     $newDateTo = clone $eventDateTo;
 
@@ -1165,7 +1240,7 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                     }
 
                     file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                        "createRecurringEvents: Итерация $i, дата события: " . $newDateFrom->format('Y-m-d') . "\n", 
+                        "createRecurringEvents: Итерация $i, дата события: " . $newDateFrom->format('Y-m-d') . ", eventsCreated = $eventsCreated, maxEvents = $maxEvents\n", 
                         FILE_APPEND | LOCK_EX);
 
                     // Проверяем ограничение по дате
@@ -1175,17 +1250,22 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                             FILE_APPEND | LOCK_EX);
                         if ($includeEndDate) {
                             // Если включаем конечную дату, проверяем что не превышаем её
-                            if ($newDateFrom->format('Y-m-d') > $endDate->format('Y-m-d')) {
+                            // Используем сравнение дат без времени для корректной проверки
+                            $eventDateOnly = $newDateFrom->format('Y-m-d');
+                            $endDateOnly = $endDate->format('Y-m-d');
+                            if ($eventDateOnly > $endDateOnly) {
                                 file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                                    "createRecurringEvents: Дата события " . $newDateFrom->format('Y-m-d') . " превышает конечную дату " . $endDate->format('Y-m-d') . " - прерываем цикл\n", 
+                                    "createRecurringEvents: Дата события $eventDateOnly превышает конечную дату $endDateOnly - прерываем цикл\n", 
                                     FILE_APPEND | LOCK_EX);
                                 break;
                             }
                         } else {
                             // Если не включаем конечную дату, проверяем что строго меньше её
-                            if ($newDateFrom->format('Y-m-d') >= $endDate->format('Y-m-d')) {
+                            $eventDateOnly = $newDateFrom->format('Y-m-d');
+                            $endDateOnly = $endDate->format('Y-m-d');
+                            if ($eventDateOnly >= $endDateOnly) {
                                 file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                                    "createRecurringEvents: Дата события " . $newDateFrom->format('Y-m-d') . " больше или равна конечной дате " . $endDate->format('Y-m-d') . " - прерываем цикл\n", 
+                                    "createRecurringEvents: Дата события $eventDateOnly больше или равна конечной дате $endDateOnly - прерываем цикл\n", 
                                     FILE_APPEND | LOCK_EX);
                                 break;
                             }
@@ -1205,7 +1285,12 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                     }
                     
                     // Проверяем доступность времени для повторяющегося события
-                    if ($calendarObj->isTimeAvailableForDoctor($newDateFrom->format('Y-m-d H:i:s'), $newDateTo->format('Y-m-d H:i:s'), $employeeId, null, $branchId)) {
+                    $isAvailable = $calendarObj->isTimeAvailableForDoctor($newDateFrom->format('Y-m-d H:i:s'), $newDateTo->format('Y-m-d H:i:s'), $employeeId, null, $branchId);
+                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                        "createRecurringEvents: Итерация $i, дата " . $newDateFrom->format('Y-m-d') . ", время доступно: " . ($isAvailable ? 'да' : 'нет') . "\n", 
+                        FILE_APPEND | LOCK_EX);
+                    
+                    if ($isAvailable) {
                         // Создаем событие
                         $recurringEventId = $calendarObj->addEvent(
                             $title,
@@ -1219,9 +1304,30 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                         );
 
                         if ($recurringEventId) {
+                            // Записываем в журнал событие создания из расписания
+                            $journal = new \Artmax\Calendar\Journal();
+                            $journal->writeEvent(
+                                $recurringEventId,
+                                'CREATED_BY_SCHEDULE',
+                                'Artmax\Calendar\Calendar::addEvent',
+                                $userId,
+                                'EVENT_ID=' . $recurringEventId
+                            );
+                            
                             $eventsCreated++;
                             $createdEventIds[] = $recurringEventId;
+                            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                                "createRecurringEvents: Создано событие ID=$recurringEventId на дату " . $newDateFrom->format('Y-m-d') . ", всего создано: $eventsCreated\n", 
+                                FILE_APPEND | LOCK_EX);
+                        } else {
+                            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                                "createRecurringEvents: ОШИБКА - addEvent вернул false для даты " . $newDateFrom->format('Y-m-d') . "\n", 
+                                FILE_APPEND | LOCK_EX);
                         }
+                    } else {
+                        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                            "createRecurringEvents: Время занято для даты " . $newDateFrom->format('Y-m-d') . " - пропускаем\n", 
+                            FILE_APPEND | LOCK_EX);
                     }
                     // Если время занято, просто пропускаем этот день
                     $i++;
@@ -1683,10 +1789,36 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                 return ['success' => false, 'error' => 'Неверные данные сделки'];
             }
             
+            $journal = new \Artmax\Calendar\Journal();
+            $userId = $USER->GetID();
+            
+            $oldDealId = !empty($event['DEAL_ENTITY_ID']) ? (int)$event['DEAL_ENTITY_ID'] : null;
+            $newDealId = (int)$dealDataArray['id'];
+            
+            // Если был привязан другой deal, сначала записываем отвязку старого
+            if ($oldDealId && $oldDealId !== $newDealId) {
+                $journal->writeEvent(
+                    $eventId,
+                    'DEAL_DETACHED',
+                    'Artmax\Calendar\Calendar::updateEventDeal',
+                    $userId,
+                    'DEAL_ID=' . $oldDealId
+                );
+            }
+            
             // Обновляем событие, добавляя ID сделки
             $result = $calendar->updateEventDeal($eventId, $dealDataArray['id']);
-
+            
             if ($result) {
+                // Записываем в журнал привязку новой сделки
+                $journal->writeEvent(
+                    $eventId,
+                    'DEAL_ATTACHED',
+                    'Artmax\Calendar\Calendar::updateEventDeal',
+                    $userId,
+                    'DEAL_ID=' . $newDealId
+                );
+                
                 // Создаем или обновляем активность в сделке
                 $dealId = $dealDataArray['id'];
                 
@@ -1814,6 +1946,177 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
         } catch (\Exception $e) {
             return ['success' => false, 'error' => $e->getMessage()];
         }
+    }
+    
+    /**
+     * Сохранение кастомных полей сделки
+     */
+    public function saveDealCustomFieldsAction($dealId, array $fields = [])
+    {
+        global $USER;
+        if (!$USER || !$USER->IsAuthorized()) {
+            return ['success' => false, 'error' => 'Необходима авторизация'];
+        }
+
+        $dealId = (int)$dealId;
+        if ($dealId <= 0) {
+            return ['success' => false, 'error' => 'Некорректный ID сделки'];
+        }
+
+        if (!\CModule::IncludeModule('crm')) {
+            return ['success' => false, 'error' => 'Модуль CRM не установлен'];
+        }
+
+        $deal = \CCrmDeal::GetListEx([], ['=ID' => $dealId], false, false, ['ID', 'TITLE'])->Fetch();
+        if (!$deal) {
+            return ['success' => false, 'error' => 'Сделка не найдена'];
+        }
+
+        $fieldCodes = $this->getDealFieldCodes();
+        $updateFields = [];
+
+        if (array_key_exists('service', $fields) && $fieldCodes['SERVICE']) {
+            $serviceValue = trim((string)$fields['service']);
+            $updateFields[$fieldCodes['SERVICE']] = $serviceValue === '' ? null : (int)$serviceValue;
+        }
+
+        if (array_key_exists('source', $fields) && $fieldCodes['SOURCE']) {
+            $sourceValue = trim((string)$fields['source']);
+            $updateFields[$fieldCodes['SOURCE']] = $sourceValue === '' ? null : (int)$sourceValue;
+        }
+
+        if (array_key_exists('branch', $fields) && $fieldCodes['BRANCH']) {
+            $branchValue = trim((string)$fields['branch']);
+            $updateFields[$fieldCodes['BRANCH']] = $branchValue === '' ? null : (int)$branchValue;
+        }
+
+        if (array_key_exists('amountValue', $fields) && $fieldCodes['AMOUNT']) {
+            $amountValue = trim((string)$fields['amountValue']);
+            $currency = isset($fields['amountCurrency']) && $fields['amountCurrency'] !== ''
+                ? strtoupper($fields['amountCurrency'])
+                : 'RUB';
+
+            if ($amountValue === '') {
+                $updateFields[$fieldCodes['AMOUNT']] = '';
+                // Очищаем штатные поля суммы
+                $updateFields['OPPORTUNITY'] = 0;
+            } else {
+                $normalizedAmount = str_replace(',', '.', $amountValue);
+                $updateFields[$fieldCodes['AMOUNT']] = $normalizedAmount . '|' . $currency;
+                
+                // Сохраняем сумму в штатные поля сделки
+                $updateFields['OPPORTUNITY'] = (float)$normalizedAmount;
+                $updateFields['CURRENCY_ID'] = $currency;
+            }
+        }
+
+        if (array_key_exists('title', $fields)) {
+            $title = trim((string)$fields['title']);
+            if ($title !== '') {
+                $updateFields['TITLE'] = $title;
+            }
+        }
+
+        if (empty($updateFields)) {
+            return ['success' => false, 'error' => 'Нет данных для обновления'];
+        }
+
+        $dealEntity = new \CCrmDeal(false);
+        $updateResult = $dealEntity->Update($dealId, $updateFields, true, true, [
+            'DISABLE_USER_FIELD_CHECK' => false,
+            'REGISTER_SONET_EVENT' => false
+        ]);
+
+        if (!$updateResult) {
+            return ['success' => false, 'error' => $dealEntity->LAST_ERROR ?: 'Не удалось обновить сделку'];
+        }
+
+        $updatedDeal = \CCrmDeal::GetListEx([], ['=ID' => $dealId], false, false, ['ID', 'TITLE'])->Fetch();
+
+        return [
+            'success' => true,
+            'dealId' => $dealId,
+            'dealTitle' => $updatedDeal['TITLE'] ?? ($updateFields['TITLE'] ?? $deal['TITLE']),
+            'fields' => [
+                'service' => $fields['service'] ?? null,
+                'source' => $fields['source'] ?? null,
+                'branch' => $fields['branch'] ?? null,
+                'amountValue' => $fields['amountValue'] ?? '',
+                'amountCurrency' => $fields['amountCurrency'] ?? 'RUB',
+            ]
+        ];
+    }
+
+    /**
+     * Возвращает коды пользовательских полей сделки
+     */
+    private function getDealFieldCodes(): array
+    {
+        return [
+            'SERVICE' => \Bitrix\Main\Config\Option::get('artmax.calendar', 'deal_service_field', 'UF_CRM_CALENDAR_SERVICE'),
+            'SOURCE' => \Bitrix\Main\Config\Option::get('artmax.calendar', 'deal_source_field', 'UF_CRM_CALENDAR_SOURCE'),
+            'AMOUNT' => \Bitrix\Main\Config\Option::get('artmax.calendar', 'deal_amount_field', 'UF_CRM_CALENDAR_AMOUNT'),
+            'BRANCH' => \Bitrix\Main\Config\Option::get('artmax.calendar', 'deal_branch_field', 'UF_CRM_CALENDAR_BRANCH'),
+        ];
+    }
+    
+    /**
+     * Добавляет филиал в перечисление пользовательского поля сделки
+     */
+    private function addBranchToDealFieldEnum(int $branchId, string $branchName): void
+    {
+        if ($branchId <= 0 || $branchName === '') {
+            return;
+        }
+
+        if (!\CModule::IncludeModule('crm')) {
+            return;
+        }
+
+        $fieldCode = \Bitrix\Main\Config\Option::get('artmax.calendar', 'deal_branch_field', 'UF_CRM_CALENDAR_BRANCH');
+        if (!$fieldCode) {
+            return;
+        }
+
+        $field = \CUserTypeEntity::GetList(
+            [],
+            ['ENTITY_ID' => 'CRM_DEAL', 'FIELD_NAME' => $fieldCode]
+        )->Fetch();
+
+        if (!$field) {
+            return;
+        }
+
+        $enum = new \CUserFieldEnum();
+        $existingValues = [];
+        $alreadyExists = false;
+
+        $rsEnum = $enum->GetList(['SORT' => 'ASC'], ['USER_FIELD_ID' => $field['ID']]);
+        while ($item = $rsEnum->Fetch()) {
+            $existingValues[$item['ID']] = [
+                'VALUE' => $item['VALUE'],
+                'DEF' => $item['DEF'],
+                'SORT' => $item['SORT'],
+                'XML_ID' => $item['XML_ID'],
+            ];
+
+            if ($item['XML_ID'] === 'branch_' . $branchId || (int)$item['XML_ID'] === $branchId) {
+                $alreadyExists = true;
+            }
+        }
+
+        if ($alreadyExists) {
+            return;
+        }
+
+        $existingValues['n' . $branchId] = [
+            'VALUE' => $branchName,
+            'DEF' => 'N',
+            'SORT' => 100 + count($existingValues) * 10,
+            'XML_ID' => 'branch_' . $branchId,
+        ];
+
+        $enum->SetEnumValues($field['ID'], $existingValues);
     }
     
     /**
@@ -2054,8 +2357,34 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
             $dealId = $deal->Add($dealFields);
             
             if ($dealId) {
+                $journal = new \Artmax\Calendar\Journal();
+                $userId = $USER->GetID();
+                
+                // Проверяем, был ли уже привязан deal
+                $oldDealId = !empty($event['DEAL_ENTITY_ID']) ? (int)$event['DEAL_ENTITY_ID'] : null;
+                
+                // Если был привязан другой deal, сначала записываем отвязку старого
+                if ($oldDealId && $oldDealId !== $dealId) {
+                    $journal->writeEvent(
+                        $eventId,
+                        'DEAL_DETACHED',
+                        'Artmax\Calendar\Calendar::updateEventDeal',
+                        $userId,
+                        'DEAL_ID=' . $oldDealId
+                    );
+                }
+                
                 // Привязываем сделку к событию
                 $calendar->updateEventDeal($eventId, $dealId);
+                
+                // Записываем в журнал привязку новой сделки
+                $journal->writeEvent(
+                    $eventId,
+                    'DEAL_ATTACHED',
+                    'Artmax\Calendar\Calendar::updateEventDeal',
+                    $userId,
+                    'DEAL_ID=' . $dealId
+                );
                 
                 // Создаем активность (бронирование) в сделке с датой и временем события
                 $activityId = $calendar->createCrmActivity(
@@ -2192,11 +2521,42 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
             }
 
             $calendar = new \Artmax\Calendar\Calendar();
+            $journal = new \Artmax\Calendar\Journal();
+            $userId = $USER->GetID();
+            
+            // Получаем текущее событие, чтобы проверить, был ли ранее привязан контакт
+            $event = $calendar->getEvent($eventId);
+            if (!$event) {
+                return ['success' => false, 'error' => 'Событие не найдено'];
+            }
+            
+            $oldContactId = !empty($event['CONTACT_ENTITY_ID']) ? (int)$event['CONTACT_ENTITY_ID'] : null;
+            $newContactId = (int)$contactId;
+            
+            // Если был привязан другой контакт, сначала записываем отвязку старого
+            if ($oldContactId && $oldContactId !== $newContactId) {
+                $journal->writeEvent(
+                    $eventId,
+                    'CONTACT_DETACHED',
+                    'Artmax\Calendar\Calendar::updateEventContact',
+                    $userId,
+                    'CONTACT_ID=' . $oldContactId
+                );
+            }
             
             // Обновляем событие с ID контакта
             $result = $calendar->updateEventContact($eventId, $contactId);
             
             if ($result) {
+                // Записываем в журнал привязку нового контакта
+                $journal->writeEvent(
+                    $eventId,
+                    'CONTACT_ATTACHED',
+                    'Artmax\Calendar\Calendar::updateEventContact',
+                    $userId,
+                    'CONTACT_ID=' . $newContactId
+                );
+                
                 return [
                     'success' => true, 
                     'message' => 'Контакт успешно привязан к событию',
@@ -2548,6 +2908,8 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
             $branchId = $branchObj->addBranch($name, $address, $phone, $email);
 
             if ($branchId) {
+                $this->addBranchToDealFieldEnum((int)$branchId, (string)$name);
+
                 // Обновляем страницы раздела для отображения нового филиала
                 try {
                     \Artmax\Calendar\EventHandlers::updateSectionPages();
@@ -2666,7 +3028,8 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                 $dateFrom,
                 $dateTo,
                 $employeeId ?? (int)$event['EMPLOYEE_ID'],
-                $branchId ?? (int)$event['BRANCH_ID']
+                $branchId ?? (int)$event['BRANCH_ID'],
+                $USER->GetID()
             );
             
             file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 

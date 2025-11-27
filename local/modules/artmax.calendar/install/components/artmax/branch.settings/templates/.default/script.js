@@ -375,9 +375,17 @@ function initializeBranchSettingsForm() {
                     }, '*');
                 }
                 
-                // Закрываем SidePanel
+                // Закрываем SidePanel без редиректа
+                window._isClosingSidePanel = true;
                 setTimeout(() => {
-                    closeSidePanel();
+                    if (typeof BX !== 'undefined' && BX.SidePanel && BX.SidePanel.Instance) {
+                        BX.SidePanel.Instance.close();
+                    } else if (window.parent && window.parent !== window) {
+                        // Если SidePanel недоступен, просто закрываем iframe
+                        window.parent.postMessage({
+                            type: 'calendar:closePanel'
+                        }, '*');
+                    }
                 }, 500);
             } else {
                 // Показываем уведомление об ошибке
@@ -411,6 +419,17 @@ function initializeBranchSettingsForm() {
             }
         });
     };
+
+    // Предотвращаем стандартную отправку формы
+    const form = document.getElementById('branch-settings-form');
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            saveBranchSettings();
+            return false;
+        });
+    }
 
     // Инициализация формы
     loadEmployees();

@@ -34,14 +34,50 @@ function initializeClientForm() {
 
     // Функция показа уведомления
     function showNotification(message, type) {
-        if (typeof BX !== 'undefined' && BX.UI && BX.UI.Notification) {
-            BX.UI.Notification.Center.notify({
-                content: message,
-                position: 'top-right'
-            });
+        const notification = document.createElement('div');
+        notification.className = `artmax-calendar-notification artmax-calendar-${type}`;
+        notification.textContent = message;
+
+        // Стили для уведомления
+        notification.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 20px;
+            border-radius: 8px;
+            color: white;
+            font-weight: 600;
+            z-index: 10001;
+            max-width: 300px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+            transform: translateX(100%);
+            transition: transform 0.3s ease;
+        `;
+
+        if (type === 'error') {
+            notification.style.background = 'linear-gradient(135deg, #ff6b6b, #ee5a24)';
+        } else if (type === 'warning') {
+            notification.style.background = 'linear-gradient(135deg, #f39c12, #e67e22)';
         } else {
-            alert(message);
+            notification.style.background = 'linear-gradient(135deg, #00b894, #00a085)';
         }
+
+        document.body.appendChild(notification);
+
+        // Анимация появления
+        setTimeout(() => {
+            notification.style.transform = 'translateX(0)';
+        }, 100);
+
+        // Автоматическое удаление
+        setTimeout(() => {
+            notification.style.transform = 'translateX(100%)';
+            setTimeout(() => {
+                if (document.body.contains(notification)) {
+                    document.body.removeChild(notification);
+                }
+            }, 300);
+        }, 5000);
     }
 
     // Функция показа/скрытия выпадающего окошка
@@ -332,6 +368,12 @@ function initializeClientForm() {
         if (backToSearch) backToSearch.style.display = 'block';
         if (createForm) createForm.style.display = 'block';
         
+        // Показываем кнопку сохранения для формы создания контакта
+        const saveBtn = document.getElementById('save-client-btn');
+        if (saveBtn) {
+            saveBtn.style.display = 'inline-block';
+        }
+        
         hideContactDropdown();
         clearCreateContactForm();
     };
@@ -345,6 +387,13 @@ function initializeClientForm() {
         if (createForm) createForm.style.display = 'none';
         if (searchGroup) searchGroup.style.display = 'block';
         if (backToSearch) backToSearch.style.display = 'none';
+        
+        // Скрываем кнопку сохранения, если не выбран контакт
+        const contactIdInput = document.getElementById('contact-id');
+        const saveBtn = document.getElementById('save-client-btn');
+        if (saveBtn && (!contactIdInput || !contactIdInput.value)) {
+            saveBtn.style.display = 'none';
+        }
         
         clearCreateContactForm();
     };
@@ -455,6 +504,14 @@ function initializeClientForm() {
 
     // Функция сохранения данных клиента
     window.saveClientData = function() {
+        // Проверяем, открыта ли форма создания контакта
+        const createForm = document.getElementById('create-contact-form');
+        if (createForm && createForm.style.display !== 'none') {
+            // Если форма создания контакта видна, вызываем функцию создания контакта
+            createContact();
+            return;
+        }
+        
         const contactInput = document.getElementById('contact-input');
         const phoneInput = document.getElementById('phone-input');
         const emailInput = document.getElementById('email-input');

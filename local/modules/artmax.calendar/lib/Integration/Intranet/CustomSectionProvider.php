@@ -85,6 +85,7 @@ class CustomSectionProvider extends Provider
 
     /**
      * Возвращает значение счетчика для страницы
+     * Считает только события с заполненным контактом на текущую дату
      */
     public function getCounterValue(string $pageSettings): ?int
     {
@@ -95,8 +96,20 @@ class CustomSectionProvider extends Provider
             if ($branchId > 0 && class_exists('\Artmax\Calendar\Calendar')) {
                 $calendar = new \Artmax\Calendar\Calendar();
                 $userId = $GLOBALS['USER']->GetID();
-                $events = $calendar->getEventsByBranch($branchId, null, null, $userId);
-                return count($events);
+                
+                // Получаем текущую дату (сегодня) в формате Y-m-d
+                // Метод getEventsByBranch сам добавит время (00:00:00 и 23:59:59)
+                $today = date('Y-m-d');
+                
+                // Получаем события на текущую дату
+                $events = $calendar->getEventsByBranch($branchId, $today, $today, $userId);
+                
+                // Фильтруем только события с заполненным контактом
+                $eventsWithContact = array_filter($events, function($event) {
+                    return !empty($event['CONTACT_ENTITY_ID']) && (int)$event['CONTACT_ENTITY_ID'] > 0;
+                });
+                
+                return count($eventsWithContact);
             }
             
             return 0;

@@ -166,6 +166,16 @@ function initializeBranchForm() {
             error.style.display = 'block';
         }
     }
+
+    // Предотвращаем стандартную отправку формы
+    const branchForm = document.getElementById('add-branch-form');
+    if (branchForm) {
+        branchForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            return false;
+        });
+    }
 }
 
 // Инициализируем форму

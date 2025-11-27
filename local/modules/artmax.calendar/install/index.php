@@ -144,6 +144,11 @@ class artmax_calendar extends CModule
         ";
         $connection->query($sqlDefaultBranch);
         
+        // Получаем ID созданного филиала (более надежный способ)
+        $result = $connection->query("SELECT ID FROM artmax_calendar_branches WHERE NAME = 'Филиал - 1' ORDER BY ID DESC LIMIT 1");
+        $row = $result->fetch();
+        $defaultBranchId = $row ? (int)$row['ID'] : null;
+        
         // Создаем пользовательское поле "Бронирование" для сделки
         $this->createDealBookingField();
         
@@ -154,6 +159,21 @@ class artmax_calendar extends CModule
         $this->createDealSourceField();
         $this->createDealAmountField();
         $this->createDealBranchField();
+        
+        // Добавляем филиал по умолчанию в список пользовательского поля "Филиал"
+        if ($defaultBranchId) {
+            try {
+                $this->addBranchToDealFieldEnum($defaultBranchId, 'Филиал - 1');
+            } catch (\Exception $e) {
+                // Логируем ошибку, но не прерываем установку
+                \CEventLog::Add([
+                    'SEVERITY' => 'ERROR',
+                    'AUDIT_TYPE_ID' => 'ARTMAX_CALENDAR_INSTALL_BRANCH_ENUM_ERROR',
+                    'MODULE_ID' => 'artmax.calendar',
+                    'DESCRIPTION' => 'Ошибка добавления филиала в enum: ' . $e->getMessage()
+                ]);
+            }
+        }
     }
     
     /**
@@ -721,6 +741,114 @@ class artmax_calendar extends CModule
         if ($existingField) {
             $userTypeEntity = new \CUserTypeEntity();
             $userTypeEntity->Delete($existingField['ID']);
+        }
+    }
+
+    /**
+     * Добавление филиала в список пользовательского поля "Филиал" для сделок
+     */
+    private function addBranchToDealFieldEnum(int $branchId, string $branchName): void
+    {
+        if ($branchId <= 0 || $branchName === '') {
+            \CEventLog::Add([
+                'SEVERITY' => 'WARNING',
+                'AUDIT_TYPE_ID' => 'ARTMAX_CALENDAR_BRANCH_ENUM_INVALID_PARAMS',
+                'MODULE_ID' => 'artmax.calendar',
+                'DESCRIPTION' => 'Неверные параметры для добавления филиала в enum: branchId=' . $branchId . ', branchName=' . $branchName
+            ]);
+            return;
+        }
+
+        if (!\Bitrix\Main\Loader::includeModule('crm')) {
+            \CEventLog::Add([
+                'SEVERITY' => 'ERROR',
+                'AUDIT_TYPE_ID' => 'ARTMAX_CALENDAR_BRANCH_ENUM_CRM_NOT_LOADED',
+                'MODULE_ID' => 'artmax.calendar',
+                'DESCRIPTION' => 'Модуль CRM не загружен при добавлении филиала в enum'
+            ]);
+            return;
+        }
+
+        $fieldCode = \Bitrix\Main\Config\Option::get('artmax.calendar', 'deal_branch_field', 'UF_CRM_CALENDAR_BRANCH');
+        if (!$fieldCode) {
+            \CEventLog::Add([
+                'SEVERITY' => 'ERROR',
+                'AUDIT_TYPE_ID' => 'ARTMAX_CALENDAR_BRANCH_ENUM_NO_FIELD_CODE',
+                'MODULE_ID' => 'artmax.calendar',
+                'DESCRIPTION' => 'Не найден код поля для добавления филиала в enum'
+            ]);
+            return;
+        }
+
+        $field = \CUserTypeEntity::GetList([], [
+            'ENTITY_ID' => 'CRM_DEAL',
+            'FIELD_NAME' => $fieldCode,
+        ])->Fetch();
+
+        if (!$field) {
+            \CEventLog::Add([
+                'SEVERITY' => 'ERROR',
+                'AUDIT_TYPE_ID' => 'ARTMAX_CALENDAR_BRANCH_ENUM_FIELD_NOT_FOUND',
+                'MODULE_ID' => 'artmax.calendar',
+                'DESCRIPTION' => 'Поле ' . $fieldCode . ' не найдено для добавления филиала в enum'
+            ]);
+            return;
+        }
+
+        $xmlId = 'branch_' . $branchId;
+        
+        $enum = new \CUserFieldEnum();
+        $existingValues = [];
+        $alreadyExists = false;
+
+        $rsEnum = $enum->GetList(['SORT' => 'ASC'], ['USER_FIELD_ID' => $field['ID']]);
+        while ($item = $rsEnum->Fetch()) {
+            $existingValues[$item['ID']] = [
+                'VALUE' => $item['VALUE'],
+                'DEF' => $item['DEF'],
+                'SORT' => $item['SORT'],
+                'XML_ID' => $item['XML_ID'],
+            ];
+
+            if ($item['XML_ID'] === $xmlId || (int)$item['XML_ID'] === $branchId) {
+                $alreadyExists = true;
+            }
+        }
+
+        if ($alreadyExists) {
+            \CEventLog::Add([
+                'SEVERITY' => 'INFO',
+                'AUDIT_TYPE_ID' => 'ARTMAX_CALENDAR_BRANCH_ENUM_ALREADY_EXISTS',
+                'MODULE_ID' => 'artmax.calendar',
+                'DESCRIPTION' => 'Филиал "' . $branchName . '" (ID: ' . $branchId . ') уже существует в enum поля ' . $fieldCode
+            ]);
+            return;
+        }
+
+        // Используем ту же логику, что и в рабочем методе
+        $existingValues['n' . $branchId] = [
+            'VALUE' => $branchName,
+            'DEF' => 'N',
+            'SORT' => 100 + count($existingValues) * 10,
+            'XML_ID' => $xmlId,
+        ];
+
+        $result = $enum->SetEnumValues($field['ID'], $existingValues);
+        
+        if ($result) {
+            \CEventLog::Add([
+                'SEVERITY' => 'INFO',
+                'AUDIT_TYPE_ID' => 'ARTMAX_CALENDAR_BRANCH_ENUM_ADDED',
+                'MODULE_ID' => 'artmax.calendar',
+                'DESCRIPTION' => 'Филиал "' . $branchName . '" (ID: ' . $branchId . ') успешно добавлен в enum поля ' . $fieldCode
+            ]);
+        } else {
+            \CEventLog::Add([
+                'SEVERITY' => 'ERROR',
+                'AUDIT_TYPE_ID' => 'ARTMAX_CALENDAR_BRANCH_ENUM_ADD_FAILED',
+                'MODULE_ID' => 'artmax.calendar',
+                'DESCRIPTION' => 'Ошибка добавления филиала "' . $branchName . '" (ID: ' . $branchId . ') в enum поля ' . $fieldCode
+            ]);
         }
     }
 

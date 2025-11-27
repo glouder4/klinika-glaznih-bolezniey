@@ -1530,9 +1530,22 @@
     }
 
     function getBranchId() {
-        // Получаем ID филиала из данных страницы или возвращаем 0
+        // Получаем ID филиала из данных страницы
+        // Сначала пробуем найти элемент .artmax-calendar с data-branch-id
+        const calendarElement = document.querySelector('.artmax-calendar[data-branch-id]');
+        if (calendarElement) {
+            const branchId = calendarElement.getAttribute('data-branch-id');
+            return branchId ? parseInt(branchId, 10) : 0;
+        }
+        
+        // Если не нашли, пробуем любой элемент с data-branch-id
         const branchElement = document.querySelector('[data-branch-id]');
-        return branchElement ? branchElement.getAttribute('data-branch-id') : 0;
+        if (branchElement) {
+            const branchId = branchElement.getAttribute('data-branch-id');
+            return branchId ? parseInt(branchId, 10) : 0;
+        }
+        
+        return 0;
     }
 
     // Функции для работы с формой филиала в SidePanel
@@ -3385,6 +3398,32 @@
                     id: data.dealId,
                     title: 'Сделка создана'
                 });
+                
+                // Открываем форму деталей сделки с автоматическим заполнением филиала
+                if (data.dealId) {
+                    const params = new URLSearchParams({
+                        IFRAME: 'Y',
+                        IFRAME_TYPE: 'SIDE_SLIDER',
+                        DEAL_ID: data.dealId
+                    });
+                    
+                    if (data.eventId) {
+                        params.append('EVENT_ID', data.eventId);
+                    }
+                    
+                    if (data.branchId) {
+                        params.append('BRANCH_ID', data.branchId);
+                    }
+                    
+                    const dealUrl = `/local/components/artmax/deal.details/page.php?${params.toString()}`;
+                    
+                    if (typeof BX !== 'undefined' && BX.SidePanel) {
+                        BX.SidePanel.Instance.open(dealUrl, {
+                            width: 640,
+                            cacheable: false
+                        });
+                    }
+                }
             } else {
                 showNotification('Ошибка создания сделки: ' + (data.error || 'Неизвестная ошибка'), 'error');
             }
@@ -3469,6 +3508,28 @@
         const currentEventId = getCurrentEventId();
         if (currentEventId) {
             params.append('EVENT_ID', currentEventId);
+        }
+
+        // Добавляем BRANCH_ID текущего филиала
+        // Пробуем получить из события, если оно открыто
+        let branchId = null;
+        const currentEvent = window.currentEventData;
+        if (currentEvent && currentEvent.BRANCH_ID) {
+            branchId = parseInt(currentEvent.BRANCH_ID, 10);
+            console.log('openDealInSidePanel: BRANCH_ID из события =', branchId);
+        } else {
+            // Иначе получаем из данных страницы
+            branchId = getBranchId();
+            console.log('openDealInSidePanel: BRANCH_ID из getBranchId() =', branchId);
+        }
+        
+        // Проверяем и добавляем в URL
+        if (branchId > 0) {
+            params.append('BRANCH_ID', branchId);
+            console.log('openDealInSidePanel: Добавлен BRANCH_ID =', branchId, 'в URL');
+        } else {
+            console.warn('openDealInSidePanel: BRANCH_ID не найден. currentEvent:', currentEvent, 'getBranchId():', getBranchId());
+            console.warn('openDealInSidePanel: Попытка найти .artmax-calendar:', document.querySelector('.artmax-calendar'));
         }
 
         const dealUrl = `/local/components/artmax/deal.details/page.php?${params.toString()}`;

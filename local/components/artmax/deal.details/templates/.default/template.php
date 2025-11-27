@@ -59,9 +59,8 @@ $deal = $arResult['DEAL'];
                 <label for="deal-branch" class="artmax-field-label">Филиал</label>
                 <div class="artmax-field-content">
                     <select id="deal-branch" class="artmax-select">
-                        <option value="">По умолчанию</option>
                         <?php foreach ($arResult['ENUMS']['BRANCH'] as $enum): ?>
-                            <option value="<?= (int)$enum['ID'] ?>" <?= ($fieldCodes['BRANCH'] && (int)$deal[$fieldCodes['BRANCH']] === (int)$enum['ID']) ? 'selected' : '' ?>>
+                            <option value="<?= (int)$enum['ID'] ?>" <?= ($fieldCodes['BRANCH'] && (int)$deal[$fieldCodes['BRANCH']] === (int)$enum['ID']) ? 'selected' : '' ?> <?= ($arResult['CURRENT_BRANCH_ENUM_ID'] && (int)$arResult['CURRENT_BRANCH_ENUM_ID'] === (int)$enum['ID'] && (!$fieldCodes['BRANCH'] || !$deal[$fieldCodes['BRANCH']])) ? 'selected' : '' ?>>
                                 <?= htmlspecialcharsbx($enum['VALUE']) ?>
                             </option>
                         <?php endforeach; ?>
@@ -98,6 +97,8 @@ $deal = $arResult['DEAL'];
         'dealId' => (int)$arResult['DEAL_ID'],
         'eventId' => (int)$arResult['EVENT_ID'],
         'fieldCodes' => $arResult['FIELD_CODES'],
+        'currentBranchEnumId' => $arResult['CURRENT_BRANCH_ENUM_ID'] ? (int)$arResult['CURRENT_BRANCH_ENUM_ID'] : null,
+        'targetBranchId' => $arResult['TARGET_BRANCH_ID'] ? (int)$arResult['TARGET_BRANCH_ID'] : null,
     ]) ?>;
 </script>
 

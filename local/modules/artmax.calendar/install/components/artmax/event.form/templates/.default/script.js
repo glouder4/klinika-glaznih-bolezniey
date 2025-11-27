@@ -163,6 +163,16 @@ function initializeEventForm() {
             }
         });
     };
+
+    // Предотвращаем стандартную отправку формы
+    const eventForm = document.getElementById('add-event-form');
+    if (eventForm) {
+        eventForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            return false;
+        });
+    }
 }
 
 // Инициализируем форму

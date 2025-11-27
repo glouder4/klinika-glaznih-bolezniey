@@ -61,6 +61,60 @@ $currencyList = class_exists('\Bitrix\Currency\CurrencyManager')
     ? \Bitrix\Currency\CurrencyManager::getCurrencyList()
     : ['RUB' => 'RUB'];
 
+// Определяем текущий филиал для автоматического заполнения
+$currentBranchEnumId = null;
+if ($eventId > 0) {
+    // Получаем событие и его филиал
+    $calendarObj = new \Artmax\Calendar\Calendar();
+    $event = $calendarObj->getEvent($eventId);
+    
+    if ($event && isset($event['BRANCH_ID']) && $event['BRANCH_ID'] > 0) {
+        $branchId = (int)$event['BRANCH_ID'];
+        
+        // Ищем enum значение по XML_ID
+        $branchFieldCode = $fieldCodes['BRANCH'];
+        if ($branchFieldCode) {
+            $field = \CUserTypeEntity::GetList(
+                [],
+                [
+                    'ENTITY_ID' => 'CRM_DEAL',
+                    'FIELD_NAME' => $branchFieldCode,
+                ]
+            )->Fetch();
+            
+            if ($field) {
+                $xmlId = 'branch_' . $branchId;
+                $enum = new \CUserFieldEnum();
+                $rsEnum = $enum->GetList(
+                    [],
+                    [
+                        'USER_FIELD_ID' => $field['ID'],
+                        'XML_ID' => $xmlId
+                    ]
+                );
+                
+                $enumItem = $rsEnum->Fetch();
+                if ($enumItem) {
+                    $currentBranchEnumId = (int)$enumItem['ID'];
+                } else {
+                    // Пробуем найти по числовому XML_ID (для старых записей)
+                    $rsEnum = $enum->GetList(
+                        [],
+                        [
+                            'USER_FIELD_ID' => $field['ID'],
+                            'XML_ID' => (string)$branchId
+                        ]
+                    );
+                    $enumItem = $rsEnum->Fetch();
+                    if ($enumItem) {
+                        $currentBranchEnumId = (int)$enumItem['ID'];
+                    }
+                }
+            }
+        }
+    }
+}
+
 $arResult = [
     'IS_IFRAME' => isset($_REQUEST["IFRAME"]) && $_REQUEST["IFRAME"] === "Y",
     'DEAL_ID' => $dealId,
@@ -70,6 +124,7 @@ $arResult = [
     'ENUMS' => $enumValues,
     'AMOUNT' => $amountData,
     'CURRENCIES' => $currencyList,
+    'CURRENT_BRANCH_ENUM_ID' => $currentBranchEnumId, // ID enum значения для автоматического заполнения
 ];
 
 $this->IncludeComponentTemplate();

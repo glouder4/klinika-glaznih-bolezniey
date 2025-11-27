@@ -89,8 +89,8 @@ if (!CModule::IncludeModule('artmax.calendar')) {
     die(json_encode(['success' => false, 'error' => 'Модуль artmax.calendar не установлен']));
 }
 
-// Получаем действие
-$action = $_POST['action'] ?? '';
+// Получаем действие из POST или GET (для совместимости)
+$action = $_POST['action'] ?? $_GET['action'] ?? '';
 
 // Логируем входящий запрос
 file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
@@ -101,6 +101,9 @@ file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
     FILE_APPEND | LOCK_EX);
 file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
     "POST data: " . json_encode($_POST) . "\n", 
+    FILE_APPEND | LOCK_EX);
+file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+    "Raw input: " . file_get_contents('php://input') . "\n", 
     FILE_APPEND | LOCK_EX);
 
 // Создаем объект календаря
@@ -147,6 +150,16 @@ switch ($action) {
         $eventId = $calendarObj->addEvent($title, $description, $dateFrom, $dateTo, $userId, $branchId, $eventColor, $employeeId);
 
         if ($eventId) {
+            // Записываем в журнал событие создания
+            $journal = new \Artmax\Calendar\Journal();
+            $journal->writeEvent(
+                $eventId,
+                'CREATED_BY_CUSTOM',
+                'Artmax\Calendar\Calendar::addEvent',
+                $userId,
+                'EVENT_ID=' . $eventId
+            );
+            
             die(json_encode(['success' => true, 'eventId' => $eventId]));
         } else {
             die(json_encode(['success' => false, 'error' => 'Ошибка добавления события']));
@@ -259,6 +272,110 @@ switch ($action) {
         try {
             $result = $calendarObj->updateEvent($eventId, $title, $description, $dateFrom, $dateTo, $eventColor, $branchId, $employeeId);
             if ($result) {
+                // Записываем в журнал изменения каждого поля отдельно
+                $journal = new \Artmax\Calendar\Journal();
+                $userId = $GLOBALS['USER']->GetID();
+                
+                // Сравниваем и записываем изменения для каждого поля
+                
+                // TITLE
+                if (isset($event['TITLE']) && $event['TITLE'] != $title) {
+                    $journal->writeEvent(
+                        $eventId,
+                        'EVENT_TITLE_CHANGED',
+                        'Artmax\Calendar\Calendar::updateEvent',
+                        $userId,
+                        'TITLE=' . $event['TITLE'] . '->' . $title
+                    );
+                }
+                
+                // DESCRIPTION
+                $oldDescription = $event['DESCRIPTION'] ?? '';
+                if ($oldDescription != $description) {
+                    $journal->writeEvent(
+                        $eventId,
+                        'EVENT_DESCRIPTION_CHANGED',
+                        'Artmax\Calendar\Calendar::updateEvent',
+                        $userId,
+                        'DESCRIPTION=' . ($oldDescription ?: 'empty') . '->' . ($description ?: 'empty')
+                    );
+                }
+                
+                // DATE_FROM (начало) - нормализуем даты для сравнения
+                if (isset($event['DATE_FROM'])) {
+                    // Конвертируем дату из формата dd.mm.yyyy в yyyy-mm-dd для сравнения
+                    $oldDateFromNormalized = $event['DATE_FROM'];
+                    if (preg_match('/^(\d{1,2})\.(\d{1,2})\.(\d{4})\s+(\d{1,2}):(\d{1,2}):(\d{1,2})$/', $oldDateFromNormalized, $matches)) {
+                        $oldDateFromNormalized = sprintf('%04d-%02d-%02d %02d:%02d:%02d', $matches[3], $matches[2], $matches[1], $matches[4], $matches[5], $matches[6]);
+                    }
+                    
+                    if ($oldDateFromNormalized != $dateFrom) {
+                        $journal->writeEvent(
+                            $eventId,
+                            'EVENT_DATE_FROM_CHANGED',
+                            'Artmax\Calendar\Calendar::updateEvent',
+                            $userId,
+                            'DATE_FROM=' . $event['DATE_FROM'] . '->' . $dateFrom
+                        );
+                    }
+                }
+                
+                // DATE_TO (окончание) - нормализуем даты для сравнения
+                if (isset($event['DATE_TO'])) {
+                    // Конвертируем дату из формата dd.mm.yyyy в yyyy-mm-dd для сравнения
+                    $oldDateToNormalized = $event['DATE_TO'];
+                    if (preg_match('/^(\d{1,2})\.(\d{1,2})\.(\d{4})\s+(\d{1,2}):(\d{1,2}):(\d{1,2})$/', $oldDateToNormalized, $matches)) {
+                        $oldDateToNormalized = sprintf('%04d-%02d-%02d %02d:%02d:%02d', $matches[3], $matches[2], $matches[1], $matches[4], $matches[5], $matches[6]);
+                    }
+                    
+                    if ($oldDateToNormalized != $dateTo) {
+                        $journal->writeEvent(
+                            $eventId,
+                            'EVENT_DATE_TO_CHANGED',
+                            'Artmax\Calendar\Calendar::updateEvent',
+                            $userId,
+                            'DATE_TO=' . $event['DATE_TO'] . '->' . $dateTo
+                        );
+                    }
+                }
+                
+                // EVENT_COLOR
+                $oldColor = $event['EVENT_COLOR'] ?? '#3498db';
+                if ($oldColor != $eventColor) {
+                    $journal->writeEvent(
+                        $eventId,
+                        'EVENT_COLOR_CHANGED',
+                        'Artmax\Calendar\Calendar::updateEvent',
+                        $userId,
+                        'EVENT_COLOR=' . $oldColor . '->' . $eventColor
+                    );
+                }
+                
+                // BRANCH_ID
+                $oldBranchId = $event['BRANCH_ID'] ?? 1;
+                if ($oldBranchId != $branchId) {
+                    $journal->writeEvent(
+                        $eventId,
+                        'EVENT_BRANCH_CHANGED',
+                        'Artmax\Calendar\Calendar::updateEvent',
+                        $userId,
+                        'BRANCH_ID=' . $oldBranchId . '->' . $branchId
+                    );
+                }
+                
+                // EMPLOYEE_ID
+                $oldEmployeeId = !empty($event['EMPLOYEE_ID']) ? (int)$event['EMPLOYEE_ID'] : null;
+                $newEmployeeId = !empty($employeeId) ? (int)$employeeId : null;
+                if ($oldEmployeeId != $newEmployeeId) {
+                    $journal->writeEvent(
+                        $eventId,
+                        'EVENT_EMPLOYEE_CHANGED',
+                        'Artmax\Calendar\Calendar::updateEvent',
+                        $userId,
+                        'EMPLOYEE_ID=' . ($oldEmployeeId ?? 'null') . '->' . ($newEmployeeId ?? 'null')
+                    );
+                }
+                
                 // Обновляем активность CRM если есть
                 if (!empty($event['ACTIVITY_ID'])) {
                     $activityUpdated = $calendarObj->updateCrmActivity(
@@ -364,8 +481,24 @@ switch ($action) {
         }
 
         try {
+            $oldEmployeeId = !empty($event['EMPLOYEE_ID']) ? (int)$event['EMPLOYEE_ID'] : null;
+            $newEmployeeId = (int)$employeeId;
+            
             $result = $calendarObj->assignDoctor($eventId, $employeeId);
             if ($result) {
+                // Записываем в журнал изменение ответственного врача
+                $journal = new \Artmax\Calendar\Journal();
+                $userId = $GLOBALS['USER']->GetID();
+                
+                $actionValue = 'EMPLOYEE_ID=' . ($oldEmployeeId ? $oldEmployeeId : 'null') . '->' . $newEmployeeId;
+                $journal->writeEvent(
+                    $eventId,
+                    'EMPLOYEE_CHANGED',
+                    'Artmax\Calendar\Calendar::assignDoctor',
+                    $userId,
+                    $actionValue
+                );
+                
                 die(json_encode(['success' => true]));
             } else {
                 die(json_encode(['success' => false, 'error' => 'Ошибка назначения врача']));
@@ -548,7 +681,7 @@ switch ($action) {
                 }
             }
             
-            $result = $calendarObj->updateEventStatus($eventId, $status);
+            $result = $calendarObj->updateEventStatus($eventId, $status, $GLOBALS['USER']->GetID());
             if ($result) {
                 die(json_encode(['success' => true]));
             } else {
@@ -661,7 +794,7 @@ switch ($action) {
             'time' => $_POST['time'] ?? '',
             'employee_id' => $_POST['employee_id'] ?? null,
             'branch_id' => $_POST['branch_id'] ?? 1,
-            'repeat' => $_POST['repeat'] === 'on' || $_POST['repeat'] === 'true',
+            'repeat' => $_POST['repeat'] === 'on' || $_POST['repeat'] === 'true' || $_POST['repeat'] === 'Y' || $_POST['repeat'] === 'y',
             'frequency' => $_POST['frequency'] ?? null,
             'weekdays' => $weekdays,
             'repeat_end' => $_POST['repeatEnd'] ?? 'never',
@@ -670,7 +803,7 @@ switch ($action) {
             'event_color' => $_POST['eventColor'] ?? '#3498db',
             'exclude_weekends' => $_POST['excludeWeekends'] === 'on' || $_POST['excludeWeekends'] === 'true' || false,
             'exclude_holidays' => $_POST['excludeHolidays'] === 'on' || $_POST['excludeHolidays'] === 'true' || false,
-            'include_end_date' => $_POST['includeEndDate'] === 'on' || $_POST['includeEndDate'] === 'true'
+            'include_end_date' => $_POST['includeEndDate'] === 'on' || $_POST['includeEndDate'] === 'true' || $_POST['includeEndDate'] === 'Y' || $_POST['includeEndDate'] === 'y'
         ];
         
         $result = $component->addScheduleAction($params);
@@ -971,6 +1104,39 @@ switch ($action) {
         }
         break;
 
+    case 'saveDealCustomFields':
+        $dealId = (int)($_POST['dealId'] ?? 0);
+        $fieldsRaw = $_POST['fields'] ?? [];
+
+        if ($dealId <= 0) {
+            die(json_encode(['success' => false, 'error' => 'ID сделки не указан']));
+        }
+
+        if (is_string($fieldsRaw)) {
+            $decodedFields = json_decode($fieldsRaw, true);
+            $fields = is_array($decodedFields) ? $decodedFields : [];
+        } elseif (is_array($fieldsRaw)) {
+            $fields = $fieldsRaw;
+        } else {
+            $fields = [];
+        }
+
+        if (empty($fields)) {
+            die(json_encode(['success' => false, 'error' => 'Нет данных для сохранения']));
+        }
+
+        try {
+            $component = new ArtmaxCalendarComponent();
+            $result = $component->saveDealCustomFieldsAction($dealId, $fields);
+            die(json_encode($result));
+        } catch (\Throwable $e) {
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
+                "Save deal custom fields error: " . $e->getMessage() . "\n",
+                FILE_APPEND | LOCK_EX);
+            die(json_encode(['success' => false, 'error' => 'Ошибка сохранения: ' . $e->getMessage()]));
+        }
+        break;
+
     case 'get_confirmation_status':
         $eventId = (int)($_POST['event_id'] ?? 0);
 
@@ -1026,10 +1192,26 @@ switch ($action) {
                 die(json_encode(['success' => false, 'error' => 'Нет прав на редактирование']));
             }
 
+            // Получаем старое значение статуса подтверждения
+            $oldConfirmationStatus = !empty($event['CONFIRMATION_STATUS']) ? $event['CONFIRMATION_STATUS'] : 'pending';
+            
             // Обновляем статус подтверждения в базе данных
             $result = $calendarObj->updateEventConfirmationStatus($eventId, $confirmationStatus);
 
             if ($result) {
+                // Записываем в журнал изменение статуса подтверждения
+                $journal = new \Artmax\Calendar\Journal();
+                $userId = $GLOBALS['USER']->GetID();
+                
+                $actionValue = 'CONFIRMATION_STATUS=' . $oldConfirmationStatus . '->' . $confirmationStatus;
+                $journal->writeEvent(
+                    $eventId,
+                    'CONFIRMATION_STATUS_CHANGED',
+                    'Artmax\Calendar\Calendar::updateEventConfirmationStatus',
+                    $userId,
+                    $actionValue
+                );
+                
                 die(json_encode(['success' => true, 'message' => 'Статус подтверждения обновлен']));
             } else {
                 die(json_encode(['success' => false, 'error' => 'Ошибка обновления статуса подтверждения']));
@@ -1090,10 +1272,26 @@ switch ($action) {
                 die(json_encode(['success' => false, 'error' => 'Нет прав на редактирование']));
             }
             
+            // Получаем старое значение статуса визита
+            $oldVisitStatus = !empty($event['VISIT_STATUS']) ? $event['VISIT_STATUS'] : 'not_specified';
+            
             // Обновляем статус визита в базе данных
             $result = $calendarObj->updateEventVisitStatus($eventId, $visitStatus);
             
             if ($result) {
+                // Записываем в журнал изменение статуса визита
+                $journal = new \Artmax\Calendar\Journal();
+                $userId = $GLOBALS['USER']->GetID();
+                
+                $actionValue = 'VISIT_STATUS=' . $oldVisitStatus . '->' . $visitStatus;
+                $journal->writeEvent(
+                    $eventId,
+                    'VISIT_STATUS_CHANGED',
+                    'Artmax\Calendar\Calendar::updateEventVisitStatus',
+                    $userId,
+                    $actionValue
+                );
+                
                 die(json_encode(['success' => true, 'message' => 'Статус визита обновлен']));
             } else {
                 die(json_encode(['success' => false, 'error' => 'Ошибка обновления статуса визита']));

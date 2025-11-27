@@ -31,14 +31,50 @@ function initializeMoveEventForm() {
 
     // Функция показа уведомления
     function showNotification(message, type) {
-        if (typeof BX !== 'undefined' && BX.UI && BX.UI.Notification) {
-            BX.UI.Notification.Center.notify({
-                content: message,
-                position: 'top-right'
-            });
+        const notification = document.createElement('div');
+        notification.className = `artmax-calendar-notification artmax-calendar-${type}`;
+        notification.textContent = message;
+
+        // Стили для уведомления
+        notification.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 20px;
+            border-radius: 8px;
+            color: white;
+            font-weight: 600;
+            z-index: 10001;
+            max-width: 300px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+            transform: translateX(100%);
+            transition: transform 0.3s ease;
+        `;
+
+        if (type === 'error') {
+            notification.style.background = 'linear-gradient(135deg, #ff6b6b, #ee5a24)';
+        } else if (type === 'warning') {
+            notification.style.background = 'linear-gradient(135deg, #f39c12, #e67e22)';
         } else {
-            alert(message);
+            notification.style.background = 'linear-gradient(135deg, #00b894, #00a085)';
         }
+
+        document.body.appendChild(notification);
+
+        // Анимация появления
+        setTimeout(() => {
+            notification.style.transform = 'translateX(0)';
+        }, 100);
+
+        // Автоматическое удаление
+        setTimeout(() => {
+            notification.style.transform = 'translateX(100%)';
+            setTimeout(() => {
+                if (document.body.contains(notification)) {
+                    document.body.removeChild(notification);
+                }
+            }, 300);
+        }, 5000);
     }
 
     // Функция загрузки врачей для выбранного филиала
@@ -211,8 +247,29 @@ function initializeMoveEventForm() {
 
     // Функция вычисления длительности события в минутах
     function getEventDuration(dateFrom, dateTo) {
-        const start = new Date(dateFrom);
-        const end = new Date(dateTo);
+        // Конвертируем российский формат "DD.MM.YYYY HH:MM:SS" в стандартный
+        const convertRussianDate = (dateStr) => {
+            // Пробуем российский формат "DD.MM.YYYY HH:MM:SS"
+            const russianMatch = dateStr.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})\s+(\d{1,2}):(\d{1,2}):(\d{1,2})$/);
+            if (russianMatch) {
+                const [, day, month, year, hour, minute, second] = russianMatch;
+                return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')} ${hour.padStart(2, '0')}:${minute.padStart(2, '0')}:${second.padStart(2, '0')}`;
+            }
+            // Если не российский формат, возвращаем как есть
+            return dateStr;
+        };
+        
+        const standardDateFrom = convertRussianDate(dateFrom);
+        const standardDateTo = convertRussianDate(dateTo);
+        
+        const start = new Date(standardDateFrom);
+        const end = new Date(standardDateTo);
+        
+        if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+            console.error('Invalid dates:', { dateFrom, dateTo, standardDateFrom, standardDateTo });
+            return NaN;
+        }
+        
         return Math.round((end - start) / (1000 * 60));
     }
 
@@ -231,7 +288,7 @@ function initializeMoveEventForm() {
     window.saveMoveEvent = function() {
         const branchId = document.getElementById('move-event-branch').value;
         const employeeId = document.getElementById('move-event-employee').value;
-        const date = document.getElementById('move-event-date').value;
+        const date = document.getElementById('move-event-date').value; // '2025-11-11'
         const time = document.getElementById('move-event-time').value;
         
         // Валидация
@@ -281,13 +338,28 @@ function initializeMoveEventForm() {
             showNotification('Ошибка: данные события не найдены', 'error');
             return;
         }
-        
-        const duration = getEventDuration(event.DATE_FROM, event.DATE_TO);
+
+        const duration = getEventDuration(event.DATE_FROM_RAW || event.DATE_FROM, event.DATE_TO_RAW || event.DATE_TO);
+         
+        if (isNaN(duration) || duration <= 0) {
+            showNotification('Ошибка: не удалось вычислить длительность события', 'error');
+            return;
+        }
         
         // Вычисляем новое время окончания
         const startTime = new Date(newDateTime);
+        if (isNaN(startTime.getTime())) {
+            showNotification('Ошибка: неверный формат даты начала', 'error');
+            return;
+        }
+        
         const endTime = new Date(startTime.getTime() + duration * 60 * 1000);
         const newEndDateTime = formatLocalDateTime(endTime);
+        
+        if (!newEndDateTime || newEndDateTime.includes('NaN')) {
+            showNotification('Ошибка: не удалось вычислить время окончания', 'error');
+            return;
+        }
         
         // Переносим событие
         fetch('/local/components/artmax/calendar/ajax.php', {
@@ -343,6 +415,16 @@ function initializeMoveEventForm() {
     // Если есть текущий врач и дата, загружаем расписание
     if (currentEmployeeId && dateInput && dateInput.value) {
         loadDoctorSchedule(currentEmployeeId, dateInput.value);
+    }
+
+    // Предотвращаем стандартную отправку формы
+    const moveEventForm = document.getElementById('move-event-form');
+    if (moveEventForm) {
+        moveEventForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            return false;
+        });
     }
 }
 

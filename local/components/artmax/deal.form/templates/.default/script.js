@@ -31,14 +31,50 @@ function initializeDealForm() {
 
     // Функция показа уведомления
     function showNotification(message, type) {
-        if (typeof BX !== 'undefined' && BX.UI && BX.UI.Notification) {
-            BX.UI.Notification.Center.notify({
-                content: message,
-                position: 'top-right'
-            });
+        const notification = document.createElement('div');
+        notification.className = `artmax-calendar-notification artmax-calendar-${type}`;
+        notification.textContent = message;
+
+        // Стили для уведомления
+        notification.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 20px;
+            border-radius: 8px;
+            color: white;
+            font-weight: 600;
+            z-index: 10001;
+            max-width: 300px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+            transform: translateX(100%);
+            transition: transform 0.3s ease;
+        `;
+
+        if (type === 'error') {
+            notification.style.background = 'linear-gradient(135deg, #ff6b6b, #ee5a24)';
+        } else if (type === 'warning') {
+            notification.style.background = 'linear-gradient(135deg, #f39c12, #e67e22)';
         } else {
-            alert(message);
+            notification.style.background = 'linear-gradient(135deg, #00b894, #00a085)';
         }
+
+        document.body.appendChild(notification);
+
+        // Анимация появления
+        setTimeout(() => {
+            notification.style.transform = 'translateX(0)';
+        }, 100);
+
+        // Автоматическое удаление
+        setTimeout(() => {
+            notification.style.transform = 'translateX(100%)';
+            setTimeout(() => {
+                if (document.body.contains(notification)) {
+                    document.body.removeChild(notification);
+                }
+            }, 300);
+        }, 5000);
     }
 
     // Функция показа/скрытия выпадающего окошка
