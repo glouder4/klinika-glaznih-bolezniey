@@ -880,6 +880,9 @@
                     closeEventForm();
                     form.reset();
 
+                    // Получаем employee_id из формы
+                    const employeeId = formData.get('employee_id') || null;
+
                     // Динамически добавляем событие в календарь
                     addEventToCalendar({
                         id: data.eventId,
@@ -889,8 +892,12 @@
                         dateTo: formatLocalDateTime(endDateTime),
                         eventColor: formData.get('event-color') || '#3498db',
                         contactName: '',
-                        contactPhone: ''
+                        contactPhone: '',
+                        employeeId: employeeId
                     });
+                    
+                    // Перезагружаем события календаря, чтобы получить полные данные из БД, включая EMPLOYEE_ID
+                    refreshCalendarEvents();
                 } else {
                     showNotification('Ошибка: ' + (data.error || 'Неизвестная ошибка'), 'error');
                 }
@@ -1287,11 +1294,13 @@
                 }
                 
                 // Загружаем данные врача, если есть EMPLOYEE_ID
-                console.log('showEventSidePanel: EMPLOYEE_ID =', event.EMPLOYEE_ID);
+                console.log('showEventSidePanel: EMPLOYEE_ID =', event.EMPLOYEE_ID, 'тип:', typeof event.EMPLOYEE_ID);
+                console.log('showEventSidePanel: BRANCH_ID =', event.BRANCH_ID);
+                console.log('showEventSidePanel: Полное событие:', event);
                 if (event.EMPLOYEE_ID) {
                     loadingCount++; // Увеличиваем счетчик только если будет запрос
-                    console.log('showEventSidePanel: Загружаем врача с ID:', event.EMPLOYEE_ID);
-                    loadEventEmployee(event.EMPLOYEE_ID);
+                    console.log('showEventSidePanel: Загружаем врача с ID:', event.EMPLOYEE_ID, 'для филиала:', event.BRANCH_ID);
+                    loadEventEmployee(event.EMPLOYEE_ID, event.BRANCH_ID);
                 } else {
                     console.log('showEventSidePanel: Нет EMPLOYEE_ID, сбрасываем врача');
                     // Сбрасываем информацию о враче, если врача нет
@@ -4391,9 +4400,17 @@
     }
 
     // Загрузка данных врача для боковой панели
-    function loadEventEmployee(employeeId) {
-        console.log('loadEventEmployee: Загружаем врача с ID:', employeeId);
+    function loadEventEmployee(employeeId, branchId = null) {
+        console.log('loadEventEmployee: Загружаем врача с ID:', employeeId, 'для филиала:', branchId);
         const csrfToken = getCSRFToken();
+        const params = {
+            action: 'getEmployees',
+            sessid: csrfToken
+        };
+        // Если передан branchId, добавляем его в параметры
+        if (branchId) {
+            params.branch_id = branchId;
+        }
         fetch('/local/components/artmax/calendar/ajax.php', {
             method: 'POST',
             headers: {
@@ -4401,10 +4418,7 @@
                 'X-Requested-With': 'XMLHttpRequest',
                 'X-Bitrix-Csrf-Token': csrfToken
             },
-            body: new URLSearchParams({
-                action: 'getEmployees',
-                sessid: csrfToken
-            })
+            body: new URLSearchParams(params)
         })
         .then(response => {
             console.log('loadEventEmployee: Получен ответ от сервера');
@@ -4415,13 +4429,24 @@
             try {
                 if (data.success && data.employees) {
                     console.log('loadEventEmployee: Всего врачей:', data.employees.length);
+                    console.log('loadEventEmployee: Ищем врача с ID:', employeeId, 'тип:', typeof employeeId);
+                    console.log('loadEventEmployee: Список ID врачей:', data.employees.map(emp => ({ id: emp.ID, type: typeof emp.ID, name: emp.NAME })));
                     const employee = data.employees.find(emp => String(emp.ID) === String(employeeId));
                     if (employee) {
                         console.log('loadEventEmployee: Врач найден:', employee);
                         updateEmployeeCardInSidePanel(employee);
                     } else {
-                        console.log('loadEventEmployee: Врач с ID', employeeId, 'не найден в списке');
-                        resetEmployeeInfoInSidePanel();
+                        console.error('loadEventEmployee: Врач с ID', employeeId, 'не найден в списке');
+                        console.error('loadEventEmployee: Попытка найти по числовому сравнению...');
+                        // Пробуем найти по числовому сравнению
+                        const employeeByNumber = data.employees.find(emp => Number(emp.ID) === Number(employeeId));
+                        if (employeeByNumber) {
+                            console.log('loadEventEmployee: Врач найден по числовому сравнению:', employeeByNumber);
+                            updateEmployeeCardInSidePanel(employeeByNumber);
+                        } else {
+                            console.error('loadEventEmployee: Врач не найден даже по числовому сравнению');
+                            resetEmployeeInfoInSidePanel();
+                        }
                     }
                 } else {
                     console.log('loadEventEmployee: Ошибка в данных или нет врачей');

@@ -2650,13 +2650,14 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
             }
 
             // Получаем список пользователей из Bitrix
+            // Убираем фильтр по департаменту, чтобы включить всех активных пользователей
             $userEntity = new \CUser();
             $users = $userEntity->GetList(
                 ($by = "ID"),
                 ($order = "ASC"),
                 [
-                    'ACTIVE' => 'Y',
-                    'UF_DEPARTMENT' => true // Получаем только пользователей с департаментами
+                    'ACTIVE' => 'Y'
+                    // Убрали фильтр 'UF_DEPARTMENT' => true, чтобы включить всех активных пользователей
                 ],
                 [
                     'FIELDS' => ['ID', 'NAME', 'LAST_NAME', 'LOGIN', 'EMAIL']
@@ -2665,7 +2666,8 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
 
             $employees = [];
             while ($user = $users->Fetch()) {
-                if (!empty($user['NAME']) || !empty($user['LAST_NAME'])) {
+                // Включаем пользователя, если есть имя, фамилия или логин
+                if (!empty($user['NAME']) || !empty($user['LAST_NAME']) || !empty($user['LOGIN'])) {
                     $employees[] = [
                         'ID' => $user['ID'],
                         'NAME' => $user['NAME'] ?: '',
@@ -2845,6 +2847,72 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
             // Сохраняем сотрудников филиала
             $employeeIdsArray = json_decode($employeeIds, true);
             if (is_array($employeeIdsArray)) {
+                // Получаем текущий список сотрудников филиала
+                $currentEmployees = $calendar->getBranchEmployees($branchId);
+                $currentEmployeeIds = array_map(function($emp) {
+                    return (string)$emp['ID'];
+                }, $currentEmployees);
+                
+                // Преобразуем новый список в строки для сравнения
+                $newEmployeeIds = array_map('strval', $employeeIdsArray);
+                
+                // Находим отвязанных врачей (были в старом списке, но нет в новом)
+                $unlinkedEmployeeIds = array_diff($currentEmployeeIds, $newEmployeeIds);
+                
+                // Проверяем, есть ли у отвязанных врачей активные события в этом филиале
+                if (!empty($unlinkedEmployeeIds)) {
+                    $employeesWithEvents = [];
+                    
+                    foreach ($unlinkedEmployeeIds as $unlinkedEmployeeId) {
+                        // Получаем события врача в этом филиале
+                        // Используем прямой SQL запрос, чтобы проверить только EMPLOYEE_ID (назначенные записи), а не USER_ID
+                        $connection = \Bitrix\Main\Application::getConnection();
+                        $sql = "SELECT COUNT(*) as count FROM artmax_calendar_events 
+                                WHERE BRANCH_ID = " . (int)$branchId . " 
+                                AND EMPLOYEE_ID = " . (int)$unlinkedEmployeeId . "
+                                AND (STATUS IS NULL OR STATUS != 'cancelled')";
+                        $result = $connection->query($sql);
+                        $row = $result->fetch();
+                        $eventsCount = (int)($row['count'] ?? 0);
+                        
+                        if ($eventsCount > 0) {
+                            // Получаем имя врача
+                            $employeeName = 'ID ' . $unlinkedEmployeeId;
+                            foreach ($currentEmployees as $emp) {
+                                if ((string)$emp['ID'] === $unlinkedEmployeeId) {
+                                    $employeeName = trim(($emp['NAME'] ?? '') . ' ' . ($emp['LAST_NAME'] ?? ''));
+                                    if (empty($employeeName)) {
+                                        $employeeName = $emp['LOGIN'] ?? 'ID ' . $unlinkedEmployeeId;
+                                    }
+                                    break;
+                                }
+                            }
+                            
+                            $employeesWithEvents[] = [
+                                'id' => $unlinkedEmployeeId,
+                                'name' => $employeeName,
+                                'eventsCount' => $eventsCount
+                            ];
+                        }
+                    }
+                    
+                    // Если есть врачи с событиями, запрещаем сохранение
+                    if (!empty($employeesWithEvents)) {
+                        $employeeNames = array_map(function($emp) {
+                            return $emp['name'] . ' (' . $emp['eventsCount'] . ' ' . $this->pluralizeEvents($emp['eventsCount']) . ')';
+                        }, $employeesWithEvents);
+                        
+                        $errorMessage = 'Невозможно отвязать врачей от филиала, так как у них есть активные записи в календаре: ' . implode(', ', $employeeNames) . '. Пожалуйста, сначала переназначьте или отмените эти записи.';
+                        
+                        return [
+                            'success' => false,
+                            'error' => $errorMessage,
+                            'employeesWithEvents' => $employeesWithEvents
+                        ];
+                    }
+                }
+                
+                // Если проверка прошла успешно, сохраняем сотрудников
                 $calendar->updateBranchEmployees($branchId, $employeeIdsArray);
             }
 
@@ -2854,6 +2922,24 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
             ];
         } catch (\Exception $e) {
             return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+    
+    /**
+     * Склонение слова "запись" в зависимости от числа
+     */
+    private function pluralizeEvents($count)
+    {
+        $count = (int)$count;
+        $mod10 = $count % 10;
+        $mod100 = $count % 100;
+        
+        if ($mod10 == 1 && $mod100 != 11) {
+            return 'запись';
+        } elseif (in_array($mod10, [2, 3, 4]) && !in_array($mod100, [12, 13, 14])) {
+            return 'записи';
+        } else {
+            return 'записей';
         }
     }
 

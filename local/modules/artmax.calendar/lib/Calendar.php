@@ -49,6 +49,11 @@ class Calendar
             FILE_APPEND | LOCK_EX);
         
         // Используем время как есть, без всяких конвертаций
+        // Обрабатываем EMPLOYEE_ID: если передан и не пустой, преобразуем в int, иначе NULL
+        $employeeIdValue = ($employeeId !== null && $employeeId !== '' && $employeeId !== '0') 
+            ? (int)$employeeId 
+            : 'NULL';
+        
         $sql = "INSERT INTO artmax_calendar_events (TITLE, DESCRIPTION, DATE_FROM, DATE_TO, ORIGINAL_DATE_FROM, ORIGINAL_DATE_TO, TIME_IS_CHANGED, USER_ID, BRANCH_ID, EVENT_COLOR, EMPLOYEE_ID) VALUES ('" . 
                $this->connection->getSqlHelper()->forSql($title) . "', '" . 
                $this->connection->getSqlHelper()->forSql($description) . "', '" .
@@ -59,7 +64,7 @@ class Calendar
                (int)$userId . ", " . 
                (int)$branchId . ", '" . 
                $this->connection->getSqlHelper()->forSql($eventColor) . "', " . 
-               ($employeeId ? (int)$employeeId : 'NULL') . ")";
+               $employeeIdValue . ")";
 
         // Логируем SQL запрос
         file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
@@ -80,7 +85,7 @@ class Calendar
                 FILE_APPEND | LOCK_EX);
             
             // Проверяем, что реально сохранилось в БД
-            $checkSql = "SELECT DATE_FROM, DATE_TO, EVENT_COLOR FROM artmax_calendar_events WHERE ID = {$eventId}";
+            $checkSql = "SELECT DATE_FROM, DATE_TO, EVENT_COLOR, EMPLOYEE_ID FROM artmax_calendar_events WHERE ID = {$eventId}";
             $checkResult = $this->connection->query($checkSql);
             if ($checkResult) {
                 $savedEvent = $checkResult->fetch();
@@ -96,6 +101,9 @@ class Calendar
                         FILE_APPEND | LOCK_EX);
                     file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
                         "  - EVENT_COLOR: " . ($savedEvent['EVENT_COLOR'] ?? 'NULL') . "\n", 
+                        FILE_APPEND | LOCK_EX);
+                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                        "  - EMPLOYEE_ID: " . ($savedEvent['EMPLOYEE_ID'] ?? 'NULL') . "\n", 
                         FILE_APPEND | LOCK_EX);
                 }
             }
@@ -487,9 +495,82 @@ class Calendar
         
         $result = $this->connection->query($sql);
         
-        // Если запись отменена, переводим сделку в "Проиграна"
+        // Если запись отменена, переводим сделку в "Проиграна" (Неуспешная) и создаем пустую запись
         if ($result && $status === 'cancelled') {
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "UPDATE_EVENT_STATUS: Запись отменена (cancelled), вызываем updateDealStatusOnCancel для события ID={$eventId}\n", 
+                FILE_APPEND | LOCK_EX);
+            
+            // Переводим сделку в "Проиграна"
             $this->updateDealStatusOnCancel($eventId);
+            
+            // Создаем пустую запись на место отмененной
+            if ($oldEvent) {
+                // Получаем даты в стандартном формате из БД напрямую
+                $dateSql = "SELECT DATE_FORMAT(DATE_FROM, '%Y-%m-%d %H:%i:%s') AS DATE_FROM_STANDARD, 
+                                   DATE_FORMAT(DATE_TO, '%Y-%m-%d %H:%i:%s') AS DATE_TO_STANDARD
+                            FROM artmax_calendar_events 
+                            WHERE ID = " . (int)$eventId;
+                $dateResult = $this->connection->query($dateSql);
+                $dateRow = $dateResult->fetch();
+                
+                if ($dateRow) {
+                    $dateFromStandard = $dateRow['DATE_FROM_STANDARD'];
+                    $dateToStandard = $dateRow['DATE_TO_STANDARD'];
+                    
+                    // Создаем пустую запись напрямую через SQL, минуя проверки доступности
+                    // так как место освободилось после отмены записи
+                    $employeeIdValue = (!empty($oldEvent['EMPLOYEE_ID']) && $oldEvent['EMPLOYEE_ID'] !== '0') 
+                        ? (int)$oldEvent['EMPLOYEE_ID'] 
+                        : 'NULL';
+                    
+                    $insertSql = "INSERT INTO artmax_calendar_events 
+                                  (TITLE, DESCRIPTION, DATE_FROM, DATE_TO, ORIGINAL_DATE_FROM, ORIGINAL_DATE_TO, 
+                                   TIME_IS_CHANGED, USER_ID, BRANCH_ID, EVENT_COLOR, EMPLOYEE_ID, 
+                                   CONTACT_ENTITY_ID, DEAL_ENTITY_ID, ACTIVITY_ID, STATUS) 
+                                  VALUES (
+                                      'Пустая запись', 
+                                      '', 
+                                      '" . $this->connection->getSqlHelper()->forSql($dateFromStandard) . "', 
+                                      '" . $this->connection->getSqlHelper()->forSql($dateToStandard) . "', 
+                                      '" . $this->connection->getSqlHelper()->forSql($dateFromStandard) . "', 
+                                      '" . $this->connection->getSqlHelper()->forSql($dateToStandard) . "', 
+                                      0, 
+                                      " . (int)($userId ?: $oldEvent['USER_ID']) . ", 
+                                      " . (int)$oldEvent['BRANCH_ID'] . ", 
+                                      '" . $this->connection->getSqlHelper()->forSql($oldEvent['EVENT_COLOR'] ?? '#3498db') . "', 
+                                      {$employeeIdValue}, 
+                                      NULL, 
+                                      NULL, 
+                                      NULL, 
+                                      'active'
+                                  )";
+                    
+                    $insertResult = $this->connection->query($insertSql);
+                    
+                    if ($insertResult) {
+                        $newEventId = $this->connection->getInsertedId();
+                        
+                        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                            "UPDATE_EVENT_STATUS: Создана пустая запись ID={$newEventId} на место отмененной записи ID={$eventId}\n" .
+                            "  - DATE_FROM: {$dateFromStandard}\n" .
+                            "  - DATE_TO: {$dateToStandard}\n" .
+                            "  - BRANCH_ID: {$oldEvent['BRANCH_ID']}\n" .
+                            "  - EMPLOYEE_ID: " . ($oldEvent['EMPLOYEE_ID'] ?? 'NULL') . "\n" .
+                            "  - CONTACT_ENTITY_ID: NULL (пустая запись)\n" .
+                            "  - DEAL_ENTITY_ID: NULL (пустая запись)\n", 
+                            FILE_APPEND | LOCK_EX);
+                    } else {
+                        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                            "UPDATE_EVENT_STATUS: Ошибка создания пустой записи для отмененной записи ID={$eventId}\n", 
+                            FILE_APPEND | LOCK_EX);
+                    }
+                } else {
+                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                        "UPDATE_EVENT_STATUS: Не удалось получить даты для создания пустой записи\n", 
+                        FILE_APPEND | LOCK_EX);
+                }
+            }
         }
         
         // Логируем изменение статуса
@@ -559,7 +640,8 @@ class Calendar
             DATE_FORMAT(CREATED_AT, '%d.%m.%Y %H:%i:%s') AS CREATED_AT,
             DATE_FORMAT(UPDATED_AT, '%d.%m.%Y %H:%i:%s') AS UPDATED_AT
         FROM artmax_calendar_events 
-        WHERE BRANCH_ID = " . (int)$branchId;
+        WHERE BRANCH_ID = " . (int)$branchId . "
+        AND (STATUS IS NULL OR STATUS != 'cancelled')";
 
         // Фильтр по диапазону дат - событие попадает в диапазон, если оно пересекается с ним
         // Событие пересекается с диапазоном, если: DATE_FROM <= dateTo AND DATE_TO >= dateFrom
@@ -1059,7 +1141,24 @@ class Calendar
         // Получаем данные события
         $event = $this->getEvent($eventId);
         
-        if (!$event || empty($event['DEAL_ENTITY_ID']) || !\CModule::IncludeModule('crm')) {
+        if (!$event) {
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "UPDATE_DEAL_ON_CANCEL: Событие ID={$eventId} не найдено\n", 
+                FILE_APPEND | LOCK_EX);
+            return;
+        }
+        
+        if (empty($event['DEAL_ENTITY_ID'])) {
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "UPDATE_DEAL_ON_CANCEL: У события ID={$eventId} нет привязанной сделки (DEAL_ENTITY_ID пуст)\n", 
+                FILE_APPEND | LOCK_EX);
+            return;
+        }
+        
+        if (!\CModule::IncludeModule('crm')) {
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "UPDATE_DEAL_ON_CANCEL: Модуль CRM не подключен\n", 
+                FILE_APPEND | LOCK_EX);
             return;
         }
         

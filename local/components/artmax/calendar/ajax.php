@@ -144,6 +144,9 @@ switch ($action) {
         file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
             "AJAX addEvent: POST data - branchId=" . ($_POST['branchId'] ?? 'not set') . ", branch_id=" . ($_POST['branch_id'] ?? 'not set') . ", final branchId=$branchId\n", 
             FILE_APPEND | LOCK_EX);
+        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+            "AJAX addEvent: employee_id from POST=" . ($_POST['employee_id'] ?? 'not set') . ", employeeId variable=" . var_export($employeeId, true) . ", type=" . gettype($employeeId) . "\n", 
+            FILE_APPEND | LOCK_EX);
 
         if (empty($title) || empty($dateFrom) || empty($dateTo)) {
             http_response_code(400);
@@ -1024,9 +1027,13 @@ switch ($action) {
         break;
 
     case 'getEmployees':
+        $branchId = $_POST['branchId'] ?? $_POST['branch_id'] ?? null;
+        if ($branchId) {
+            $branchId = (int)$branchId;
+        }
         try {
             $component = new ArtmaxCalendarComponent();
-            $result = $component->getEmployeesAction();
+            $result = $component->getEmployeesAction($branchId);
             die(json_encode($result));
         } catch (Exception $e) {
             die(json_encode(['success' => false, 'error' => 'Ошибка получения сотрудников: ' . $e->getMessage()]));
