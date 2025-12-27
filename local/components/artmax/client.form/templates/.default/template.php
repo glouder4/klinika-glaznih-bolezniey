@@ -83,7 +83,7 @@ CJSCore::Init(['ui.buttons']);
                 <div class="artmax-form-field">
                     <label for="new-contact-phone" class="artmax-field-label">Телефон</label>
                     <div class="artmax-field-content">
-                        <input type="tel" id="new-contact-phone" class="artmax-input" placeholder="Введите номер телефона">
+                        <input type="tel" id="new-contact-phone" class="artmax-input" placeholder="+7 (999) 999-99-99">
                     </div>
                 </div>
                 
@@ -104,7 +104,7 @@ CJSCore::Init(['ui.buttons']);
                 <div class="artmax-field-content">
                     <div class="input-with-icons">
                         <div class="input-icon left">🇷🇺</div>
-                        <input type="tel" id="phone-input" class="artmax-input" placeholder="Номер телефона">
+                        <input type="tel" id="phone-input" class="artmax-input" placeholder="+7 (999) 999-99-99">
                     </div>
                 </div>
             </div>

@@ -23,6 +23,54 @@ function initializeDealDetailsForm() {
             saveDealDetails();
         });
     }
+
+    // Автоматическое заполнение поля филиала
+    if (window.dealDetailsData) {
+        console.log('dealDetailsData:', window.dealDetailsData);
+        
+        // Проверяем, что currentBranchEnumId установлен и не пустой
+        const currentBranchEnumId = window.dealDetailsData.currentBranchEnumId;
+        if (currentBranchEnumId && currentBranchEnumId !== '' && currentBranchEnumId !== null && currentBranchEnumId !== 'null') {
+            const branchSelect = document.getElementById('deal-branch');
+            if (branchSelect) {
+                // Проверяем, не заполнено ли уже поле значением из сделки
+                const currentValue = branchSelect.value;
+                const hasDealValue = currentValue && currentValue !== '';
+                
+                console.log('Текущее значение филиала:', currentValue);
+                console.log('ID enum филиала для установки:', currentBranchEnumId);
+                
+                // Если поле пустое или значение не установлено, устанавливаем текущий филиал
+                if (!hasDealValue) {
+                    // Проверяем, существует ли опция с таким значением
+                    const targetEnumId = String(currentBranchEnumId);
+                    const optionExists = Array.from(branchSelect.options).some(
+                        option => String(option.value) === targetEnumId
+                    );
+                    
+                    console.log('Опция существует:', optionExists);
+                    console.log('Доступные опции:', Array.from(branchSelect.options).map(opt => ({value: opt.value, text: opt.text})));
+                    
+                    if (optionExists) {
+                        branchSelect.value = targetEnumId;
+                        console.log('✓ Значение филиала установлено:', branchSelect.value);
+                        // Триггерим событие change для обновления UI
+                        branchSelect.dispatchEvent(new Event('change', { bubbles: true }));
+                    } else {
+                        console.warn('✗ Enum значение филиала не найдено в списке:', currentBranchEnumId);
+                        console.log('Доступные опции:', Array.from(branchSelect.options).map(opt => ({value: opt.value, text: opt.text})));
+                    }
+                } else {
+                    console.log('Поле филиала уже заполнено значением из сделки:', currentValue);
+                }
+            } else {
+                console.warn('Элемент deal-branch не найден');
+            }
+        } else {
+            console.log('currentBranchEnumId не установлен или пустой. targetBranchId:', window.dealDetailsData?.targetBranchId);
+            console.log('Проверка: currentBranchEnumId =', currentBranchEnumId, '(тип:', typeof currentBranchEnumId, ')');
+        }
+    }
 }
 
 function getCSRFToken() {

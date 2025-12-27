@@ -197,6 +197,8 @@ class Calendar
                 DATE_FORMAT(DATE_TO, '%Y-%m-%d %H:%i:%s') AS DATE_TO,
                 DATE_FORMAT(DATE_FROM, '%d.%m.%Y %H:%i:%s') AS DATE_FROM_RAW,
                 DATE_FORMAT(DATE_TO, '%d.%m.%Y %H:%i:%s') AS DATE_TO_RAW,
+                DATE_FORMAT(ORIGINAL_DATE_FROM, '%d.%m.%Y %H:%i:%s') AS ORIGINAL_DATE_FROM,
+                DATE_FORMAT(ORIGINAL_DATE_TO, '%d.%m.%Y %H:%i:%s') AS ORIGINAL_DATE_TO,
                 TITLE,
                 DESCRIPTION,
                 USER_ID,
@@ -261,16 +263,32 @@ class Calendar
             $branchId = $existingEvent['BRANCH_ID'];
         }
         
+        // Нормализуем даты для корректного сравнения
+        // $existingEvent['DATE_FROM'] в формате dd.mm.yyyy HH:ii:ss, $dateFrom в формате yyyy-mm-dd HH:ii:ss
+        $normalizeDate = function($dateStr) {
+            if (empty($dateStr)) return '';
+            // Если дата в формате dd.mm.yyyy HH:ii:ss, конвертируем в yyyy-mm-dd HH:ii:ss
+            if (preg_match('/^(\d{2})\.(\d{2})\.(\d{4})\s+(\d{2}):(\d{2}):(\d{2})$/', $dateStr, $matches)) {
+                return sprintf('%s-%s-%s %s:%s:%s', $matches[3], $matches[2], $matches[1], $matches[4], $matches[5], $matches[6]);
+            }
+            // Если уже в формате yyyy-mm-dd HH:ii:ss, возвращаем как есть
+            return $dateStr;
+        };
+        
         // Проверяем, изменилось ли время
         $timeChanged = 0;
         if ($existingEvent['ORIGINAL_DATE_FROM'] && $existingEvent['ORIGINAL_DATE_TO']) {
             // Если есть оригинальные даты, сравниваем с ними
-            if ($existingEvent['ORIGINAL_DATE_FROM'] != $dateFrom || $existingEvent['ORIGINAL_DATE_TO'] != $dateTo) {
+            $originalFromNormalized = $normalizeDate($existingEvent['ORIGINAL_DATE_FROM']);
+            $originalToNormalized = $normalizeDate($existingEvent['ORIGINAL_DATE_TO']);
+            if ($originalFromNormalized != $dateFrom || $originalToNormalized != $dateTo) {
                 $timeChanged = 1;
             }
         } else {
             // Если нет оригинальных дат, сравниваем с текущими
-            if ($existingEvent['DATE_FROM'] != $dateFrom || $existingEvent['DATE_TO'] != $dateTo) {
+            $existingFromNormalized = $normalizeDate($existingEvent['DATE_FROM']);
+            $existingToNormalized = $normalizeDate($existingEvent['DATE_TO']);
+            if ($existingFromNormalized != $dateFrom || $existingToNormalized != $dateTo) {
                 $timeChanged = 1;
             }
         }

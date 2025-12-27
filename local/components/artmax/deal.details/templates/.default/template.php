@@ -82,6 +82,21 @@ $deal = $arResult['DEAL'];
                 </div>
             </div>
         </form>
+        
+        <?php
+        // Формируем URL для полной формы сделки
+        $dealId = (int)$arResult['DEAL_ID'];
+        $dealCategoryId = isset($deal['CATEGORY_ID']) ? (int)$deal['CATEGORY_ID'] : 0;
+        $dealFullUrl = '/crm/deal/details/' . $dealId . '/';
+        if ($dealCategoryId > 0) {
+            $dealFullUrl = '/crm/deal/details/' . $dealId . '/' . $dealCategoryId . '/';
+        }
+        ?>
+        <div class="deal-full-form-link" style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #e0e0e0; text-align: center;">
+            <a href="<?= htmlspecialcharsbx($dealFullUrl) ?>" target="_blank" style="color: #2066b0; text-decoration: none; font-size: 14px;">
+                Перейти к полной форме
+            </a>
+        </div>
     </div>
 
     <?php if ($arResult['IS_IFRAME']): ?>

@@ -1,7 +1,8 @@
 <?php
 $dealId = (int)($_REQUEST['DEAL_ID'] ?? 0);
 $eventId = (int)($_REQUEST['EVENT_ID'] ?? 0);
-$redirectUrl = '/page/artmax_calendar/';
+$branchId = (int)($_REQUEST['BRANCH_ID'] ?? 0);
+$redirectUrl = '/page/artmax_calendar/calendar_branch_1/';
 
 if (!isset($_REQUEST["IFRAME"]) || $_REQUEST["IFRAME"] !== "Y") {
     header('Location: ' . $redirectUrl);
@@ -27,7 +28,8 @@ CJSCore::Init("sidepanel");
             ".default",
             [
                 'DEAL_ID' => $dealId,
-                'EVENT_ID' => $eventId
+                'EVENT_ID' => $eventId,
+                'BRANCH_ID' => $branchId
             ]
         );
         ?>

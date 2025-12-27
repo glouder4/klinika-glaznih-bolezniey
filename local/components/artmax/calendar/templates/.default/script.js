@@ -1247,10 +1247,24 @@
             if (data.success && data.event) {
                 const event = data.event;
                 
+                // Сохраняем данные события для использования в других функциях
+                window.currentEventData = event;
+                
                 // Обновляем заголовок бокового окна
                 const titleElement = document.getElementById('sidePanelTitle');
                 if (titleElement) {
-                    titleElement.textContent = event.TITLE || 'Детали записи';
+                    const titleText = event.TITLE || 'Детали записи';
+                    // Обновляем структуру с иконкой карандаша
+                    titleElement.innerHTML = `
+                        <span class="title-text">${titleText}</span>
+                        <span class="edit-icon" title="Кликните для редактирования названия">✏️</span>
+                    `;
+                    // Добавляем обработчик клика для редактирования названия
+                    titleElement.style.cursor = 'pointer';
+                    titleElement.onclick = function(e) {
+                        e.stopPropagation();
+                        editEventTitle();
+                    };
                 }
                 
                 // Применяем цвет события к шапке
@@ -1382,6 +1396,175 @@
         sidePanel.style.height = panelHeight + 'px';
     }
 
+    // Функция для редактирования названия записи
+    function editEventTitle() {
+        const titleElement = document.getElementById('sidePanelTitle');
+        if (!titleElement || !window.currentEventId || !window.currentEventData) {
+            return;
+        }
+        
+        // Получаем текст из span.title-text, если он есть, иначе из textContent
+        const titleTextSpan = titleElement.querySelector('.title-text');
+        const currentTitle = titleTextSpan ? titleTextSpan.textContent.trim() : titleElement.textContent.trim();
+        
+        // Создаем input для редактирования
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.value = currentTitle;
+        input.className = 'event-title-input';
+        input.style.cssText = 'width: 100%; padding: 5px; font-size: 18px; font-weight: bold; border: 2px solid #3498db; border-radius: 4px; background: white; color: #333;';
+        
+        // Заменяем h3 на input
+        const parent = titleElement.parentElement;
+        parent.replaceChild(input, titleElement);
+        input.focus();
+        input.select();
+        
+        // Функция сохранения
+        const saveTitle = () => {
+            const newTitle = input.value.trim();
+            
+            if (newTitle === currentTitle) {
+                // Если название не изменилось, просто возвращаем h3 с иконкой
+                const h3 = document.createElement('h3');
+                h3.id = 'sidePanelTitle';
+                h3.innerHTML = `
+                    <span class="title-text">${currentTitle}</span>
+                    <span class="edit-icon" title="Кликните для редактирования названия">✏️</span>
+                `;
+                h3.style.cursor = 'pointer';
+                h3.onclick = function(e) {
+                    e.stopPropagation();
+                    editEventTitle();
+                };
+                parent.replaceChild(h3, input);
+                return;
+            }
+            
+            if (!newTitle) {
+                showNotification('Название не может быть пустым', 'error');
+                input.focus();
+                return;
+            }
+            
+            // Отправляем AJAX запрос для обновления названия
+            const csrfToken = getCSRFToken();
+            const eventData = window.currentEventData;
+            
+            // Конвертируем даты из формата dd.mm.yyyy в yyyy-mm-dd для updateEvent
+            const convertDateToStandard = (dateStr) => {
+                if (!dateStr) return '';
+                // Если дата уже в формате yyyy-mm-dd, возвращаем как есть
+                if (dateStr.match(/^\d{4}-\d{2}-\d{2}/)) {
+                    return dateStr;
+                }
+                // Конвертируем из dd.mm.yyyy HH:ii:ss в yyyy-mm-dd HH:ii:ss
+                const match = dateStr.match(/(\d{2})\.(\d{2})\.(\d{4})\s+(\d{2}):(\d{2}):(\d{2})/);
+                if (match) {
+                    return `${match[3]}-${match[2]}-${match[1]} ${match[4]}:${match[5]}:${match[6]}`;
+                }
+                return dateStr;
+            };
+            
+            const postData = {
+                action: 'updateEvent',
+                eventId: window.currentEventId,
+                title: newTitle,
+                description: eventData.DESCRIPTION || '',
+                dateFrom: convertDateToStandard(eventData.DATE_FROM),
+                dateTo: convertDateToStandard(eventData.DATE_TO),
+                eventColor: eventData.EVENT_COLOR || '#3498db',
+                branchId: eventData.BRANCH_ID || 1,
+                employee_id: eventData.EMPLOYEE_ID || null,
+                sessid: csrfToken
+            };
+            
+            fetch('/local/components/artmax/calendar/ajax.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-Bitrix-Csrf-Token': csrfToken
+                },
+                body: new URLSearchParams(postData)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Обновляем данные события
+                    window.currentEventData.TITLE = newTitle;
+                    
+                    // Возвращаем h3 с новым названием и иконкой карандаша
+                    const h3 = document.createElement('h3');
+                    h3.id = 'sidePanelTitle';
+                    h3.innerHTML = `
+                        <span class="title-text">${newTitle}</span>
+                        <span class="edit-icon" title="Кликните для редактирования названия">✏️</span>
+                    `;
+                    h3.style.cursor = 'pointer';
+                    h3.onclick = function(e) {
+                        e.stopPropagation();
+                        editEventTitle();
+                    };
+                    parent.replaceChild(h3, input);
+                    
+                    // Обновляем название в календаре
+                    const eventElement = document.querySelector(`[data-event-id="${window.currentEventId}"]`);
+                    if (eventElement) {
+                        const eventTitleElement = eventElement.querySelector('.event-title');
+                        if (eventTitleElement) {
+                            // Сохраняем имя и телефон, если они есть
+                            const currentText = eventTitleElement.textContent;
+                            const parts = currentText.split(' - ');
+                            if (parts.length > 1) {
+                                // Если есть имя и телефон, сохраняем их
+                                eventTitleElement.textContent = newTitle + ' - ' + parts.slice(1).join(' - ');
+                            } else {
+                                // Если только название, просто обновляем его
+                                eventTitleElement.textContent = newTitle;
+                            }
+                        }
+                    }
+                    
+                    showNotification('Название записи обновлено', 'success');
+                } else {
+                    showNotification('Ошибка: ' + (data.error || 'Не удалось обновить название'), 'error');
+                    input.focus();
+                }
+            })
+            .catch(error => {
+                console.error('Ошибка при обновлении названия:', error);
+                showNotification('Ошибка при обновлении названия', 'error');
+                input.focus();
+            });
+        };
+        
+        // Сохраняем при нажатии Enter
+        input.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                saveTitle();
+            } else if (e.key === 'Escape') {
+                // Отменяем редактирование
+                const h3 = document.createElement('h3');
+                h3.id = 'sidePanelTitle';
+                h3.innerHTML = `
+                    <span class="title-text">${currentTitle}</span>
+                    <span class="edit-icon" title="Кликните для редактирования названия">✏️</span>
+                `;
+                h3.style.cursor = 'pointer';
+                h3.onclick = function(e) {
+                    e.stopPropagation();
+                    editEventTitle();
+                };
+                parent.replaceChild(h3, input);
+            }
+        });
+        
+        // Сохраняем при потере фокуса
+        input.addEventListener('blur', saveTitle);
+    }
+    
     function closeEventSidePanel() {
         const sidePanel = document.getElementById('eventSidePanel');
         if (sidePanel) {
@@ -1407,8 +1590,9 @@
                     sidePanelHeader.style.background = '';
                 }
                 
-                // Очищаем ID текущего события
+                // Очищаем ID текущего события и данные события
                 window.currentEventId = null;
+                window.currentEventData = null;
             }, 300);
         }
     }
@@ -5167,6 +5351,7 @@
     window.clearAllEvents = clearAllEvents;
     window.showEventSidePanel = showEventSidePanel;
     window.closeEventSidePanel = closeEventSidePanel;
+    window.editEventTitle = editEventTitle;
     window.openJournalSidePanel = openJournalSidePanel;
     window.openEditEventModalFromSidePanel = openEditEventModalFromSidePanel;
     window.deleteEventFromSidePanel = deleteEventFromSidePanel;
@@ -5841,8 +6026,8 @@
                 <div class="event-time"><span>${timeString} – ${endTimeString}</span><div class="event-icons">
                         <span class="event-icon contact-icon ${eventData.contactEntityId ? 'active' : ''}" title="Контакт">👤</span>
                         <span class="event-icon deal-icon ${getDealIconClass(eventData.dealEntityId)}" title="Сделка">💼</span>
-                        <span class="event-icon visit-icon ${getVisitIconClass(eventData.visitStatus)}" title="Визит">🏥</span>
                         <span class="event-icon confirmation-icon ${getConfirmationIconClass(eventData.confirmationStatus)}" title="Подтверждение">✅</span>
+                        <span class="event-icon visit-icon ${getVisitIconClass(eventData.visitStatus)}" title="Визит">🏥</span>                        
                     </div></div>
             </div>
             <div class="event-arrow">▼</div>
@@ -6684,8 +6869,8 @@
                 <div class="event-time"><span>${timeString} – ${endTimeString}</span><div class="event-icons">
                         <span class="event-icon contact-icon ${event.CONTACT_ENTITY_ID ? 'active' : ''}" title="Контакт">👤</span>
                         <span class="event-icon deal-icon ${getDealIconClass(event.DEAL_ENTITY_ID)}" title="Сделка">💼</span>
-                        <span class="event-icon visit-icon ${getVisitIconClass(event.VISIT_STATUS)}" title="Визит">🏥</span>
                         <span class="event-icon confirmation-icon ${getConfirmationIconClass(event.CONFIRMATION_STATUS)}" title="Подтверждение">✅</span>
+                        <span class="event-icon visit-icon ${getVisitIconClass(event.VISIT_STATUS)}" title="Визит">🏥</span>                        
                     </div></div>
             </div>
             <div class="event-arrow">▼</div>

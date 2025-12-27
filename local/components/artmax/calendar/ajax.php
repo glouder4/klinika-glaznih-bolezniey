@@ -258,8 +258,23 @@ switch ($action) {
             die(json_encode(['success' => false, 'error' => 'Нет прав на редактирование']));
         }
 
+        // Нормализуем даты для корректного сравнения
+        // $event['DATE_FROM'] в формате dd.mm.yyyy HH:ii:ss, $dateFrom в формате yyyy-mm-dd HH:ii:ss
+        $normalizeDate = function($dateStr) {
+            if (empty($dateStr)) return '';
+            // Если дата в формате dd.mm.yyyy HH:ii:ss, конвертируем в yyyy-mm-dd HH:ii:ss
+            if (preg_match('/^(\d{2})\.(\d{2})\.(\d{4})\s+(\d{2}):(\d{2}):(\d{2})$/', $dateStr, $matches)) {
+                return sprintf('%s-%s-%s %s:%s:%s', $matches[3], $matches[2], $matches[1], $matches[4], $matches[5], $matches[6]);
+            }
+            // Если уже в формате yyyy-mm-dd HH:ii:ss, возвращаем как есть
+            return $dateStr;
+        };
+        
+        $oldDateFromNormalized = $normalizeDate($event['DATE_FROM']);
+        $oldDateToNormalized = $normalizeDate($event['DATE_TO']);
+        
         // Проверяем доступность времени для врача при изменении времени
-        $timeChanged = ($event['DATE_FROM'] != $dateFrom || $event['DATE_TO'] != $dateTo);
+        $timeChanged = ($oldDateFromNormalized != $dateFrom || $oldDateToNormalized != $dateTo);
         $doctorChanged = ((int)$event['EMPLOYEE_ID'] != (int)$employeeId);
         
         // Логируем для отладки
@@ -267,7 +282,7 @@ switch ($action) {
             "UPDATE_EVENT_DEBUG: timeChanged=" . ($timeChanged ? 'true' : 'false') . ", doctorChanged=" . ($doctorChanged ? 'true' : 'false') . "\n", 
             FILE_APPEND | LOCK_EX);
         file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-            "UPDATE_EVENT_DEBUG: oldTime=" . $event['DATE_FROM'] . " - " . $event['DATE_TO'] . ", newTime=" . $dateFrom . " - " . $dateTo . "\n", 
+            "UPDATE_EVENT_DEBUG: oldTime=" . $event['DATE_FROM'] . " (" . $oldDateFromNormalized . ") - " . $event['DATE_TO'] . " (" . $oldDateToNormalized . "), newTime=" . $dateFrom . " - " . $dateTo . "\n", 
             FILE_APPEND | LOCK_EX);
         file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
             "UPDATE_EVENT_DEBUG: oldDoctor=" . $event['EMPLOYEE_ID'] . ", newDoctor=" . $employeeId . "\n", 
@@ -295,14 +310,16 @@ switch ($action) {
                 
                 // Сравниваем и записываем изменения для каждого поля
                 
-                // TITLE
-                if (isset($event['TITLE']) && $event['TITLE'] != $title) {
+                // TITLE - нормализуем для корректного сравнения (убираем пробелы)
+                $oldTitle = isset($event['TITLE']) ? trim($event['TITLE']) : '';
+                $newTitle = trim($title);
+                if ($oldTitle != $newTitle) {
                     $journal->writeEvent(
                         $eventId,
                         'EVENT_TITLE_CHANGED',
                         'Artmax\Calendar\Calendar::updateEvent',
                         $userId,
-                        'TITLE=' . $event['TITLE'] . '->' . $title
+                        'TITLE=' . ($oldTitle ?: 'empty') . '->' . ($newTitle ?: 'empty')
                     );
                 }
                 
@@ -720,6 +737,21 @@ switch ($action) {
         try {
             $events = $calendarObj->getEventsByBranch($branchId, $dateFrom, $dateTo);
             error_log("DYNAMIC LOAD: actual events count=" . count($events));
+            
+            // Создаем экземпляр компонента для загрузки данных контактов
+            $component = new ArtmaxCalendarComponent();
+            
+            // Загружаем данные контактов для каждого события
+            foreach ($events as &$event) {
+                if (!empty($event['CONTACT_ENTITY_ID'])) {
+                    $contactData = $component->getContactFromCRM($event['CONTACT_ENTITY_ID']);
+                    if ($contactData) {
+                        $event['CONTACT_NAME'] = $contactData['name'] ?? '';
+                        $event['CONTACT_PHONE'] = $contactData['phone'] ?? '';
+                    }
+                }
+            }
+            unset($event); // Разрываем ссылку после foreach
             
             // Логируем первые несколько событий для отладки
             if (count($events) > 0) {

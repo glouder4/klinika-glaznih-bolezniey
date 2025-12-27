@@ -880,6 +880,9 @@
                     closeEventForm();
                     form.reset();
 
+                    // Получаем employee_id из формы
+                    const employeeId = formData.get('employee_id') || null;
+
                     // Динамически добавляем событие в календарь
                     addEventToCalendar({
                         id: data.eventId,
@@ -889,8 +892,12 @@
                         dateTo: formatLocalDateTime(endDateTime),
                         eventColor: formData.get('event-color') || '#3498db',
                         contactName: '',
-                        contactPhone: ''
+                        contactPhone: '',
+                        employeeId: employeeId
                     });
+                    
+                    // Перезагружаем события календаря, чтобы получить полные данные из БД, включая EMPLOYEE_ID
+                    refreshCalendarEvents();
                 } else {
                     showNotification('Ошибка: ' + (data.error || 'Неизвестная ошибка'), 'error');
                 }
@@ -1240,10 +1247,24 @@
             if (data.success && data.event) {
                 const event = data.event;
                 
+                // Сохраняем данные события для использования в других функциях
+                window.currentEventData = event;
+                
                 // Обновляем заголовок бокового окна
                 const titleElement = document.getElementById('sidePanelTitle');
                 if (titleElement) {
-                    titleElement.textContent = event.TITLE || 'Детали записи';
+                    const titleText = event.TITLE || 'Детали записи';
+                    // Обновляем структуру с иконкой карандаша
+                    titleElement.innerHTML = `
+                        <span class="title-text">${titleText}</span>
+                        <span class="edit-icon" title="Кликните для редактирования названия">✏️</span>
+                    `;
+                    // Добавляем обработчик клика для редактирования названия
+                    titleElement.style.cursor = 'pointer';
+                    titleElement.onclick = function(e) {
+                        e.stopPropagation();
+                        editEventTitle();
+                    };
                 }
                 
                 // Применяем цвет события к шапке
@@ -1287,11 +1308,13 @@
                 }
                 
                 // Загружаем данные врача, если есть EMPLOYEE_ID
-                console.log('showEventSidePanel: EMPLOYEE_ID =', event.EMPLOYEE_ID);
+                console.log('showEventSidePanel: EMPLOYEE_ID =', event.EMPLOYEE_ID, 'тип:', typeof event.EMPLOYEE_ID);
+                console.log('showEventSidePanel: BRANCH_ID =', event.BRANCH_ID);
+                console.log('showEventSidePanel: Полное событие:', event);
                 if (event.EMPLOYEE_ID) {
                     loadingCount++; // Увеличиваем счетчик только если будет запрос
-                    console.log('showEventSidePanel: Загружаем врача с ID:', event.EMPLOYEE_ID);
-                    loadEventEmployee(event.EMPLOYEE_ID);
+                    console.log('showEventSidePanel: Загружаем врача с ID:', event.EMPLOYEE_ID, 'для филиала:', event.BRANCH_ID);
+                    loadEventEmployee(event.EMPLOYEE_ID, event.BRANCH_ID);
                 } else {
                     console.log('showEventSidePanel: Нет EMPLOYEE_ID, сбрасываем врача');
                     // Сбрасываем информацию о враче, если врача нет
@@ -1373,6 +1396,175 @@
         sidePanel.style.height = panelHeight + 'px';
     }
 
+    // Функция для редактирования названия записи
+    function editEventTitle() {
+        const titleElement = document.getElementById('sidePanelTitle');
+        if (!titleElement || !window.currentEventId || !window.currentEventData) {
+            return;
+        }
+        
+        // Получаем текст из span.title-text, если он есть, иначе из textContent
+        const titleTextSpan = titleElement.querySelector('.title-text');
+        const currentTitle = titleTextSpan ? titleTextSpan.textContent.trim() : titleElement.textContent.trim();
+        
+        // Создаем input для редактирования
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.value = currentTitle;
+        input.className = 'event-title-input';
+        input.style.cssText = 'width: 100%; padding: 5px; font-size: 18px; font-weight: bold; border: 2px solid #3498db; border-radius: 4px; background: white; color: #333;';
+        
+        // Заменяем h3 на input
+        const parent = titleElement.parentElement;
+        parent.replaceChild(input, titleElement);
+        input.focus();
+        input.select();
+        
+        // Функция сохранения
+        const saveTitle = () => {
+            const newTitle = input.value.trim();
+            
+            if (newTitle === currentTitle) {
+                // Если название не изменилось, просто возвращаем h3 с иконкой
+                const h3 = document.createElement('h3');
+                h3.id = 'sidePanelTitle';
+                h3.innerHTML = `
+                    <span class="title-text">${currentTitle}</span>
+                    <span class="edit-icon" title="Кликните для редактирования названия">✏️</span>
+                `;
+                h3.style.cursor = 'pointer';
+                h3.onclick = function(e) {
+                    e.stopPropagation();
+                    editEventTitle();
+                };
+                parent.replaceChild(h3, input);
+                return;
+            }
+            
+            if (!newTitle) {
+                showNotification('Название не может быть пустым', 'error');
+                input.focus();
+                return;
+            }
+            
+            // Отправляем AJAX запрос для обновления названия
+            const csrfToken = getCSRFToken();
+            const eventData = window.currentEventData;
+            
+            // Конвертируем даты из формата dd.mm.yyyy в yyyy-mm-dd для updateEvent
+            const convertDateToStandard = (dateStr) => {
+                if (!dateStr) return '';
+                // Если дата уже в формате yyyy-mm-dd, возвращаем как есть
+                if (dateStr.match(/^\d{4}-\d{2}-\d{2}/)) {
+                    return dateStr;
+                }
+                // Конвертируем из dd.mm.yyyy HH:ii:ss в yyyy-mm-dd HH:ii:ss
+                const match = dateStr.match(/(\d{2})\.(\d{2})\.(\d{4})\s+(\d{2}):(\d{2}):(\d{2})/);
+                if (match) {
+                    return `${match[3]}-${match[2]}-${match[1]} ${match[4]}:${match[5]}:${match[6]}`;
+                }
+                return dateStr;
+            };
+            
+            const postData = {
+                action: 'updateEvent',
+                eventId: window.currentEventId,
+                title: newTitle,
+                description: eventData.DESCRIPTION || '',
+                dateFrom: convertDateToStandard(eventData.DATE_FROM),
+                dateTo: convertDateToStandard(eventData.DATE_TO),
+                eventColor: eventData.EVENT_COLOR || '#3498db',
+                branchId: eventData.BRANCH_ID || 1,
+                employee_id: eventData.EMPLOYEE_ID || null,
+                sessid: csrfToken
+            };
+            
+            fetch('/local/components/artmax/calendar/ajax.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-Bitrix-Csrf-Token': csrfToken
+                },
+                body: new URLSearchParams(postData)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Обновляем данные события
+                    window.currentEventData.TITLE = newTitle;
+                    
+                    // Возвращаем h3 с новым названием и иконкой карандаша
+                    const h3 = document.createElement('h3');
+                    h3.id = 'sidePanelTitle';
+                    h3.innerHTML = `
+                        <span class="title-text">${newTitle}</span>
+                        <span class="edit-icon" title="Кликните для редактирования названия">✏️</span>
+                    `;
+                    h3.style.cursor = 'pointer';
+                    h3.onclick = function(e) {
+                        e.stopPropagation();
+                        editEventTitle();
+                    };
+                    parent.replaceChild(h3, input);
+                    
+                    // Обновляем название в календаре
+                    const eventElement = document.querySelector(`[data-event-id="${window.currentEventId}"]`);
+                    if (eventElement) {
+                        const eventTitleElement = eventElement.querySelector('.event-title');
+                        if (eventTitleElement) {
+                            // Сохраняем имя и телефон, если они есть
+                            const currentText = eventTitleElement.textContent;
+                            const parts = currentText.split(' - ');
+                            if (parts.length > 1) {
+                                // Если есть имя и телефон, сохраняем их
+                                eventTitleElement.textContent = newTitle + ' - ' + parts.slice(1).join(' - ');
+                            } else {
+                                // Если только название, просто обновляем его
+                                eventTitleElement.textContent = newTitle;
+                            }
+                        }
+                    }
+                    
+                    showNotification('Название записи обновлено', 'success');
+                } else {
+                    showNotification('Ошибка: ' + (data.error || 'Не удалось обновить название'), 'error');
+                    input.focus();
+                }
+            })
+            .catch(error => {
+                console.error('Ошибка при обновлении названия:', error);
+                showNotification('Ошибка при обновлении названия', 'error');
+                input.focus();
+            });
+        };
+        
+        // Сохраняем при нажатии Enter
+        input.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                saveTitle();
+            } else if (e.key === 'Escape') {
+                // Отменяем редактирование
+                const h3 = document.createElement('h3');
+                h3.id = 'sidePanelTitle';
+                h3.innerHTML = `
+                    <span class="title-text">${currentTitle}</span>
+                    <span class="edit-icon" title="Кликните для редактирования названия">✏️</span>
+                `;
+                h3.style.cursor = 'pointer';
+                h3.onclick = function(e) {
+                    e.stopPropagation();
+                    editEventTitle();
+                };
+                parent.replaceChild(h3, input);
+            }
+        });
+        
+        // Сохраняем при потере фокуса
+        input.addEventListener('blur', saveTitle);
+    }
+    
     function closeEventSidePanel() {
         const sidePanel = document.getElementById('eventSidePanel');
         if (sidePanel) {
@@ -1398,8 +1590,9 @@
                     sidePanelHeader.style.background = '';
                 }
                 
-                // Очищаем ID текущего события
+                // Очищаем ID текущего события и данные события
                 window.currentEventId = null;
+                window.currentEventData = null;
             }, 300);
         }
     }
@@ -1530,9 +1723,22 @@
     }
 
     function getBranchId() {
-        // Получаем ID филиала из данных страницы или возвращаем 0
+        // Получаем ID филиала из данных страницы
+        // Сначала пробуем найти элемент .artmax-calendar с data-branch-id
+        const calendarElement = document.querySelector('.artmax-calendar[data-branch-id]');
+        if (calendarElement) {
+            const branchId = calendarElement.getAttribute('data-branch-id');
+            return branchId ? parseInt(branchId, 10) : 0;
+        }
+        
+        // Если не нашли, пробуем любой элемент с data-branch-id
         const branchElement = document.querySelector('[data-branch-id]');
-        return branchElement ? branchElement.getAttribute('data-branch-id') : 0;
+        if (branchElement) {
+            const branchId = branchElement.getAttribute('data-branch-id');
+            return branchId ? parseInt(branchId, 10) : 0;
+        }
+        
+        return 0;
     }
 
     // Функции для работы с формой филиала в SidePanel
@@ -3385,6 +3591,32 @@
                     id: data.dealId,
                     title: 'Сделка создана'
                 });
+                
+                // Открываем форму деталей сделки с автоматическим заполнением филиала
+                if (data.dealId) {
+                    const params = new URLSearchParams({
+                        IFRAME: 'Y',
+                        IFRAME_TYPE: 'SIDE_SLIDER',
+                        DEAL_ID: data.dealId
+                    });
+                    
+                    if (data.eventId) {
+                        params.append('EVENT_ID', data.eventId);
+                    }
+                    
+                    if (data.branchId) {
+                        params.append('BRANCH_ID', data.branchId);
+                    }
+                    
+                    const dealUrl = `/local/components/artmax/deal.details/page.php?${params.toString()}`;
+                    
+                    if (typeof BX !== 'undefined' && BX.SidePanel) {
+                        BX.SidePanel.Instance.open(dealUrl, {
+                            width: 640,
+                            cacheable: false
+                        });
+                    }
+                }
             } else {
                 showNotification('Ошибка создания сделки: ' + (data.error || 'Неизвестная ошибка'), 'error');
             }
@@ -3469,6 +3701,28 @@
         const currentEventId = getCurrentEventId();
         if (currentEventId) {
             params.append('EVENT_ID', currentEventId);
+        }
+
+        // Добавляем BRANCH_ID текущего филиала
+        // Пробуем получить из события, если оно открыто
+        let branchId = null;
+        const currentEvent = window.currentEventData;
+        if (currentEvent && currentEvent.BRANCH_ID) {
+            branchId = parseInt(currentEvent.BRANCH_ID, 10);
+            console.log('openDealInSidePanel: BRANCH_ID из события =', branchId);
+        } else {
+            // Иначе получаем из данных страницы
+            branchId = getBranchId();
+            console.log('openDealInSidePanel: BRANCH_ID из getBranchId() =', branchId);
+        }
+        
+        // Проверяем и добавляем в URL
+        if (branchId > 0) {
+            params.append('BRANCH_ID', branchId);
+            console.log('openDealInSidePanel: Добавлен BRANCH_ID =', branchId, 'в URL');
+        } else {
+            console.warn('openDealInSidePanel: BRANCH_ID не найден. currentEvent:', currentEvent, 'getBranchId():', getBranchId());
+            console.warn('openDealInSidePanel: Попытка найти .artmax-calendar:', document.querySelector('.artmax-calendar'));
         }
 
         const dealUrl = `/local/components/artmax/deal.details/page.php?${params.toString()}`;
@@ -4330,9 +4584,17 @@
     }
 
     // Загрузка данных врача для боковой панели
-    function loadEventEmployee(employeeId) {
-        console.log('loadEventEmployee: Загружаем врача с ID:', employeeId);
+    function loadEventEmployee(employeeId, branchId = null) {
+        console.log('loadEventEmployee: Загружаем врача с ID:', employeeId, 'для филиала:', branchId);
         const csrfToken = getCSRFToken();
+        const params = {
+            action: 'getEmployees',
+            sessid: csrfToken
+        };
+        // Если передан branchId, добавляем его в параметры
+        if (branchId) {
+            params.branch_id = branchId;
+        }
         fetch('/local/components/artmax/calendar/ajax.php', {
             method: 'POST',
             headers: {
@@ -4340,10 +4602,7 @@
                 'X-Requested-With': 'XMLHttpRequest',
                 'X-Bitrix-Csrf-Token': csrfToken
             },
-            body: new URLSearchParams({
-                action: 'getEmployees',
-                sessid: csrfToken
-            })
+            body: new URLSearchParams(params)
         })
         .then(response => {
             console.log('loadEventEmployee: Получен ответ от сервера');
@@ -4354,13 +4613,24 @@
             try {
                 if (data.success && data.employees) {
                     console.log('loadEventEmployee: Всего врачей:', data.employees.length);
+                    console.log('loadEventEmployee: Ищем врача с ID:', employeeId, 'тип:', typeof employeeId);
+                    console.log('loadEventEmployee: Список ID врачей:', data.employees.map(emp => ({ id: emp.ID, type: typeof emp.ID, name: emp.NAME })));
                     const employee = data.employees.find(emp => String(emp.ID) === String(employeeId));
                     if (employee) {
                         console.log('loadEventEmployee: Врач найден:', employee);
                         updateEmployeeCardInSidePanel(employee);
                     } else {
-                        console.log('loadEventEmployee: Врач с ID', employeeId, 'не найден в списке');
-                        resetEmployeeInfoInSidePanel();
+                        console.error('loadEventEmployee: Врач с ID', employeeId, 'не найден в списке');
+                        console.error('loadEventEmployee: Попытка найти по числовому сравнению...');
+                        // Пробуем найти по числовому сравнению
+                        const employeeByNumber = data.employees.find(emp => Number(emp.ID) === Number(employeeId));
+                        if (employeeByNumber) {
+                            console.log('loadEventEmployee: Врач найден по числовому сравнению:', employeeByNumber);
+                            updateEmployeeCardInSidePanel(employeeByNumber);
+                        } else {
+                            console.error('loadEventEmployee: Врач не найден даже по числовому сравнению');
+                            resetEmployeeInfoInSidePanel();
+                        }
                     }
                 } else {
                     console.log('loadEventEmployee: Ошибка в данных или нет врачей');
@@ -5081,6 +5351,7 @@
     window.clearAllEvents = clearAllEvents;
     window.showEventSidePanel = showEventSidePanel;
     window.closeEventSidePanel = closeEventSidePanel;
+    window.editEventTitle = editEventTitle;
     window.openJournalSidePanel = openJournalSidePanel;
     window.openEditEventModalFromSidePanel = openEditEventModalFromSidePanel;
     window.deleteEventFromSidePanel = deleteEventFromSidePanel;
@@ -5755,8 +6026,8 @@
                 <div class="event-time"><span>${timeString} – ${endTimeString}</span><div class="event-icons">
                         <span class="event-icon contact-icon ${eventData.contactEntityId ? 'active' : ''}" title="Контакт">👤</span>
                         <span class="event-icon deal-icon ${getDealIconClass(eventData.dealEntityId)}" title="Сделка">💼</span>
-                        <span class="event-icon visit-icon ${getVisitIconClass(eventData.visitStatus)}" title="Визит">🏥</span>
                         <span class="event-icon confirmation-icon ${getConfirmationIconClass(eventData.confirmationStatus)}" title="Подтверждение">✅</span>
+                        <span class="event-icon visit-icon ${getVisitIconClass(eventData.visitStatus)}" title="Визит">🏥</span>                        
                     </div></div>
             </div>
             <div class="event-arrow">▼</div>
@@ -6598,8 +6869,8 @@
                 <div class="event-time"><span>${timeString} – ${endTimeString}</span><div class="event-icons">
                         <span class="event-icon contact-icon ${event.CONTACT_ENTITY_ID ? 'active' : ''}" title="Контакт">👤</span>
                         <span class="event-icon deal-icon ${getDealIconClass(event.DEAL_ENTITY_ID)}" title="Сделка">💼</span>
-                        <span class="event-icon visit-icon ${getVisitIconClass(event.VISIT_STATUS)}" title="Визит">🏥</span>
                         <span class="event-icon confirmation-icon ${getConfirmationIconClass(event.CONFIRMATION_STATUS)}" title="Подтверждение">✅</span>
+                        <span class="event-icon visit-icon ${getVisitIconClass(event.VISIT_STATUS)}" title="Визит">🏥</span>                        
                     </div></div>
             </div>
             <div class="event-arrow">▼</div>

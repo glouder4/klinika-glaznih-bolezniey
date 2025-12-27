@@ -1744,7 +1744,15 @@ input:checked + .toggle-slider:before {
     }
     
     .calendar-event .event-icon.visit-icon.inactive {
-        filter: grayscale(0.9) brightness(0.7) !important;
+        color: #f44336 !important;
+        background: rgba(244, 67, 54, 0.2) !important;
+        border: 1.5px solid #f44336 !important;
+        filter: none !important;
+        opacity: 1 !important;
+        text-shadow: 0 0 2px rgba(244, 67, 54, 0.8) !important;
+        border-radius: 3px !important;
+        padding: 1px 2px !important;
+        box-shadow: 0 0 3px rgba(244, 67, 54, 0.5) !important;
     }
     
     .calendar-event .event-arrow {
@@ -1876,7 +1884,15 @@ input:checked + .toggle-slider:before {
     }
     
     .calendar-event .event-icon.visit-icon.inactive {
-        filter: grayscale(0.9) brightness(0.7) !important;
+        color: #f44336 !important;
+        background: rgba(244, 67, 54, 0.2) !important;
+        border: 1.5px solid #f44336 !important;
+        filter: none !important;
+        opacity: 1 !important;
+        text-shadow: 0 0 2px rgba(244, 67, 54, 0.8) !important;
+        border-radius: 3px !important;
+        padding: 1px 2px !important;
+        box-shadow: 0 0 3px rgba(244, 67, 54, 0.5) !important;
     }
     
     .calendar-event .event-arrow {
@@ -2037,7 +2053,15 @@ input:checked + .toggle-slider:before {
     }
     
     .calendar-event .event-icon.visit-icon.inactive {
-        filter: grayscale(0.9) brightness(0.7) !important;
+        color: #f44336 !important;
+        background: rgba(244, 67, 54, 0.2) !important;
+        border: 1.5px solid #f44336 !important;
+        filter: none !important;
+        opacity: 1 !important;
+        text-shadow: 0 0 2px rgba(244, 67, 54, 0.8) !important;
+        border-radius: 3px !important;
+        padding: 1px 2px !important;
+        box-shadow: 0 0 3px rgba(244, 67, 54, 0.5) !important;
     }
     
     /* Переопределяем стрелку событий */
@@ -2184,7 +2208,15 @@ input:checked + .toggle-slider:before {
     }
     
     .calendar-event .event-icon.visit-icon.inactive {
-        filter: grayscale(0.9) brightness(0.7) !important;
+        color: #f44336 !important;
+        background: rgba(244, 67, 54, 0.2) !important;
+        border: 1.5px solid #f44336 !important;
+        filter: none !important;
+        opacity: 1 !important;
+        text-shadow: 0 0 2px rgba(244, 67, 54, 0.8) !important;
+        border-radius: 3px !important;
+        padding: 1px 2px !important;
+        box-shadow: 0 0 3px rgba(244, 67, 54, 0.5) !important;
     }
     
     /* Переопределяем стрелку событий */
@@ -3030,6 +3062,24 @@ input:checked + .toggle-slider:before {
     margin: 0;
     font-size: 18px;
     font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.side-panel-header h3 .title-text {
+    flex: 1;
+}
+
+.side-panel-header h3 .edit-icon {
+    font-size: 16px;
+    opacity: 0.8;
+    transition: opacity 0.2s ease;
+    cursor: pointer;
+}
+
+.side-panel-header h3:hover .edit-icon {
+    opacity: 1;
 }
 
 .close-side-panel {
@@ -3858,6 +3908,19 @@ input:checked + .toggle-slider:before {
     text-shadow: 0 0 3px rgba(244, 67, 54, 0.5);
 }
 
+/* Специфичный стиль для иконки визита в календаре, когда клиент не пришёл */
+.calendar-event .event-icon.visit-icon.inactive {
+    color: #f44336 !important;
+    background: rgba(244, 67, 54, 0.2) !important;
+    border: 1.5px solid #f44336 !important;
+    filter: none !important;
+    opacity: 1 !important;
+    text-shadow: 0 0 2px rgba(244, 67, 54, 0.8) !important;
+    border-radius: 3px !important;
+    padding: 1px 2px !important;
+    box-shadow: 0 0 3px rgba(244, 67, 54, 0.5) !important;
+}
+
 /* Выпадающее меню визита */
 .visit-dropdown {
     position: absolute;
@@ -3933,7 +3996,7 @@ input:checked + .toggle-slider:before {
     backdrop-filter: blur(2px);
     border-radius: 8px;
 }
-
+ 
 .preloader-spinner {
     width: 40px;
     height: 40px;

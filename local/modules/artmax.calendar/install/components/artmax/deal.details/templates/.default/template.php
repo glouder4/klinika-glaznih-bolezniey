@@ -59,9 +59,8 @@ $deal = $arResult['DEAL'];
                 <label for="deal-branch" class="artmax-field-label">Филиал</label>
                 <div class="artmax-field-content">
                     <select id="deal-branch" class="artmax-select">
-                        <option value="">По умолчанию</option>
                         <?php foreach ($arResult['ENUMS']['BRANCH'] as $enum): ?>
-                            <option value="<?= (int)$enum['ID'] ?>" <?= ($fieldCodes['BRANCH'] && (int)$deal[$fieldCodes['BRANCH']] === (int)$enum['ID']) ? 'selected' : '' ?>>
+                            <option value="<?= (int)$enum['ID'] ?>" <?= ($fieldCodes['BRANCH'] && (int)$deal[$fieldCodes['BRANCH']] === (int)$enum['ID']) ? 'selected' : '' ?> <?= ($arResult['CURRENT_BRANCH_ENUM_ID'] && (int)$arResult['CURRENT_BRANCH_ENUM_ID'] === (int)$enum['ID'] && (!$fieldCodes['BRANCH'] || !$deal[$fieldCodes['BRANCH']])) ? 'selected' : '' ?>>
                                 <?= htmlspecialcharsbx($enum['VALUE']) ?>
                             </option>
                         <?php endforeach; ?>
@@ -83,6 +82,21 @@ $deal = $arResult['DEAL'];
                 </div>
             </div>
         </form>
+        
+        <?php
+        // Формируем URL для полной формы сделки
+        $dealId = (int)$arResult['DEAL_ID'];
+        $dealCategoryId = isset($deal['CATEGORY_ID']) ? (int)$deal['CATEGORY_ID'] : 0;
+        $dealFullUrl = '/crm/deal/details/' . $dealId . '/';
+        if ($dealCategoryId > 0) {
+            $dealFullUrl = '/crm/deal/details/' . $dealId . '/' . $dealCategoryId . '/';
+        }
+        ?>
+        <div class="deal-full-form-link" style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #e0e0e0; text-align: center;">
+            <a href="<?= htmlspecialcharsbx($dealFullUrl) ?>" target="_blank" style="color: #2066b0; text-decoration: none; font-size: 14px;">
+                Перейти к полной форме
+            </a>
+        </div>
     </div>
 
     <?php if ($arResult['IS_IFRAME']): ?>
@@ -98,6 +112,8 @@ $deal = $arResult['DEAL'];
         'dealId' => (int)$arResult['DEAL_ID'],
         'eventId' => (int)$arResult['EVENT_ID'],
         'fieldCodes' => $arResult['FIELD_CODES'],
+        'currentBranchEnumId' => $arResult['CURRENT_BRANCH_ENUM_ID'] ? (int)$arResult['CURRENT_BRANCH_ENUM_ID'] : null,
+        'targetBranchId' => $arResult['TARGET_BRANCH_ID'] ? (int)$arResult['TARGET_BRANCH_ID'] : null,
     ]) ?>;
 </script>
 

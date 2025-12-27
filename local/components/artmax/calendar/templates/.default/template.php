@@ -264,6 +264,17 @@ $totalDays = 42; // 6 недель * 7 дней
                                 echo '<div class="event-icons">';
                                 echo '<span class="event-icon contact-icon ' . ($event['CONTACT_ENTITY_ID'] ? 'active' : '') . '" title="Контакт">👤</span>';
                                 echo '<span class="event-icon deal-icon ' . ($event['DEAL_ENTITY_ID'] ? 'active' : '') . '" title="Сделка">💼</span>';
+
+                                // Логика для иконки подтверждения
+                                $confirmationActive = '';
+                                if (isset($event['CONFIRMATION_STATUS'])) {
+                                    if ($event['CONFIRMATION_STATUS'] === 'confirmed') {
+                                        $confirmationActive = 'active';
+                                    } elseif ($event['CONFIRMATION_STATUS'] === 'not_confirmed') {
+                                        $confirmationActive = 'inactive';
+                                    }
+                                }
+                                echo '<span class="event-icon confirmation-icon ' . $confirmationActive . '" title="Подтверждение">✅</span>';
                                 
                                 // Логика для иконки визита
                                 $visitActive = '';
@@ -275,17 +286,7 @@ $totalDays = 42; // 6 недель * 7 дней
                                     }
                                 }
                                 echo '<span class="event-icon visit-icon ' . $visitActive . '" title="Визит">🏥</span>';
-                                
-                                // Логика для иконки подтверждения
-                                $confirmationActive = '';
-                                if (isset($event['CONFIRMATION_STATUS'])) {
-                                    if ($event['CONFIRMATION_STATUS'] === 'confirmed') {
-                                        $confirmationActive = 'active';
-                                    } elseif ($event['CONFIRMATION_STATUS'] === 'not_confirmed') {
-                                        $confirmationActive = 'inactive';
-                                    }
-                                }
-                                echo '<span class="event-icon confirmation-icon ' . $confirmationActive . '" title="Подтверждение">✅</span>';
+
                                 echo '</div>';
                                 echo '</div>';
                                 echo '</div>';
@@ -441,7 +442,10 @@ $totalDays = 42; // 6 недель * 7 дней
         
         <div class="side-panel-content">
             <div class="side-panel-header">
-                <h3 id="sidePanelTitle">Детали записи</h3>
+                <h3 id="sidePanelTitle">
+                    <span class="title-text">Детали записи</span>
+                    <span class="edit-icon" title="Кликните для редактирования названия">✏️</span>
+                </h3>
                 <button class="close-side-panel" onclick="closeEventSidePanel()">×</button>
             </div>
             

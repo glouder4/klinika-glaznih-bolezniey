@@ -306,7 +306,7 @@ function initializeClientForm() {
         // Заполняем поле телефона
         const phoneInput = document.getElementById('phone-input');
         if (phoneInput && contact.phone) {
-            phoneInput.value = contact.phone;
+            phoneInput.value = formatPhoneNumber(contact.phone);
         }
         
         // Заполняем поле email
@@ -376,6 +376,12 @@ function initializeClientForm() {
         
         hideContactDropdown();
         clearCreateContactForm();
+        
+        // Инициализируем маску для поля телефона
+        const phoneInput = document.getElementById('new-contact-phone');
+        if (phoneInput) {
+            initPhoneMask(phoneInput);
+        }
     };
 
     // Функция скрытия формы создания контакта
@@ -397,6 +403,119 @@ function initializeClientForm() {
         
         clearCreateContactForm();
     };
+
+    // Функция форматирования телефона в формат +7 (999) 999-99-99
+    function formatPhoneNumber(phone) {
+        if (!phone) return '';
+        
+        // Удаляем все нецифровые символы
+        let value = phone.replace(/\D/g, '');
+        
+        // Если номер начинается с 8, заменяем на 7
+        if (value.length > 0 && value[0] === '8') {
+            value = '7' + value.substring(1);
+        }
+        
+        // Если номер не начинается с 7, добавляем 7
+        if (value.length > 0 && value[0] !== '7') {
+            value = '7' + value;
+        }
+        
+        // Ограничиваем длину до 11 цифр (7 + 10 цифр)
+        if (value.length > 11) {
+            value = value.substring(0, 11);
+        }
+        
+        // Если номер слишком короткий, возвращаем как есть
+        if (value.length <= 1) {
+            return value.length === 1 && value[0] === '7' ? '+7 (' : phone;
+        }
+        
+        // Форматируем номер
+        let formattedValue = '+7';
+        if (value.length > 1) {
+            formattedValue += ' (' + value.substring(1, 4);
+            if (value.length > 4) {
+                formattedValue += ') ' + value.substring(4, 7);
+                if (value.length > 7) {
+                    formattedValue += '-' + value.substring(7, 9);
+                    if (value.length > 9) {
+                        formattedValue += '-' + value.substring(9, 11);
+                    }
+                }
+            }
+        }
+        
+        return formattedValue;
+    }
+
+    // Функция маски ввода телефона +7 (999) 999-99-99
+    function initPhoneMask(inputElement) {
+        if (!inputElement) return;
+        
+        // Проверяем, не инициализирована ли уже маска
+        if (inputElement.dataset.maskInitialized === 'true') {
+            return;
+        }
+        inputElement.dataset.maskInitialized = 'true';
+        
+        // Устанавливаем начальное значение только если поле пустое
+        if (!inputElement.value || inputElement.value.trim() === '') {
+            inputElement.value = '+7 (';
+        }
+        
+        inputElement.addEventListener('input', function(e) {
+            let value = e.target.value.replace(/\D/g, ''); // Удаляем все нецифровые символы
+            
+            // Если начинается не с 7, добавляем 7
+            if (value.length > 0 && value[0] !== '7') {
+                value = '7' + value;
+            }
+            
+            // Ограничиваем длину до 11 цифр (7 + 10 цифр)
+            if (value.length > 11) {
+                value = value.substring(0, 11);
+            }
+            
+            // Форматируем номер
+            let formattedValue = '+7';
+            if (value.length > 1) {
+                formattedValue += ' (' + value.substring(1, 4);
+                if (value.length > 4) {
+                    formattedValue += ') ' + value.substring(4, 7);
+                    if (value.length > 7) {
+                        formattedValue += '-' + value.substring(7, 9);
+                        if (value.length > 9) {
+                            formattedValue += '-' + value.substring(9, 11);
+                        }
+                    }
+                }
+            }
+            
+            e.target.value = formattedValue;
+        });
+        
+        inputElement.addEventListener('keydown', function(e) {
+            // Разрешаем удаление, но не позволяем удалить +7 (
+            if (e.key === 'Backspace' && e.target.value === '+7 (') {
+                e.preventDefault();
+            }
+        });
+        
+        inputElement.addEventListener('focus', function(e) {
+            // Если поле пустое, устанавливаем начальное значение
+            if (!e.target.value || e.target.value.trim() === '') {
+                e.target.value = '+7 (';
+            }
+        });
+        
+        inputElement.addEventListener('blur', function(e) {
+            // Если остался только +7 (, очищаем поле
+            if (e.target.value === '+7 (') {
+                e.target.value = '';
+            }
+        });
+    }
 
     // Функция очистки формы создания контакта
     function clearCreateContactForm() {
@@ -605,6 +724,17 @@ function initializeClientForm() {
         }
     };
 
+    // Инициализация маски для полей телефона при загрузке страницы
+    const newContactPhoneInput = document.getElementById('new-contact-phone');
+    if (newContactPhoneInput) {
+        initPhoneMask(newContactPhoneInput);
+    }
+    
+    const phoneInput = document.getElementById('phone-input');
+    if (phoneInput) {
+        initPhoneMask(phoneInput);
+    }
+    
     // Инициализация поиска
     const contactInput = document.getElementById('contact-input');
     const contactDropdown = document.getElementById('contact-search-dropdown');
