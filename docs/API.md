@@ -77,6 +77,26 @@ X-Requested-With: XMLHttpRequest
 }
 ```
 
+#### `moveEvent` - Перенос записи
+**Параметры:**
+- `action`: `moveEvent`
+- `eventId`: ID события для переноса
+- `branchId`: ID нового филиала (опционально)
+- `employeeId`: ID нового врача (опционально)
+- `dateFrom`: Новая дата и время начала (Y-m-d H:i:s)
+- `dateTo`: Новая дата и время окончания (Y-m-d H:i:s)
+
+**Ответ:**
+```json
+{
+  "success": true,
+  "message": "Запись успешно перенесена",
+  "affectedEvents": [123, 124]
+}
+```
+
+**Примечание:** Метод автоматически обрабатывает обмен местами между событиями, если на новом месте уже есть запись. В ответе `affectedEvents` содержит массив ID всех затронутых событий.
+
 #### `getEvent` - Получение записи
 **Параметры:**
 - `action`: `getEvent`
@@ -120,13 +140,23 @@ X-Requested-With: XMLHttpRequest
     {
       "ID": 123,
       "TITLE": "Запись к врачу",
-      "DATE_FROM": "2024-01-15 10:00:00",
-      "DATE_TO": "2024-01-15 11:00:00",
-      "EVENT_COLOR": "#3498db"
+      "DATE_FROM": "01.01.2025 10:00:00",
+      "DATE_TO": "01.01.2025 11:00:00",
+      "EVENT_COLOR": "#3498db",
+      "CONTACT_ENTITY_ID": 456,
+      "CONTACT_NAME": "Иван Петров",
+      "CONTACT_PHONE": "+7 (999) 123-45-67",
+      "DEAL_ENTITY_ID": 789,
+      "EMPLOYEE_ID": 101,
+      "STATUS": "active",
+      "CONFIRMATION_STATUS": "pending",
+      "VISIT_STATUS": "not_specified"
     }
   ]
 }
 ```
+
+**Примечание:** Метод автоматически загружает данные контактов (`CONTACT_NAME`, `CONTACT_PHONE`) для каждого события, если указан `CONTACT_ENTITY_ID`.
 
 ### 2. Расписание (Schedule)
 
@@ -407,5 +437,5 @@ if ($data['success']) {
 
 ---
 
-*Документ актуален на: 04.10.2025*  
-*Версия API: 1.0*
+*Документ актуален на: 27.12.2025*  
+*Версия API: 1.1*
