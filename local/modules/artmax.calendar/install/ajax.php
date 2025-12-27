@@ -13,14 +13,8 @@ require($_SERVER['DOCUMENT_ROOT'].'/bitrix/modules/main/include/prolog_before.ph
 function createRecurringEvents($originalEventId, $frequency, $weekdays = [], $repeatEnd = 'never', $repeatCount = null, $repeatEndDate = null, $eventColor = '#3498db')
 {
     try {
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-            "=== CREATE_RECURRING_EVENTS DEBUG ===\n", 
-            FILE_APPEND | LOCK_EX);
         
         if (!CModule::IncludeModule('artmax.calendar')) {
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "CREATE_RECURRING_EVENTS: Module not included\n", 
-                FILE_APPEND | LOCK_EX);
             return false;
         }
         
@@ -28,9 +22,6 @@ function createRecurringEvents($originalEventId, $frequency, $weekdays = [], $re
         $originalEvent = $calendarObj->getEvent($originalEventId);
         
         if (!$originalEvent) {
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "CREATE_RECURRING_EVENTS: Original event not found\n", 
-                FILE_APPEND | LOCK_EX);
             return false;
         }
         
@@ -153,16 +144,9 @@ function createRecurringEvents($originalEventId, $frequency, $weekdays = [], $re
                 // Если время занято, просто пропускаем этот день
             }
         }
-
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-            "CREATE_RECURRING_EVENTS: Total events created: {$eventsCreated}\n", 
-            FILE_APPEND | LOCK_EX);
         
         return $eventsCreated;
     } catch (\Exception $e) {
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-            "CREATE_RECURRING_EVENTS: Exception: " . $e->getMessage() . "\n", 
-            FILE_APPEND | LOCK_EX);
         return false;
     }
 }
@@ -276,10 +260,6 @@ switch ($action) {
         break;
         
     case 'addSchedule':
-        // Логируем начало обработки
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-            "=== ADD_SCHEDULE START (install/ajax.php) ===\n", 
-            FILE_APPEND | LOCK_EX);
         
         $title = $_POST['title'] ?? '';
         $date = $_POST['date'] ?? '';
@@ -302,20 +282,7 @@ switch ($action) {
             $repeatEndDate = null;
         }
         $eventColor = $_POST['eventColor'] ?? '#3498db';
-        
-        // Логируем параметры
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-            "ADD_SCHEDULE: Parameters:\n", 
-            FILE_APPEND | LOCK_EX);
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-            "  - repeat: " . ($repeat ? 'true' : 'false') . "\n", 
-            FILE_APPEND | LOCK_EX);
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-            "  - frequency: {$frequency}\n", 
-            FILE_APPEND | LOCK_EX);
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-            "  - weekdays: " . json_encode($weekdays) . "\n", 
-            FILE_APPEND | LOCK_EX);
+
         
         if (empty($title) || empty($date) || empty($time)) {
             http_response_code(400);

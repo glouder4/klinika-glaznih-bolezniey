@@ -22,31 +22,6 @@ class Calendar
      */
     public function addEvent($title, $description, $dateFrom, $dateTo, $userId, $branchId = 1, $eventColor = '#3498db', $employeeId = null)
     {
-                // Простое логирование
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-            "=== ADD_EVENT DEBUG ===\n", 
-            FILE_APPEND | LOCK_EX);
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-            "ADD_EVENT: Input parameters:\n", 
-            FILE_APPEND | LOCK_EX);
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-            "  - dateFrom: {$dateFrom}\n", 
-            FILE_APPEND | LOCK_EX);
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-            "  - dateTo: {$dateTo}\n", 
-            FILE_APPEND | LOCK_EX);
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-            "  - userId: {$userId}\n", 
-            FILE_APPEND | LOCK_EX);
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-            "  - branchId: {$branchId}\n", 
-            FILE_APPEND | LOCK_EX);
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-            "  - eventColor: {$eventColor}\n", 
-            FILE_APPEND | LOCK_EX);
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-            "  - employeeId: {$employeeId}\n", 
-            FILE_APPEND | LOCK_EX);
         
         // Используем время как есть, без всяких конвертаций
         // Обрабатываем EMPLOYEE_ID: если передан и не пустой, преобразуем в int, иначе NULL
@@ -66,62 +41,20 @@ class Calendar
                $this->connection->getSqlHelper()->forSql($eventColor) . "', " . 
                $employeeIdValue . ")";
 
-        // Логируем SQL запрос
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-            "ADD_EVENT: SQL Query:\n", 
-            FILE_APPEND | LOCK_EX);
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-            "  - SQL: {$sql}\n", 
-            FILE_APPEND | LOCK_EX);
-
         $result = $this->connection->query($sql);
 
         if ($result) {
             $eventId = $this->connection->getInsertedId();
-            
-            // Логируем успешное создание
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "ADD_EVENT: Event created successfully with ID: {$eventId}\n", 
-                FILE_APPEND | LOCK_EX);
             
             // Проверяем, что реально сохранилось в БД
             $checkSql = "SELECT DATE_FROM, DATE_TO, EVENT_COLOR, EMPLOYEE_ID FROM artmax_calendar_events WHERE ID = {$eventId}";
             $checkResult = $this->connection->query($checkSql);
             if ($checkResult) {
                 $savedEvent = $checkResult->fetch();
-                if ($savedEvent) {
-                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                        "ADD_EVENT: What was actually saved in DB:\n", 
-                        FILE_APPEND | LOCK_EX);
-                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                        "  - DATE_FROM: " . ($savedEvent['DATE_FROM'] ?? 'NULL') . "\n", 
-                        FILE_APPEND | LOCK_EX);
-                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                        "  - DATE_TO: " . ($savedEvent['DATE_TO'] ?? 'NULL') . "\n", 
-                        FILE_APPEND | LOCK_EX);
-                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                        "  - EVENT_COLOR: " . ($savedEvent['EVENT_COLOR'] ?? 'NULL') . "\n", 
-                        FILE_APPEND | LOCK_EX);
-                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                        "  - EMPLOYEE_ID: " . ($savedEvent['EMPLOYEE_ID'] ?? 'NULL') . "\n", 
-                        FILE_APPEND | LOCK_EX);
-                }
             }
-            
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "=== END ADD_EVENT DEBUG ===\n", 
-                FILE_APPEND | LOCK_EX);
             
             return $eventId;
         }
-
-        // Логируем ошибку
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-            "ADD_EVENT: Failed to create event\n", 
-            FILE_APPEND | LOCK_EX);
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-            "=== END ADD_EVENT DEBUG ===\n", 
-            FILE_APPEND | LOCK_EX);
 
         return false;
     } 
@@ -176,9 +109,6 @@ class Calendar
             // Возвращаем в нужном формате
             return $utcDateTime->format('d.m.Y H:i:s');
         } catch (\Exception $e) {
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-                "GET_EVENT: Error converting time: " . $e->getMessage() . "\n",
-                FILE_APPEND | LOCK_EX);
             return $timeString; // Возвращаем как есть при ошибке
         }
     }
@@ -235,13 +165,6 @@ class Calendar
             $event['DATE_FROM'] = $event['DATE_FROM_RAW'];
 
             $event['DATE_TO'] = $event['DATE_TO_RAW'];
-        } else {
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "GET_EVENT: Event not found\n", 
-                FILE_APPEND | LOCK_EX);
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "=== END GET_EVENT DEBUG ===\n", 
-                FILE_APPEND | LOCK_EX);
         }
 
         return $event;
@@ -352,23 +275,12 @@ class Calendar
     {
         // Если врач не указан, считаем время доступным (не проверяем конфликты)
         if (!$employeeId || $employeeId === '' || $employeeId === '0') {
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "IS_TIME_AVAILABLE_FOR_DOCTOR: No employeeId provided, returning true (no conflict check)\n", 
-                FILE_APPEND | LOCK_EX);
             return true;
         }
-
-        // Логируем параметры
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-            "IS_TIME_AVAILABLE_FOR_DOCTOR: Checking for employeeId=" . $employeeId . ", branchId=" . $branchId . ", dateFrom=" . $dateFrom . ", dateTo=" . $dateTo . "\n", 
-            FILE_APPEND | LOCK_EX);
         
         // Извлекаем дату из dateFrom для фильтрации по конкретному дню
         // Используем простой способ извлечения даты без DateTime
         $dateOnly = substr($dateFrom, 0, 10); // Берем первые 10 символов (YYYY-MM-DD)
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-            "IS_TIME_AVAILABLE_FOR_DOCTOR: Extracted dateOnly=" . $dateOnly . "\n", 
-            FILE_APPEND | LOCK_EX);
         
         // Проверяем пересечение временных интервалов только для конкретного врача, только активных записей, только на конкретную дату И только в том же филиале
         if ($employeeId === null) {
@@ -386,14 +298,6 @@ class Calendar
             $sql .= " AND ID != " . (int)$excludeId;
         }
         
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-            "IS_TIME_AVAILABLE_FOR_DOCTOR: SQL = " . $sql . "\n", 
-            FILE_APPEND | LOCK_EX);
-        
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-            "IS_TIME_AVAILABLE_FOR_DOCTOR: dateOnly = " . $dateOnly . ", dateFrom = " . $dateFrom . ", dateTo = " . $dateTo . "\n", 
-            FILE_APPEND | LOCK_EX);
-        
         // Проверяем, какие события есть у врача на эту дату в этом филиале
         $checkSql = "SELECT ID, TITLE, DATE_FROM, DATE_TO, BRANCH_ID FROM artmax_calendar_events WHERE EMPLOYEE_ID = " . (int)$employeeId . " AND DATE(DATE_FROM) = '$dateOnly'";
         if ($branchId) {
@@ -401,17 +305,11 @@ class Calendar
         }
         $checkResult = $this->connection->query($checkSql);
         $existingEvents = $checkResult->fetchAll();
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-            "IS_TIME_AVAILABLE_FOR_DOCTOR: Existing events on $dateOnly" . ($branchId ? " in branch $branchId" : "") . ": " . json_encode($existingEvents) . "\n", 
-            FILE_APPEND | LOCK_EX);
         
         $result = $this->connection->query($sql);
         $row = $result->fetch();
         
         $count = $row['count'];
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-            "IS_TIME_AVAILABLE_FOR_DOCTOR: Found " . $count . " conflicting events for doctor" . ($branchId ? " in branch $branchId" : "") . "\n", 
-            FILE_APPEND | LOCK_EX);
         
         // Если есть конфликты, показываем какие именно события конфликтуют
         if ($count > 0) {
@@ -431,10 +329,6 @@ class Calendar
             }
             $conflictResult = $this->connection->query($conflictSql);
             $conflicts = $conflictResult->fetchAll();
-            
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "IS_TIME_AVAILABLE_FOR_DOCTOR: Conflicting events: " . json_encode($conflicts) . "\n", 
-                FILE_APPEND | LOCK_EX);
         }
         
         return $count == 0; 
@@ -515,9 +409,6 @@ class Calendar
         
         // Если запись отменена, переводим сделку в "Проиграна" (Неуспешная) и создаем пустую запись
         if ($result && $status === 'cancelled') {
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "UPDATE_EVENT_STATUS: Запись отменена (cancelled), вызываем updateDealStatusOnCancel для события ID={$eventId}\n", 
-                FILE_APPEND | LOCK_EX);
             
             // Переводим сделку в "Проиграна"
             $this->updateDealStatusOnCancel($eventId);
@@ -568,25 +459,7 @@ class Calendar
                     
                     if ($insertResult) {
                         $newEventId = $this->connection->getInsertedId();
-                        
-                        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                            "UPDATE_EVENT_STATUS: Создана пустая запись ID={$newEventId} на место отмененной записи ID={$eventId}\n" .
-                            "  - DATE_FROM: {$dateFromStandard}\n" .
-                            "  - DATE_TO: {$dateToStandard}\n" .
-                            "  - BRANCH_ID: {$oldEvent['BRANCH_ID']}\n" .
-                            "  - EMPLOYEE_ID: " . ($oldEvent['EMPLOYEE_ID'] ?? 'NULL') . "\n" .
-                            "  - CONTACT_ENTITY_ID: NULL (пустая запись)\n" .
-                            "  - DEAL_ENTITY_ID: NULL (пустая запись)\n", 
-                            FILE_APPEND | LOCK_EX);
-                    } else {
-                        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                            "UPDATE_EVENT_STATUS: Ошибка создания пустой записи для отмененной записи ID={$eventId}\n", 
-                            FILE_APPEND | LOCK_EX);
                     }
-                } else {
-                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                        "UPDATE_EVENT_STATUS: Не удалось получить даты для создания пустой записи\n", 
-                        FILE_APPEND | LOCK_EX);
                 }
             }
         }
@@ -701,52 +574,13 @@ class Calendar
             $sql .= " LIMIT " . (int)$limit;
         }
 
-        // Логирование SQL запроса
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-            "\n=== getEventsByBranch SQL ===\n", 
-            FILE_APPEND | LOCK_EX);
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-            "branchId: " . $branchId . "\n", 
-            FILE_APPEND | LOCK_EX);
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-            "dateFrom: " . ($dateFrom ?? 'null') . "\n", 
-            FILE_APPEND | LOCK_EX);
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-            "dateTo: " . ($dateTo ?? 'null') . "\n", 
-            FILE_APPEND | LOCK_EX);
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-            "userId: " . ($userId ?? 'null') . "\n", 
-            FILE_APPEND | LOCK_EX);
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-            "employeeId: " . ($employeeId ?? 'null') . "\n", 
-            FILE_APPEND | LOCK_EX);
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-            "SQL: " . $sql . "\n", 
-            FILE_APPEND | LOCK_EX);
-
         try {
             $result = $this->connection->query($sql);
             $events = $result->fetchAll();
 
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "Events found: " . count($events) . "\n", 
-                FILE_APPEND | LOCK_EX);
-            
-            // Выводим первые 3 события для проверки
-            foreach (array_slice($events, 0, 3) as $idx => $event) {
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                    "Event #" . ($idx + 1) . ": ID=" . $event['ID'] . ", USER_ID=" . ($event['USER_ID'] ?? 'null') . ", TITLE=" . ($event['TITLE'] ?? 'null') . "\n", 
-                    FILE_APPEND | LOCK_EX);
-            }
-
             // Если нужно — можно дополнительно обработать, но уже не обязательно
             return $events ?: [];
         } catch (\Exception $e) {
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "ERROR: " . $e->getMessage() . "\n", 
-                FILE_APPEND | LOCK_EX);
-            // Логируйте при необходимости
-            // error_log("DB Error in getEventsByBranch: " . $e->getMessage());
             return [];
         }
     }
@@ -792,24 +626,14 @@ class Calendar
      */
     private function convertRussianDateToStandard($dateString)
     {
-        // Логируем входные данные
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-            "CONVERT_DATE: Input dateString=" . $dateString . "\n", 
-            FILE_APPEND | LOCK_EX);
         
         // Проверяем, что строка не пустая
         if (empty($dateString)) {
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "CONVERT_DATE: Empty string, returning as is\n", 
-                FILE_APPEND | LOCK_EX);
             return $dateString;
         }
 
         // Если дата уже в стандартном формате, возвращаем как есть
         if (preg_match('/^\d{4}-\d{2}-\d{2}/', $dateString)) {
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "CONVERT_DATE: Already in standard format, returning as is\n", 
-                FILE_APPEND | LOCK_EX);
             return $dateString;
         }
 
@@ -823,9 +647,6 @@ class Calendar
             $second = str_pad($matches[6], 2, '0', STR_PAD_LEFT);
             
             $result = "{$year}-{$month}-{$day} {$hour}:{$minute}:{$second}";
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "CONVERT_DATE: Russian format converted to: " . $result . "\n", 
-                FILE_APPEND | LOCK_EX);
             return $result;
         }
 
@@ -833,16 +654,8 @@ class Calendar
         $timestamp = strtotime($dateString);
         if ($timestamp !== false) {
             $result = date('Y-m-d H:i:s', $timestamp);
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "CONVERT_DATE: strtotime fallback result: " . $result . "\n", 
-                FILE_APPEND | LOCK_EX);
             return $result;
         }
-
-        // Если ничего не получилось, возвращаем исходную строку
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-            "CONVERT_DATE: No conversion possible, returning original: " . $dateString . "\n", 
-            FILE_APPEND | LOCK_EX);
         return $dateString;
     }
 
@@ -853,27 +666,12 @@ class Calendar
     {
         $sql = "UPDATE artmax_calendar_events SET DEAL_ENTITY_ID = " . (int)$dealId . " WHERE ID = " . (int)$eventId;
         
-        // Логируем SQL запрос
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-            "SQL Query updateEventDeal: {$sql}\n", 
-            FILE_APPEND | LOCK_EX);
-        
         try {
             $this->connection->query($sql);
-            
-            // Логируем успешное выполнение
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "Successfully updated deal for event {$eventId} with deal ID {$dealId}\n", 
-                FILE_APPEND | LOCK_EX);
             
             return true;
         } catch (\Exception $e) {
             error_log('Ошибка обновления сделки события: ' . $e->getMessage());
-            
-            // Логируем ошибку
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "Error updating deal for event {$eventId}: " . $e->getMessage() . "\n", 
-                FILE_APPEND | LOCK_EX);
             
             return false;
         }
@@ -886,27 +684,12 @@ class Calendar
     {
         $sql = "UPDATE artmax_calendar_events SET CONTACT_ENTITY_ID = " . (int)$contactId . " WHERE ID = " . (int)$eventId;
         
-        // Логируем SQL запрос
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-            "SQL Query updateEventContact: {$sql}\n", 
-            FILE_APPEND | LOCK_EX);
-        
         try {
             $this->connection->query($sql);
-            
-            // Логируем успешное выполнение
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "Successfully updated contact for event {$eventId} with contact ID {$contactId}\n", 
-                FILE_APPEND | LOCK_EX);
             
             return true;
         } catch (\Exception $e) {
             error_log('Ошибка обновления контакта события: ' . $e->getMessage());
-            
-            // Логируем ошибку
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "Error updating contact for event {$eventId}: " . $e->getMessage() . "\n", 
-                FILE_APPEND | LOCK_EX);
             
             return false;
         }
@@ -920,27 +703,12 @@ class Calendar
         $noteText = $this->connection->getSqlHelper()->forSql($noteText);
         $sql = "UPDATE artmax_calendar_events SET NOTE = '{$noteText}' WHERE ID = " . (int)$eventId;
         
-        // Логируем SQL запрос
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-            "SQL Query updateEventNote: {$sql}\n", 
-            FILE_APPEND | LOCK_EX);
-        
         try {
             $this->connection->query($sql);
-            
-            // Логируем успешное выполнение
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "Successfully updated note for event {$eventId}\n", 
-                FILE_APPEND | LOCK_EX);
             
             return true;
         } catch (\Exception $e) {
             error_log('Ошибка обновления заметки события: ' . $e->getMessage());
-            
-            // Логируем ошибку
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "Error updating note for event {$eventId}: " . $e->getMessage() . "\n", 
-                FILE_APPEND | LOCK_EX);
             
             return false;
         }
@@ -1049,16 +817,8 @@ class Calendar
         $sql = "UPDATE artmax_calendar_events SET CONFIRMATION_STATUS = '" . 
                $this->connection->getSqlHelper()->forSql($confirmationStatus) . "' WHERE ID = " . (int)$eventId;
         
-        // Логируем SQL запрос
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-            "SQL Query: {$sql}\n", 
-            FILE_APPEND | LOCK_EX);
-        
         try {
             $result = $this->connection->query($sql);
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "Query executed successfully\n", 
-                FILE_APPEND | LOCK_EX);
             
             // Обновляем поле подтверждения в сделке
             $this->updateDealConfirmationField($eventId, $confirmationStatus);
@@ -1072,9 +832,6 @@ class Calendar
         } catch (\Exception $e) {
             $errorMessage = 'Ошибка обновления статуса подтверждения события: ' . $e->getMessage();
             error_log($errorMessage);
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "SQL Error: {$errorMessage}\n", 
-                FILE_APPEND | LOCK_EX);
             return false;
         }
     }
@@ -1124,10 +881,6 @@ class Calendar
             return;
         }
         
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-            "UPDATE_VISIT_STATUS: Начинаем обновление сделки ID={$event['DEAL_ENTITY_ID']} на WON\n", 
-            FILE_APPEND | LOCK_EX);
-        
         $dealId = (int)$event['DEAL_ENTITY_ID'];
         $deal = new \CCrmDeal(false);
         
@@ -1137,17 +890,6 @@ class Calendar
         ];
         
         $dealUpdateResult = $deal->Update($dealId, $updateFields);
-        
-        if ($dealUpdateResult) {
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "UPDATE_VISIT_STATUS: Сделка ID={$dealId} переведена в статус 'Завершена успешно' (WON)\n", 
-                FILE_APPEND | LOCK_EX);
-        } else {
-            $dealError = $deal->LAST_ERROR;
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "UPDATE_VISIT_STATUS: Ошибка обновления сделки ID={$dealId}: {$dealError}\n", 
-                FILE_APPEND | LOCK_EX);
-        }
     }
     
     /**
@@ -1160,29 +902,16 @@ class Calendar
         $event = $this->getEvent($eventId);
         
         if (!$event) {
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "UPDATE_DEAL_ON_CANCEL: Событие ID={$eventId} не найдено\n", 
-                FILE_APPEND | LOCK_EX);
             return;
         }
         
         if (empty($event['DEAL_ENTITY_ID'])) {
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "UPDATE_DEAL_ON_CANCEL: У события ID={$eventId} нет привязанной сделки (DEAL_ENTITY_ID пуст)\n", 
-                FILE_APPEND | LOCK_EX);
             return;
         }
         
         if (!\CModule::IncludeModule('crm')) {
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "UPDATE_DEAL_ON_CANCEL: Модуль CRM не подключен\n", 
-                FILE_APPEND | LOCK_EX);
             return;
         }
-        
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-            "UPDATE_DEAL_ON_CANCEL: Начинаем обновление сделки ID={$event['DEAL_ENTITY_ID']} на LOSE\n", 
-            FILE_APPEND | LOCK_EX);
         
         $dealId = (int)$event['DEAL_ENTITY_ID'];
         $deal = new \CCrmDeal(false);
@@ -1193,17 +922,6 @@ class Calendar
         ];
         
         $dealUpdateResult = $deal->Update($dealId, $updateFields);
-        
-        if ($dealUpdateResult) {
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "UPDATE_DEAL_ON_CANCEL: Сделка ID={$dealId} переведена в статус 'Проиграна' (LOSE)\n", 
-                FILE_APPEND | LOCK_EX);
-        } else {
-            $dealError = $deal->LAST_ERROR;
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "UPDATE_DEAL_ON_CANCEL: Ошибка обновления сделки ID={$dealId}: {$dealError}\n", 
-                FILE_APPEND | LOCK_EX);
-        }
     }
 
     /**
@@ -1219,10 +937,6 @@ class Calendar
             return;
         }
         
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-            "UPDATE_CONFIRMATION_STATUS: Начинаем обновление сделки ID={$event['DEAL_ENTITY_ID']} на EXECUTING\n", 
-            FILE_APPEND | LOCK_EX);
-        
         $dealId = (int)$event['DEAL_ENTITY_ID'];
         $deal = new \CCrmDeal(false);
         
@@ -1232,17 +946,6 @@ class Calendar
         ];
         
         $dealUpdateResult = $deal->Update($dealId, $updateFields);
-        
-        if ($dealUpdateResult) {
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "UPDATE_CONFIRMATION_STATUS: Сделка ID={$dealId} переведена в статус 'В работе' (EXECUTING)\n", 
-                FILE_APPEND | LOCK_EX);
-        } else {
-            $dealError = $deal->LAST_ERROR;
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "UPDATE_CONFIRMATION_STATUS: Ошибка обновления сделки ID={$dealId}: {$dealError}\n", 
-                FILE_APPEND | LOCK_EX);
-        }
     }
     
     /**
@@ -1272,9 +975,6 @@ class Calendar
         )->Fetch();
         
         if (!$enumValue) {
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "UPDATE_DEAL_CONFIRMATION_FIELD: Не найдено значение для XML_ID={$confirmationStatus}\n", 
-                FILE_APPEND | LOCK_EX);
             return;
         }
         
@@ -1284,17 +984,6 @@ class Calendar
         ];
         
         $dealUpdateResult = $deal->Update($dealId, $updateFields);
-        
-        if ($dealUpdateResult) {
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "UPDATE_DEAL_CONFIRMATION_FIELD: Сделка ID={$dealId} обновлена. Подтверждение={$confirmationStatus}\n", 
-                FILE_APPEND | LOCK_EX);
-        } else {
-            $dealError = $deal->LAST_ERROR;
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "UPDATE_DEAL_CONFIRMATION_FIELD: Ошибка обновления сделки ID={$dealId}: {$dealError}\n", 
-                FILE_APPEND | LOCK_EX);
-        }
     }
     
     /**
@@ -1324,9 +1013,6 @@ class Calendar
         )->Fetch();
         
         if (!$enumValue) {
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "UPDATE_DEAL_VISIT_FIELD: Не найдено значение для XML_ID={$visitStatus}\n", 
-                FILE_APPEND | LOCK_EX);
             return;
         }
         
@@ -1336,17 +1022,6 @@ class Calendar
         ];
         
         $dealUpdateResult = $deal->Update($dealId, $updateFields);
-        
-        if ($dealUpdateResult) {
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "UPDATE_DEAL_VISIT_FIELD: Сделка ID={$dealId} обновлена. Визит={$visitStatus}\n", 
-                FILE_APPEND | LOCK_EX);
-        } else {
-            $dealError = $deal->LAST_ERROR;
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "UPDATE_DEAL_VISIT_FIELD: Ошибка обновления сделки ID={$dealId}: {$dealError}\n", 
-                FILE_APPEND | LOCK_EX);
-        }
     }
 
     /**
@@ -1519,16 +1194,7 @@ class Calendar
 
             $result = $this->connection->query($sql);
             $targetEvent = $result->fetch();
-            
-            // Логируем результат поиска
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "MOVE_EVENT: Поиск события на новом месте:\n" . 
-                "  - newDateFrom: $newDateFrom\n" . 
-                "  - employeeId: " . ($employeeId ?? 'null') . "\n" . 
-                "  - branchId: " . ($branchId ?? 'null') . "\n" . 
-                "  - SQL: $sql\n" . 
-                "  - Найдено событие: " . ($targetEvent ? 'да (ID=' . $targetEvent['ID'] . ', DATE_FROM=' . $targetEvent['DATE_FROM'] . ', DATE_TO=' . $targetEvent['DATE_TO'] . ')' : 'нет') . "\n", 
-                FILE_APPEND | LOCK_EX);
+
 
             // Сохраняем старые значения для логирования
             $oldMovingDateFrom = $this->convertRussianDateToStandard($movingEvent['DATE_FROM']);
@@ -1541,9 +1207,6 @@ class Calendar
             $newMovingBranchId = $branchId ? (int)$branchId : $oldMovingBranchId;
             
             // Начинаем транзакцию (Bitrix method)
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "MOVE_EVENT: Начинаем транзакцию\n", 
-                FILE_APPEND | LOCK_EX);
                 
             $this->connection->query("START TRANSACTION");
 
@@ -1570,23 +1233,6 @@ class Calendar
                 $oldDateTo = $oldDateToObj->format('Y-m-d H:i:s');
                 $oldEmployeeId = $oldMovingEmployeeId;
                 $oldBranchId = $oldMovingBranchId;
-                
-                // Логируем для отладки
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                    "MOVE_EVENT: Original dates from moving event:\n", 
-                    FILE_APPEND | LOCK_EX);
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                    "  - Original DATE_FROM: " . $movingEvent['DATE_FROM'] . "\n", 
-                    FILE_APPEND | LOCK_EX);
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                    "  - Converted DATE_FROM: " . $oldDateFrom . "\n", 
-                    FILE_APPEND | LOCK_EX);
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                    "  - Original DATE_TO: " . $movingEvent['DATE_TO'] . "\n", 
-                    FILE_APPEND | LOCK_EX);
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                    "  - Converted DATE_TO: " . $oldDateTo . "\n", 
-                    FILE_APPEND | LOCK_EX);
 
                 $targetSet = [];
                 $targetSet[] = "DATE_FROM = '" . $this->connection->getSqlHelper()->forSql($oldDateFrom) . "'";
@@ -1772,10 +1418,6 @@ class Calendar
                 }
             }
             
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "MOVE_EVENT: Транзакция успешно завершена\n", 
-                FILE_APPEND | LOCK_EX);
-            
             // Возвращаем информацию о затронутых событиях
             $result = [
                 'success' => true,
@@ -1787,14 +1429,6 @@ class Calendar
             if ($targetEvent) {
                 $result['targetEventId'] = (int)$targetEvent['ID'];
                 $result['affectedEvents'][] = (int)$targetEvent['ID'];
-                
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                    "MOVE_EVENT: Обмен местами - затронуты события: " . implode(', ', $result['affectedEvents']) . "\n", 
-                    FILE_APPEND | LOCK_EX);
-            } else {
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                    "MOVE_EVENT: Простой перенос - затронуто событие: " . $eventId . "\n", 
-                    FILE_APPEND | LOCK_EX);
             }
                 
             return $result;
@@ -1804,9 +1438,6 @@ class Calendar
             $this->connection->query("ROLLBACK");
             
             $errorMessage = 'Ошибка переноса события: ' . $e->getMessage();
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "MOVE_EVENT ERROR: $errorMessage\n", 
-                FILE_APPEND | LOCK_EX);
                 
             error_log($errorMessage);
             return false;
@@ -1851,21 +1482,11 @@ class Calendar
      */
     public function createCrmActivity($dealId, $title, $dateFrom, $dateTo, $responsibleId)
     {
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-            "createCrmActivity: Начало. DealID=$dealId, Title=$title, DateFrom=$dateFrom, DateTo=$dateTo, ResponsibleID=$responsibleId\n", 
-            FILE_APPEND | LOCK_EX);
             
         if (!\CModule::IncludeModule('crm')) {
             error_log('CRM модуль не подключен');
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "createCrmActivity ERROR: CRM модуль не подключен\n", 
-                FILE_APPEND | LOCK_EX);
             return false;
         }
-        
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-            "createCrmActivity: CRM модуль подключен успешно\n", 
-            FILE_APPEND | LOCK_EX);
         
         try {
             // Конвертируем даты в формат MySQL datetime (Y-m-d H:i:s)
@@ -1876,15 +1497,8 @@ class Calendar
             $startTime = date('d.m.Y H:i:s', $startTimestamp);
             $endTime = date('d.m.Y H:i:s', $endTimestamp);
             
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "createCrmActivity: Конвертированные даты - StartTime=$startTime, EndTime=$endTime\n", 
-                FILE_APPEND | LOCK_EX);
-            
             // Проверяем, существует ли класс CCrmActivity
             if (!class_exists('\CCrmActivity')) {
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                    "createCrmActivity ERROR: Класс CCrmActivity не найден\n", 
-                    FILE_APPEND | LOCK_EX);
                 return false;
             }
             
@@ -1906,20 +1520,9 @@ class Calendar
                 'PRIORITY' => 2, // Средний приоритет
             ];
             
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "createCrmActivity: Поля для создания активности: " . print_r($fields, true) . "\n", 
-                FILE_APPEND | LOCK_EX);
-            
             $activityId = $activity->Add($fields);
             
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "createCrmActivity: activity->Add() вернул: " . var_export($activityId, true) . "\n", 
-                FILE_APPEND | LOCK_EX);
-            
             if ($activityId) {
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                    "CRM_ACTIVITY: Создана активность ID=$activityId для сделки ID=$dealId\n", 
-                    FILE_APPEND | LOCK_EX);
                 return $activityId;
             } else {
                 $error = $activity->LAST_ERROR;
@@ -1927,10 +1530,6 @@ class Calendar
                 // Получаем глобальную переменную APPLICATION с ошибками
                 global $APPLICATION;
                 $appError = $APPLICATION->GetException();
-                
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                    "CRM_ACTIVITY ERROR: LAST_ERROR='" . $error . "', APP_ERROR='" . ($appError ? $appError->GetString() : 'нет') . "'\n", 
-                    FILE_APPEND | LOCK_EX);
                     
                 error_log('Ошибка создания CRM активности: ' . $error);
                 return false;
@@ -1938,9 +1537,6 @@ class Calendar
             
         } catch (\Exception $e) {
             error_log('Ошибка создания CRM активности: ' . $e->getMessage());
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "createCrmActivity EXCEPTION: " . $e->getMessage() . "\n" . $e->getTraceAsString() . "\n", 
-                FILE_APPEND | LOCK_EX);
             return false;
         }
     }
@@ -1976,9 +1572,6 @@ class Calendar
             $result = $activity->Update($activityId, $fields);
             
             if ($result) {
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                    "CRM_ACTIVITY: Обновлена активность ID=$activityId\n", 
-                    FILE_APPEND | LOCK_EX);
                 return true;
             } else {
                 $error = $activity->LAST_ERROR;
@@ -2007,12 +1600,6 @@ class Calendar
             $activity = new \CCrmActivity(false);
             $result = $activity->Delete($activityId);
             
-            if ($result) {
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                    "CRM_ACTIVITY: Удалена активность ID=$activityId\n", 
-                    FILE_APPEND | LOCK_EX);
-            }
-            
             return $result;
         } catch (\Exception $e) {
             error_log('Ошибка удаления CRM активности: ' . $e->getMessage());
@@ -2032,9 +1619,6 @@ class Calendar
         
         try {
             $this->connection->query($sql);
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "Сохранен ACTIVITY_ID=$activityId для события ID=$eventId\n", 
-                FILE_APPEND | LOCK_EX);
             return true;
         } catch (\Exception $e) {
             error_log('Ошибка сохранения ACTIVITY_ID: ' . $e->getMessage());
@@ -2051,19 +1635,8 @@ class Calendar
             // Получаем актуальные данные события
             $event = $this->getEvent($eventId);
             if (!$event) {
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                    "UPDATE_BOOKING_AFTER_MOVE: Событие не найдено ID=$eventId\n", 
-                    FILE_APPEND | LOCK_EX);
                 return false;
             }
-
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "UPDATE_BOOKING_AFTER_MOVE: Начинаем обновление для события ID=$eventId\n" .
-                "  - newDateFrom: $newDateFrom\n" .
-                "  - newDateTo: $newDateTo\n" .
-                "  - DEAL_ENTITY_ID: {$event['DEAL_ENTITY_ID']}\n" .
-                "  - ACTIVITY_ID: {$event['ACTIVITY_ID']}\n", 
-                FILE_APPEND | LOCK_EX);
 
             // Обновляем CRM активность если есть
             if (!empty($event['ACTIVITY_ID'])) {
@@ -2073,12 +1646,6 @@ class Calendar
                     $newDateFrom,
                     $newDateTo
                 );
-                
-                if ($activityUpdated) {
-                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                        "UPDATE_BOOKING_AFTER_MOVE: Обновлена активность CRM ID={$event['ACTIVITY_ID']}\n", 
-                        FILE_APPEND | LOCK_EX);
-                }
             }
 
             // Обновляем бронирование в сделке если есть
@@ -2108,17 +1675,6 @@ class Calendar
                     $durationSeconds = $dateToObj->getTimestamp() - $dateFromObj->getTimestamp();
                     $bookingValue = "user|{$responsibleId}|{$bookingDateTime}|{$durationSeconds}|{$event['TITLE']}";
                     
-                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                        "UPDATE_BOOKING_AFTER_MOVE: Вычисление бронирования:\n" .
-                        "  - newDateFrom: $newDateFrom\n" .
-                        "  - newDateTo: $newDateTo\n" .
-                        "  - branchTimezone: $branchTimezone\n" .
-                        "  - bookingDateTime: $bookingDateTime\n" .
-                        "  - durationSeconds: $durationSeconds\n" .
-                        "  - responsibleId: $responsibleId\n" .
-                        "  - ФИНАЛЬНАЯ СТРОКА: $bookingValue\n", 
-                        FILE_APPEND | LOCK_EX);
-                    
                     $bookingFieldCode = \Bitrix\Main\Config\Option::get('artmax.calendar', 'deal_booking_field', 'UF_CRM_CALENDAR_BOOKING');
                     
                     $deal = new \CCrmDeal(false);
@@ -2126,19 +1682,12 @@ class Calendar
                         $bookingFieldCode => [$bookingValue]
                     ];
                     $deal->Update($event['DEAL_ENTITY_ID'], $updateFields);
-                    
-                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                        "UPDATE_BOOKING_AFTER_MOVE: Обновлено бронирование в сделке ID={$event['DEAL_ENTITY_ID']}\n", 
-                        FILE_APPEND | LOCK_EX);
                 }
             }
 
             return true;
 
         } catch (\Exception $e) {
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "UPDATE_BOOKING_AFTER_MOVE ERROR: " . $e->getMessage() . "\n", 
-                FILE_APPEND | LOCK_EX);
             return false;
         }
     }
