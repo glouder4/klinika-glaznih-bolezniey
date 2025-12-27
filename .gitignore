@@ -2,6 +2,8 @@ bitrix
 /bitrix
 .playwright-mcp
 /.playwright-mcp
+.idea
+/.idea
 AI_CONTEXT.md
 debug_calendar_ajax.log
 /debug_calendar_ajax.log
