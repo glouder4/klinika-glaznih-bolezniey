@@ -1,8 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<project version="4">
-  <component name="SshConfigs">
-    <configs>
-      <sshConfig authType="PASSWORD" host="glouder.beget.tech" id="a9d0e506-060a-40b3-ab7f-649a2b849a5b" port="22" nameFormat="DESCRIPTIVE" username="glouder_ftp" useOpenSSHConfig="true" />
-    </configs>
-  </component>
-</project>
