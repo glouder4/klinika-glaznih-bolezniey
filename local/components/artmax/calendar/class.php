@@ -2817,10 +2817,6 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
         }
 
         try {
-            if (!CModule::IncludeModule('crm')) {
-                return ['success' => false, 'error' => 'Модуль CRM не установлен'];
-            }
-
             // Если передан branchId, используем getBranchEmployees
             if ($branchId) {
                 if (!CModule::IncludeModule('artmax.calendar')) {
@@ -2836,18 +2832,20 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                 ];
             }
 
-            // Если branchId не передан, возвращаем всех активных пользователей
-            // Получаем список пользователей из Bitrix
+            // Если branchId не передан, возвращаем всех сотрудников компании
+            // Фильтруем по заполненности WORK_POSITION и UF_DEPARTMENT
+            // Сотрудники компании обычно имеют должность и привязку к отделу
             $userEntity = new \CUser();
             $users = $userEntity->GetList(
                 ($by = "ID"),
                 ($order = "ASC"),
                 [
-                    'ACTIVE' => 'Y'
-                    // Убрали фильтр 'UF_DEPARTMENT' => true, чтобы включить всех активных пользователей
+                    'ACTIVE' => 'Y',
+                    '!WORK_POSITION' => false, // Должность заполнена
+                    '!UF_DEPARTMENT' => false   // Отдел заполнен
                 ],
                 [
-                    'FIELDS' => ['ID', 'NAME', 'LAST_NAME', 'LOGIN', 'EMAIL']
+                    'FIELDS' => ['ID', 'NAME', 'LAST_NAME', 'LOGIN', 'EMAIL', 'WORK_POSITION', 'UF_DEPARTMENT']
                 ]
             );
 
@@ -2885,27 +2883,25 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
         }
 
         try {
-            if (!CModule::IncludeModule('crm')) {
-                return ['success' => false, 'error' => 'Модуль CRM не установлен'];
-            }
-
             $query = trim($query);
             if (empty($query)) {
                 return $this->getEmployeesAction();
             }
 
-            // Получаем список пользователей из Bitrix с поиском
+            // Получаем список пользователей из Bitrix с поиском только среди сотрудников компании
+            // Фильтруем по заполненности WORK_POSITION и UF_DEPARTMENT
             $userEntity = new \CUser();
             $employees = [];
             $foundIds = [];
             
-            // Поиск по имени
+            // Поиск по имени среди сотрудников компании
             $usersByName = $userEntity->GetList(
                 ($by = "ID"),
                 ($order = "ASC"),
                 [
                     'ACTIVE' => 'Y',
-                    // Убрали фильтр 'UF_DEPARTMENT' => true, чтобы включить всех активных пользователей
+                    '!WORK_POSITION' => false, // Должность заполнена
+                    '!UF_DEPARTMENT' => false, // Отдел заполнен
                     'NAME' => $query . ' &' // Поиск по имени с оператором &
                 ],
                 [
@@ -2926,13 +2922,14 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                 }
             }
             
-            // Поиск по фамилии
+            // Поиск по фамилии среди сотрудников компании
             $usersByLastName = $userEntity->GetList(
                 ($by = "ID"),
                 ($order = "ASC"),
                 [
                     'ACTIVE' => 'Y',
-                    // Убрали фильтр 'UF_DEPARTMENT' => true, чтобы включить всех активных пользователей
+                    '!WORK_POSITION' => false, // Должность заполнена
+                    '!UF_DEPARTMENT' => false, // Отдел заполнен
                     'LAST_NAME' => $query . ' &' // Поиск по фамилии с оператором &
                 ],
                 [
@@ -2953,13 +2950,14 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                 }
             }
             
-            // Поиск по логину
+            // Поиск по логину среди сотрудников компании
             $usersByLogin = $userEntity->GetList(
                 ($by = "ID"),
                 ($order = "ASC"),
                 [
                     'ACTIVE' => 'Y',
-                    // Убрали фильтр 'UF_DEPARTMENT' => true, чтобы включить всех активных пользователей
+                    '!WORK_POSITION' => false, // Должность заполнена
+                    '!UF_DEPARTMENT' => false, // Отдел заполнен
                     'LOGIN' => $query . ' &' // Поиск по логину с оператором &
                 ],
                 [
