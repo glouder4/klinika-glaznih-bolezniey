@@ -3,9 +3,17 @@ namespace Artmax\Calendar;
 
 use Bitrix\Main\Application;
 use Bitrix\Main\DB\Connection;
+
 use Bitrix\Main\Type\DateTime;
 use Artmax\Calendar\TimezoneManager;
 
+
+// Функция для логирования
+function artmax_log($message) {
+    $logFile = $_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log';
+    $timestamp = date('Y-m-d H:i:s');
+    file_put_contents($logFile, "[$timestamp] $message\n", FILE_APPEND | LOCK_EX);
+}
 class Calendar
 {
     private $connection;
@@ -749,19 +757,194 @@ class Calendar
 
     /**
      * Получить сотрудников филиала
+     * 
+     * Если в настройках модуля указана группа пользователей для сотрудников филиала,
+     * возвращает пользователей из этой группы. Иначе использует таблицу artmax_calendar_branch_employees.
      */
+    /**
+     * Получить доступных сотрудников для выбора в филиале
+     */
+    public function getAvailableEmployeesForBranch($branchId)
+    {
+        try {
+            $moduleSettings = new \Artmax\Calendar\ModuleSettings();
+            $employeesGroupId = $moduleSettings->getBranchEmployeesGroupId();
+
+            $employees = [];
+
+            // Сначала получаем всех уже привязанных к филиалу сотрудников
+            $branchEmployeeIds = [];
+            $sql = "SELECT EMPLOYEE_ID FROM artmax_calendar_branch_employees WHERE BRANCH_ID = " . (int)$branchId;
+            $result = $this->connection->query($sql);
+
+            while ($row = $result->fetch()) {
+                $branchEmployeeIds[] = (int)$row['EMPLOYEE_ID'];
+            }
+
+            // Если указана группа, возвращаем пользователей из группы + всех привязанных к филиалу
+            if ($employeesGroupId) {
+                artmax_log("getAvailableEmployeesForBranch: Returning users from group " . $employeesGroupId . " + branch employees for branch " . $branchId);
+
+                if ($employeesGroupId > 0) {
+                    // Реальная группа Bitrix
+                    $userEntity = new \CUser();
+                    $groupUsers = $userEntity->GetList(
+                        ($by = "ID"),
+                        ($order = "ASC"),
+                        [
+                            'GROUPS_ID' => $employeesGroupId,
+                            'ACTIVE' => 'Y'
+                        ],
+                        [
+                            'FIELDS' => ['ID', 'NAME', 'LAST_NAME', 'LOGIN', 'EMAIL']
+                        ]
+                    );
+
+                    $groupUserIds = [];
+                    while ($user = $groupUsers->Fetch()) {
+                        $employees[] = [
+                            'ID' => $user['ID'],
+                            'NAME' => $user['NAME'] ?: '',
+                            'LAST_NAME' => $user['LAST_NAME'] ?: '',
+                            'LOGIN' => $user['LOGIN'] ?: '',
+                            'EMAIL' => $user['EMAIL'] ?: ''
+                        ];
+                        $groupUserIds[] = $user['ID'];
+                    }
+                } else {
+                    // Виртуальная группа - нет пользователей из Bitrix группы
+                    $groupUserIds = [];
+                    artmax_log("getAvailableEmployeesForBranch: Virtual group, no users from Bitrix group");
+                }
+
+                // Добавляем привязанных сотрудников, которых нет в группе (если они есть)
+                $missingEmployeeIds = array_diff($branchEmployeeIds, $groupUserIds);
+                if (!empty($missingEmployeeIds)) {
+                    $placeholders = str_repeat('?,', count($missingEmployeeIds) - 1) . '?';
+                    $users = $userEntity->GetList(
+                        ($by = "ID"),
+                        ($order = "ASC"),
+                        [
+                            'ID' => implode('|', $missingEmployeeIds),
+                            'ACTIVE' => 'Y'
+                        ],
+                        [
+                            'FIELDS' => ['ID', 'NAME', 'LAST_NAME', 'LOGIN', 'EMAIL']
+                        ]
+                    );
+
+                    while ($user = $users->Fetch()) {
+                        $employees[] = [
+                            'ID' => $user['ID'],
+                            'NAME' => $user['NAME'] ?: '',
+                            'LAST_NAME' => $user['LAST_NAME'] ?: '',
+                            'LOGIN' => $user['LOGIN'] ?: '',
+                            'EMAIL' => $user['EMAIL'] ?: '',
+                            '_from_old_group' => true // Метка для интерфейса
+                        ];
+                    }
+                }
+
+                return $employees;
+            }
+
+            // В индивидуальном режиме возвращаем всех активных пользователей
+            error_log("getAvailableEmployeesForBranch: Returning all active users (individual mode)");
+
+            $userEntity = new \CUser();
+            $users = $userEntity->GetList(
+                ($by = "ID"),
+                ($order = "ASC"),
+                [
+                    'ACTIVE' => 'Y'
+                ],
+                [
+                    'FIELDS' => ['ID', 'NAME', 'LAST_NAME', 'LOGIN', 'EMAIL']
+                ]
+            );
+
+            while ($user = $users->Fetch()) {
+                $employees[] = [
+                    'ID' => $user['ID'],
+                    'NAME' => $user['NAME'] ?: '',
+                    'LAST_NAME' => $user['LAST_NAME'] ?: '',
+                    'LOGIN' => $user['LOGIN'] ?: '',
+                    'EMAIL' => $user['EMAIL'] ?: ''
+                ];
+            }
+
+            return $employees;
+
+        } catch (\Exception $e) {
+            error_log("getAvailableEmployeesForBranch error: " . $e->getMessage());
+            return [];
+        }
+    }
+
     public function getBranchEmployees($branchId)
     {
         try {
-            // Сначала получаем ID сотрудников филиала
+            $moduleSettings = new \Artmax\Calendar\ModuleSettings();
+            $employeesGroupId = $moduleSettings->getBranchEmployeesGroupId();
+            
+            $employeeIds = [];
+            
+            // Всегда возвращаем привязанных сотрудников филиала (независимо от группы)
+            artmax_log("getBranchEmployees: Getting branch employees for branch " . $branchId);
+
+            // Получаем привязанных сотрудников филиала
+            $branchEmployeeIds = [];
+            $sql = "SELECT EMPLOYEE_ID FROM artmax_calendar_branch_employees WHERE BRANCH_ID = " . (int)$branchId;
+            $result = $this->connection->query($sql);
+
+            while ($row = $result->fetch()) {
+                $branchEmployeeIds[] = (int)$row['EMPLOYEE_ID'];
+                artmax_log("getBranchEmployees: Found branch employee ID = " . $row['EMPLOYEE_ID']);
+            }
+
+            if (empty($branchEmployeeIds)) {
+                error_log("getBranchEmployees: No branch employees found for branch " . $branchId);
+                return [];
+            }
+
+            // Получаем данные пользователей
+            $userEntity = new \CUser();
+            $users = $userEntity->GetList(
+                ($by = "ID"),
+                ($order = "ASC"),
+                [
+                    'ID' => implode('|', $branchEmployeeIds),
+                    'ACTIVE' => 'Y'
+                ],
+                [
+                    'FIELDS' => ['ID', 'NAME', 'LAST_NAME', 'LOGIN', 'EMAIL']
+                ]
+            );
+
+            $employees = [];
+            while ($user = $users->Fetch()) {
+                $employees[] = [
+                    'ID' => $user['ID'],
+                    'NAME' => $user['NAME'] ?: '',
+                    'LAST_NAME' => $user['LAST_NAME'] ?: '',
+                    'LOGIN' => $user['LOGIN'] ?: '',
+                    'EMAIL' => $user['EMAIL'] ?: ''
+                ];
+            }
+
+            error_log("getBranchEmployees: Found " . count($employees) . " employees for branch " . $branchId);
+            return $employees;
+            
+            // Иначе используем таблицу artmax_calendar_branch_employees (старый способ)
+            error_log("getBranchEmployees: Using artmax_calendar_branch_employees table for branch " . $branchId);
+            
+            // Сначала получаем ID сотрудников филиала из таблицы
             $sql = "SELECT EMPLOYEE_ID FROM artmax_calendar_branch_employees WHERE BRANCH_ID = " . (int)$branchId;
             $result = $this->connection->query($sql);
             
-            // Отладочная информация
             error_log("getBranchEmployees: SQL = " . $sql);
             error_log("getBranchEmployees: branchId = " . $branchId);
             
-            $employeeIds = [];
             while ($row = $result->fetch()) {
                 $employeeIds[] = $row['EMPLOYEE_ID'];
                 error_log("getBranchEmployees: Found employee ID = " . $row['EMPLOYEE_ID']);

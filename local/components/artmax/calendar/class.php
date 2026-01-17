@@ -2,8 +2,6 @@
 if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true) die();
 
 
-
-
 use Bitrix\Main\Localization\Loc;
 use Bitrix\UI\Toolbar\Facade\Toolbar;
 use Bitrix\UI\Toolbar\ButtonLocation;
@@ -208,6 +206,12 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
         } else {
             $this->arResult['SHOW_BRANCH_BUTTONS'] = false;
         }
+        
+        // Добавляем кнопку "Группы и права" для всех пользователей с правом manage_groups
+        // (независимо от статуса администратора)
+        if ($USER && $USER->IsAuthorized()) {
+            $this->addPermissionsButton();
+        }
 
         // Подключаем шаблон
         $this->includeComponentTemplate();
@@ -233,39 +237,44 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
      */
     private function addModernToolbarButtons()
     {
-        // Кнопка "Создать" с выпадающим меню
-        Toolbar::addButton([
-            'text' => 'Создать',
-            'title' => 'Создать новый элемент',
-            'color' => \Bitrix\UI\Buttons\Color::SUCCESS,
-            'dataset' => [
-                'toolbar-collapsed-icon' => \Bitrix\UI\Buttons\Icon::ADD
-            ],
-            'menu' => [
-                'items' => [
-                    [
-                        'text' => 'Создать расписание',
-                        'onclick' => new \Bitrix\UI\Buttons\JsHandler('openScheduleModal')
-                    ],
-                    [
-                        'text' => 'Создать филиал',
-                        'onclick' => new \Bitrix\UI\Buttons\JsHandler('openAddBranchModal')
+        global $USER;
+        
+        // Кнопка "Создать" с выпадающим меню (только для администраторов)
+        if ($USER && $USER->IsAdmin()) {
+            Toolbar::addButton([
+                'text' => 'Создать',
+                'title' => 'Создать новый элемент',
+                'color' => \Bitrix\UI\Buttons\Color::SUCCESS,
+                'dataset' => [
+                    'toolbar-collapsed-icon' => \Bitrix\UI\Buttons\Icon::ADD
+                ],
+                'menu' => [
+                    'items' => [
+                        [
+                            'text' => 'Создать расписание',
+                            'onclick' => new \Bitrix\UI\Buttons\JsHandler('openScheduleModal')
+                        ],
+                        [
+                            'text' => 'Создать филиал',
+                            'onclick' => new \Bitrix\UI\Buttons\JsHandler('openAddBranchModal')
+                        ]
                     ]
                 ]
-            ]
-        ], ButtonLocation::AFTER_TITLE);
+            ], ButtonLocation::AFTER_TITLE);
 
-        // Кнопка "Настройки филиала" (только иконка с полупрозрачным фоном)
-        Toolbar::addButton([
-            'text' => '',
-            'title' => 'Настроить параметры текущего филиала',
-            'icon' => \Bitrix\UI\Buttons\Icon::SETTING,
-            'dataset' => [
-                'toolbar-collapsed-icon' => \Bitrix\UI\Buttons\Icon::SETTING
-            ],
-            'onclick' => 'openBranchModal',
-            'classList' => ['calendar-settings-btn']
-        ], ButtonLocation::AFTER_TITLE);
+            // Кнопка "Настройки филиала" (только иконка с полупрозрачным фоном)
+            Toolbar::addButton([
+                'text' => '',
+                'title' => 'Настроить параметры текущего филиала',
+                'icon' => \Bitrix\UI\Buttons\Icon::SETTING,
+                'dataset' => [
+                    'toolbar-collapsed-icon' => \Bitrix\UI\Buttons\Icon::SETTING
+                ],
+                'onclick' => 'openBranchModal',
+                'classList' => ['calendar-settings-btn']
+            ], ButtonLocation::AFTER_TITLE);
+        }
+
 
         // Блок навигации по месяцам в pagetitle-below через отложенные функции
         global $APPLICATION;
@@ -431,6 +440,68 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
     /**
      * Управляет звездочкой "Добавить в избранное" в тулбаре
      */
+    /**
+     * Добавляет кнопку "Группы и права" для пользователей с соответствующим правом
+     */
+    private function addPermissionsButton()
+    {
+        global $USER;
+        
+        if (!$USER || !$USER->IsAuthorized()) {
+            return;
+        }
+        
+        // Проверяем, доступен ли современный API тулбара
+        if (!class_exists('\Bitrix\UI\Toolbar\Facade\Toolbar')) {
+            return;
+        }
+        
+        try {
+            // Проверяем наличие класса Permissions
+            if (!class_exists('\Artmax\Calendar\Permissions')) {
+                return;
+            }
+            
+            $permissionsObj = new \Artmax\Calendar\Permissions();
+            
+            // Безопасно проверяем права доступа с обработкой ошибок
+            $hasManageGroupsPermission = false;
+            try {
+                $hasManageGroupsPermission = $permissionsObj->hasPermission($USER->GetID(), 'calendar.manage_groups') || $USER->IsAdmin();
+            } catch (\Exception $permException) {
+                // Если таблицы не созданы или другая ошибка - просто не показываем кнопку
+                error_log('Ошибка проверки прав доступа: ' . $permException->getMessage());
+                return;
+            }
+            
+            if ($hasManageGroupsPermission) {
+                // Добавляем JavaScript функцию для редиректа
+                global $APPLICATION;
+                $jsFunction = '
+                    <script>
+                    if (typeof window.redirectToPermissionsPage === "undefined") {
+                        window.redirectToPermissionsPage = function() {
+                            window.location.href = "/bitrix/admin/artmax.calendar_artmax_calendar_permissions.php?lang=' . LANGUAGE_ID . '";
+                        };
+                    }
+                    </script>
+                ';
+                $APPLICATION->AddHeadString($jsFunction);
+                
+                Toolbar::addButton([
+                    'text' => 'Группы и права',
+                    'title' => 'Управление группами пользователей и правами доступа',
+                    'icon' => \Bitrix\UI\Buttons\Icon::SETTING,
+                    'onclick' => new \Bitrix\UI\Buttons\JsHandler('redirectToPermissionsPage'),
+                    'classList' => ['calendar-permissions-btn']
+                ], ButtonLocation::AFTER_TITLE);
+            }
+        } catch (\Exception $e) {
+            // Если произошла ошибка (например, таблицы не созданы), просто не показываем кнопку
+            error_log('Ошибка при добавлении кнопки "Группы и права": ' . $e->getMessage());
+        }
+    }
+
     private function manageFavoriteStar()
     {
         // Проверяем, доступен ли современный API тулбара
@@ -753,6 +824,7 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
         $title = $params['title'] ?? '';
         $date = $params['date'] ?? '';
         $time = $params['time'] ?? '';
+        $duration = $params['duration'] ?? 30; // Длительность в минутах, по умолчанию 30
         $employeeId = $params['employee_id'] ?? null;
         $branchId = $params['branch_id'] ?? 1;
         $repeat = $params['repeat'] ?? false;
@@ -768,7 +840,7 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
 
         // Логируем полученные параметры для отладки
         file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-            "addScheduleAction: repeat = " . ($repeat ? 'true' : 'false') . ", frequency = " . ($frequency ?? 'null') . ", weekdays = " . json_encode($weekdays) . ", repeatCount = " . ($repeatCount ?? 'null') . ", repeatEnd = " . ($repeatEnd ?? 'null') . ", includeEndDate = " . ($includeEndDate ? 'true' : 'false') . "\n", 
+            "addScheduleAction: repeat = " . ($repeat ? 'true' : 'false') . ", frequency = " . ($frequency ?? 'null') . ", weekdays = " . json_encode($weekdays) . ", repeatCount = " . ($repeatCount ?? 'null') . ", repeatEnd = " . ($repeatEnd ?? 'null') . ", includeEndDate = " . ($includeEndDate ? 'true' : 'false') . ", duration = " . $duration . " minutes\n", 
             FILE_APPEND | LOCK_EX);
         
         if (!$USER || !$USER->IsAuthorized()) {
@@ -787,7 +859,8 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
             $dateTime = $date . ' ' . $time;
             $dateFrom = new \DateTime($dateTime);
             $dateTo = clone $dateFrom;
-            $dateTo->add(new \DateInterval('PT1H')); // Добавляем 1 час по умолчанию
+            // Добавляем длительность в минутах (конвертируем в DateInterval)
+            $dateTo->add(new \DateInterval('PT' . (int)$duration . 'M'));
 
             $eventsCreated = 0;
             $createdEvents = [];
@@ -2990,7 +3063,7 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
     /**
      * Сохранение настроек филиала
      */
-    public function saveBranchSettingsAction($branchId, $timezoneName, $employeeIds, $branchName = null)
+    public function saveBranchSettingsAction($branchId, $timezoneName, $employeeIds, $branchName = null, $address = null, $phone = null, $email = null)
     {
         global $USER;
         if (!$USER || !$USER->IsAuthorized()) {
@@ -3004,22 +3077,38 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
 
             $calendar = new \Artmax\Calendar\Calendar();
             
-            // Обновляем название филиала
-            if (!empty($branchName)) {
-                $branchObj = new \Artmax\Calendar\Branch();
-                $updateResult = $branchObj->updateBranch($branchId, $branchName);
+            // Обновляем филиал (название, адрес, телефон, email)
+            $branchObj = new \Artmax\Calendar\Branch();
+            $updateData = [];
+
+            if ($branchName !== null) $updateData['name'] = $branchName;
+            if ($address !== null) $updateData['address'] = $address;
+            if ($phone !== null) $updateData['phone'] = $phone;
+            if ($email !== null) $updateData['email'] = $email;
+
+            // Если есть что обновлять
+            if (!empty($updateData)) {
+                $updateResult = $branchObj->updateBranch($branchId,
+                    $updateData['name'] ?? null,
+                    $updateData['address'] ?? null,
+                    $updateData['phone'] ?? null,
+                    $updateData['email'] ?? null
+                );
+
                 if (!$updateResult) {
-                    return ['success' => false, 'error' => 'Ошибка обновления названия филиала'];
+                    return ['success' => false, 'error' => 'Ошибка обновления данных филиала'];
                 }
-                
-                // Обновляем страницы раздела для отображения нового названия
-                try {
-                    \Artmax\Calendar\EventHandlers::updateSectionPages();
-                    
-                    // Дополнительно обновляем конкретную страницу филиала в настраиваемом разделе
-                    \Artmax\Calendar\EventHandlers::updateBranchPageTitle($branchId, $branchName);
-                } catch (\Exception $e) {
-                    error_log('Ошибка обновления страниц раздела: ' . $e->getMessage());
+
+                // Обновляем страницы раздела только если изменилось название
+                if (isset($updateData['name'])) {
+                    try {
+                        \Artmax\Calendar\EventHandlers::updateSectionPages();
+
+                        // Дополнительно обновляем конкретную страницу филиала в настраиваемом разделе
+                        \Artmax\Calendar\EventHandlers::updateBranchPageTitle($branchId, $updateData['name']);
+                    } catch (\Exception $e) {
+                        error_log('Ошибка обновления страниц раздела: ' . $e->getMessage());
+                    }
                 }
             }
             
@@ -3205,6 +3294,22 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
     /**
      * Получение сотрудников филиала
      */
+    public function getAvailableEmployeesForBranchAction($branchId)
+    {
+        try {
+            if (!CModule::IncludeModule('artmax.calendar')) {
+                return ['success' => false, 'error' => 'Модуль календаря не установлен'];
+            }
+
+            $calendar = new \Artmax\Calendar\Calendar();
+            $employees = $calendar->getAvailableEmployeesForBranch($branchId);
+
+            return ['success' => true, 'employees' => $employees];
+        } catch (\Exception $e) {
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+
     public function getBranchEmployeesAction($branchId)
     {
         global $USER;

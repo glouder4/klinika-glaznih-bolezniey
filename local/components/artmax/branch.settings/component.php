@@ -41,11 +41,17 @@ try {
     
     // Получаем доступные часовые пояса
     $availableTimezones = $timezoneManager->getAvailableTimezones();
-    
+
+    // Определяем режим работы с сотрудниками
+    $moduleSettings = new \Artmax\Calendar\ModuleSettings();
+    $employeesGroupId = $moduleSettings->getBranchEmployeesGroupId();
+    $employeesGroupMode = $employeesGroupId > 0 ? 'group' : 'individual';
+
     $arResult['BRANCH'] = $branch;
     $arResult['BRANCH_ID'] = $branchId;
     $arResult['CURRENT_TIMEZONE'] = $currentTimezone;
     $arResult['AVAILABLE_TIMEZONES'] = $availableTimezones;
+    $arResult['EMPLOYEES_GROUP_MODE'] = $employeesGroupMode;
     
 } catch (Exception $e) {
     ShowError('Ошибка: ' . $e->getMessage());

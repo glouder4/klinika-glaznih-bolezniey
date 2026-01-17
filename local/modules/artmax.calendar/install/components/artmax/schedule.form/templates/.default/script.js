@@ -192,6 +192,7 @@ function initializeScheduleForm() {
         const date = document.getElementById('schedule-date');
         const time = document.getElementById('schedule-time');
         const employee = document.getElementById('schedule-employee');
+        const duration = document.getElementById('schedule-duration');
         
         if (!title.value.trim()) {
             isValid = false;
@@ -206,6 +207,11 @@ function initializeScheduleForm() {
         if (!time.value) {
             isValid = false;
             showFieldError('schedule-time', 'time-error', 'Выберите время');
+        }
+        
+        if (!duration.value) {
+            isValid = false;
+            showFieldError('schedule-duration', 'duration-error', 'Выберите длительность события');
         }
         
         if (!employee.value) {
@@ -262,6 +268,7 @@ function initializeScheduleForm() {
             title: title.value.trim(),
             date: date.value,
             time: time.value,
+            duration: duration.value,
             employee_id: employee.value,
             branch_id: form.querySelector('[name="branch_id"]').value,
             repeat: repeatCheckbox ? repeatCheckbox.checked : false,
@@ -318,6 +325,7 @@ function initializeScheduleForm() {
             title: scheduleData.title,
             date: scheduleData.date,
             time: scheduleData.time,
+            duration: scheduleData.duration,
             employee_id: scheduleData.employee_id,
             branch_id: scheduleData.branch_id,
             repeat: scheduleData.repeat ? 'Y' : 'N',
@@ -436,6 +444,21 @@ function initializeScheduleForm() {
         frequencySelect.addEventListener('change', toggleWeeklyDays);
         // Также обрабатываем событие input для большей надежности
         frequencySelect.addEventListener('input', toggleWeeklyDays);
+    }
+    
+    // Добавляем обработчик для поля длительности
+    const durationSelect = document.getElementById('schedule-duration');
+    if (durationSelect) {
+        durationSelect.addEventListener('change', function() {
+            const errorElement = document.getElementById('duration-error');
+            if (errorElement) {
+                errorElement.style.display = 'none';
+            }
+            const fieldContainer = durationSelect.closest('.artmax-form-field');
+            if (fieldContainer) {
+                fieldContainer.classList.remove('error');
+            }
+        });
     }
 
     // Предотвращаем стандартную отправку формы

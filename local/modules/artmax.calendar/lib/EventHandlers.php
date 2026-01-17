@@ -67,6 +67,59 @@ class EventHandlers
         if (!$customSectionId) {
             self::createCustomSection();
         }
+        
+        // Показываем сообщение об удалении модуля на странице списка модулей
+        if (strpos($requestPage, '/bitrix/admin/partner_modules.php') !== false) {
+            // Проверяем sessionStorage для сообщения об удалении
+            echo '<script>
+                (function() {
+                    if (typeof sessionStorage !== "undefined") {
+                        var messageDataStr = sessionStorage.getItem("artmax_calendar_uninstall_message");
+                        if (messageDataStr) {
+                            try {
+                                var messageData = JSON.parse(messageDataStr);
+                                if (messageData && messageData.MESSAGE) {
+                                    var showMessage = function() {
+                                        if (typeof BX !== "undefined" && BX.ready) {
+                                            BX.ready(function() {
+                                                var messageHtml = messageData.MESSAGE;
+                                                var type = messageData.TYPE || "OK";
+                                                
+                                                // Показываем сообщение через стандартный механизм Bitrix
+                                                if (typeof BX !== "undefined" && BX.adminPanel) {
+                                                    BX.adminPanel.showNotify({
+                                                        content: messageHtml.replace(/<[^>]*>/g, ""), // Убираем HTML для notify
+                                                        type: type === "ERROR" ? "error" : "success",
+                                                        autoHide: false
+                                                    });
+                                                }
+                                                
+                                                // Также показываем через CAdminMessage стиль
+                                                var messageDiv = document.createElement("div");
+                                                messageDiv.style.cssText = "margin: 10px 0;";
+                                                messageDiv.innerHTML = messageHtml;
+                                                var adminWrap = document.querySelector(".adm-main-wrap") || document.body;
+                                                if (adminWrap) {
+                                                    adminWrap.insertBefore(messageDiv, adminWrap.firstChild);
+                                                }
+                                                
+                                                // Удаляем сообщение из sessionStorage
+                                                sessionStorage.removeItem("artmax_calendar_uninstall_message");
+                                            });
+                                        } else {
+                                            setTimeout(showMessage, 100);
+                                        }
+                                    };
+                                    showMessage();
+                                }
+                            } catch (e) {
+                                sessionStorage.removeItem("artmax_calendar_uninstall_message");
+                            }
+                        }
+                    }
+                })();
+            </script>';
+        }
     }
 
     /**

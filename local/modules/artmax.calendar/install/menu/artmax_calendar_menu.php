@@ -24,6 +24,11 @@ $aMenu = [
                 "url" => "/artmax-calendar.php",
                 "title" => "Просмотр календаря событий"
             ],
+            [
+                "text" => "Группы и права доступа",
+                "url" => "artmax.calendar_artmax_calendar_permissions.php?lang=" . LANGUAGE_ID,
+                "title" => "Управление группами пользователей и правами доступа"
+            ],
         ],
     ],
 ];

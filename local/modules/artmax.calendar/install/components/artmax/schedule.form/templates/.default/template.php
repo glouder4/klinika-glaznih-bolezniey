@@ -75,6 +75,29 @@ CJSCore::Init(['ui.buttons']);
                     </div>
                 </div>
                 
+                <!-- Длительность события -->
+                <div class="artmax-form-field">
+                    <label for="schedule-duration" class="artmax-field-label">
+                        Длительность события
+                        <span class="artmax-required">*</span>
+                    </label>
+                    <div class="artmax-field-content">
+                        <select id="schedule-duration" name="duration" class="artmax-select" required>
+                            <option value="">Выберите длительность</option>
+                            <option value="5">5 минут</option>
+                            <option value="10">10 минут</option>
+                            <option value="15">15 минут</option>
+                            <option value="30" selected>30 минут</option>
+                            <option value="60">1 час</option>
+                            <option value="90">1.5 часа</option>
+                            <option value="120">2 часа</option>
+                        </select>
+                        <div class="artmax-field-error" id="duration-error" style="display: none;">
+                            Выберите длительность события
+                        </div>
+                    </div>
+                </div>
+                
                 <!-- Повторяемое расписание -->
                 <div class="artmax-form-field">
                     <label class="artmax-field-label">Повторяемое</label>

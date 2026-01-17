@@ -569,7 +569,7 @@ $totalDays = 42; // 6 недель * 7 дней
                     <button class="move-event-btn" onclick="moveEventFromSidePanel()">📅 Перенести запись</button>
                     <button id="cancel-event-btn" class="cancel-event-btn" onclick="toggleEventStatusFromSidePanel()">❌ Отменить запись</button>
                     <button class="journal-btn" onclick="openJournalSidePanel()">📋 Журнал</button>
-                    <button class="delete-event-btn" style="display: none;" onclick="deleteEventFromSidePanel()">🗑️ Удалить</button>
+                    <button class="delete-event-btn" style="display: block;" onclick="deleteEventFromSidePanel()">🗑️ Удалить</button>
                 </div>
             </div>
         </div>

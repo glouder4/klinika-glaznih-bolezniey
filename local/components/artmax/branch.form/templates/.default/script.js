@@ -98,11 +98,11 @@ function initializeBranchForm() {
         .then(function(response) {
             if (response.success) {
                 // Отправляем сообщение родительскому окну о создании филиала
-                if (window.parent) {
+                if (window.parent && window.parent !== window) {
                     window.parent.postMessage({
                         type: 'calendar:branchCreated',
                         branchId: response.branchId || null
-                    }, '*');
+                    }, window.location.origin);
                 }
                 
                 // Показываем уведомление об успехе

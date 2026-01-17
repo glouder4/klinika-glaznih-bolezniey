@@ -34,6 +34,39 @@ CJSCore::Init(['ui.buttons']);
             
             <!-- Блок настроек -->
             <div class="artmax-settings-block">
+                <!-- Адрес -->
+                <div class="artmax-form-field">
+                    <label for="branch-address" class="artmax-field-label">Адрес</label>
+                    <div class="artmax-field-content">
+                        <input type="text" id="branch-address" name="address" class="artmax-input"
+                               value="<?= htmlspecialchars($arResult['BRANCH']['ADDRESS'] ?? '') ?>"
+                               placeholder="Введите адрес филиала">
+                    </div>
+                </div>
+
+                <!-- Телефон -->
+                <div class="artmax-form-field">
+                    <label for="branch-phone" class="artmax-field-label">Телефон</label>
+                    <div class="artmax-field-content">
+                        <input type="tel" id="branch-phone" name="phone" class="artmax-input"
+                               value="<?= htmlspecialchars($arResult['BRANCH']['PHONE'] ?? '') ?>"
+                               placeholder="Введите телефон филиала">
+                    </div>
+                </div>
+
+                <!-- Email -->
+                <div class="artmax-form-field">
+                    <label for="branch-email" class="artmax-field-label">Email</label>
+                    <div class="artmax-field-content">
+                        <input type="email" id="branch-email" name="email" class="artmax-input"
+                               value="<?= htmlspecialchars($arResult['BRANCH']['EMAIL'] ?? '') ?>"
+                               placeholder="Введите email филиала">
+                        <div class="artmax-field-error" id="email-error" style="display: none;">
+                            Введите корректный email
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Часовой пояс -->
                 <div class="artmax-form-field">
                     <label for="timezone-name" class="artmax-field-label">Часовой пояс</label>
@@ -45,7 +78,7 @@ CJSCore::Init(['ui.buttons']);
                             if ($arResult['CURRENT_TIMEZONE'] && isset($arResult['CURRENT_TIMEZONE']['TIMEZONE_NAME'])) {
                                 $currentTimezoneName = $arResult['CURRENT_TIMEZONE']['TIMEZONE_NAME'];
                             }
-                            
+
                             foreach ($arResult['AVAILABLE_TIMEZONES'] as $timezoneName => $timezoneLabel) {
                                 $selected = ($currentTimezoneName === $timezoneName) ? 'selected' : '';
                                 echo '<option value="' . htmlspecialchars($timezoneName) . '" ' . $selected . '>' . htmlspecialchars($timezoneLabel) . '</option>';
@@ -57,12 +90,31 @@ CJSCore::Init(['ui.buttons']);
                 
                 <!-- Сотрудники филиала -->
                 <div class="artmax-form-field">
-                    <label for="branch-employees" class="artmax-field-label">Сотрудники филиала</label>
+                    <label for="branch-employees" class="artmax-field-label">
+                        Сотрудники филиала
+                        <?php if ($arResult['EMPLOYEES_GROUP_MODE'] === 'group'): ?>
+                            <span style="font-weight: normal; font-size: 12px; color: #666;">
+                                (из выбранной группы пользователей)
+                            </span>
+                        <?php endif; ?>
+                    </label>
                     <div class="artmax-field-content">
+                        <?php if ($arResult['EMPLOYEES_GROUP_MODE'] === 'group'): ?>
+                            <div style="padding: 8px; background: #e3f2fd; border: 1px solid #bbdefb; border-radius: 4px; margin-bottom: 10px; font-size: 13px; color: #1976d2;">
+                                <strong>Групповой режим:</strong> Вы можете выбрать сотрудников филиала из пользователей выбранной группы.
+                                <br><em>Примечание: Сотрудники из предыдущих групп также доступны для управления.</em>
+                            </div>
+                        <?php endif; ?>
+
                         <div class="multiselect-container">
                             <div class="multiselect-input" id="multiselect-input">
-                                <span class="placeholder">Выберите сотрудников</span>
+                                <span class="placeholder">
+                                    <?php echo $arResult['EMPLOYEES_GROUP_MODE'] === 'group' ? 'Выберите сотрудников из группы' : 'Выберите сотрудников'; ?>
+                                </span>
                                 <span class="dropdown-arrow">▼</span>
+                            </div>
+                            <div id="old-group-notice" style="display: none; padding: 6px; background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 3px; margin-top: 5px; font-size: 12px; color: #856404;">
+                                Некоторые сотрудники из предыдущих групп также доступны для выбора.
                             </div>
                             <div class="multiselect-dropdown" id="multiselect-dropdown" style="display: none;">
                                 <div class="multiselect-search">
@@ -95,7 +147,8 @@ CJSCore::Init(['ui.buttons']);
     // Передаём данные из PHP в JavaScript
     window.branchSettingsData = {
         branchId: <?= json_encode($arResult['BRANCH_ID']) ?>,
-        branchName: <?= json_encode($arResult['BRANCH']['NAME']) ?>
+        branchName: <?= json_encode($arResult['BRANCH']['NAME']) ?>,
+        employeesGroupMode: <?= json_encode($arResult['EMPLOYEES_GROUP_MODE']) ?>
     };
 </script>
 
