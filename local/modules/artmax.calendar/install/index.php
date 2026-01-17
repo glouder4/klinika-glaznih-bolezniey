@@ -4,8 +4,6 @@ use Bitrix\Main\Config\Option;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 
-Loc::loadMessages(__FILE__);
-
 class artmax_calendar extends CModule
 {
     public $MODULE_ID = 'artmax.calendar';
@@ -14,32 +12,122 @@ class artmax_calendar extends CModule
     public $MODULE_NAME;
     public $MODULE_DESCRIPTION;
     public $MODULE_GROUP_RIGHTS = 'Y';
+    public $MODULE_RIGHTS = 'Y';
     public $PARTNER_NAME = 'АртМакс';
     public $PARTNER_URI  = '#';
 
     public function __construct()
     {
-        $this->MODULE_NAME = Loc::getMessage('ARTMAX_CALENDAR_MODULE_NAME');
-        $this->MODULE_DESCRIPTION = Loc::getMessage('ARTMAX_CALENDAR_MODULE_DESCRIPTION');
+        // Загружаем языковые файлы
+        Loc::loadMessages(__FILE__);
+        
+        // Получаем сообщения с fallback значениями
+        $this->MODULE_NAME = Loc::getMessage('ARTMAX_CALENDAR_MODULE_NAME') ?: 'Онлайн запись | ArtMax';
+        $this->MODULE_DESCRIPTION = Loc::getMessage('ARTMAX_CALENDAR_MODULE_DESCRIPTION') ?: 'Модуль для реализации онлайн-записи пациентов медицинских клиник';
         $this->MODULE_VERSION = '1.0.0';
         $this->MODULE_VERSION_DATE = '2024-01-01 00:00:00';
     }
 
     public function DoInstall()
     {
-        ModuleManager::registerModule($this->MODULE_ID);
-        $this->InstallDB();
-        $this->InstallFiles();
-        $this->InstallEvents();
+        global $APPLICATION;
+        
+        try {
+            // Проверяем, установлен ли уже модуль
+            $isModuleInstalled = ModuleManager::isModuleInstalled($this->MODULE_ID);
+            
+            // Если модуль еще не установлен, выполняем установку
+            if (!$isModuleInstalled) {
+                // Сначала выполняем установку модуля (БД, события, файлы)
+                $dbResult = $this->InstallDB();
+                if ($dbResult === false) {
+                    if (isset($GLOBALS["errors"]) && is_array($GLOBALS["errors"])) {
+                        $errorMsg = implode("\n", $GLOBALS["errors"]);
+                    } else {
+                        $errorMsg = 'Ошибка установки базы данных';
+                    }
+                    $APPLICATION->ThrowException($errorMsg);
+                    return false;
+                }
+                
+                $this->InstallEvents();
+                $this->InstallFiles();
+                
+                // Регистрируем модуль в системе ПОСЛЕ всех установочных операций
+                ModuleManager::registerModule($this->MODULE_ID);
+            }
+            
+            // Очищаем кэш после установки
+            if (function_exists('BXClearCache')) {
+                BXClearCache(true);
+            }
+            
+            // Редирект на страницу настроек после установки
+            $settingsUrl = '/bitrix/admin/artmax.calendar_artmax_calendar_settings.php?lang=' . LANGUAGE_ID;
+            
+            // Используем JavaScript редирект для надежности
+            echo '<script>window.location.href="' . htmlspecialchars($settingsUrl) . '";</script>';
+            echo '<noscript><meta http-equiv="refresh" content="0;url=' . htmlspecialchars($settingsUrl) . '"></noscript>';
+            
+            // Также делаем PHP редирект на случай, если JavaScript отключен
+            LocalRedirect($settingsUrl);
+            
+        } catch (\Exception $e) {
+            $APPLICATION->ThrowException('Ошибка при установке модуля: ' . $e->getMessage());
+            return false;
+        } catch (\Error $e) {
+            $APPLICATION->ThrowException('Критическая ошибка при установке модуля: ' . $e->getMessage());
+            return false;
+        }
     }
 
     public function DoUninstall()
     {
+        global $APPLICATION;
+        $request = \Bitrix\Main\Context::getCurrent()->getRequest();
+        $step = (int)$request->get('step');
+        
+        if ($step < 2) {
+            // Первый шаг - показываем форму выбора
+            $APPLICATION->IncludeAdminFile(
+                Loc::getMessage('ARTMAX_CALENDAR_UNINSTALL_TITLE'),
+                $_SERVER['DOCUMENT_ROOT'] . '/local/modules/' . $this->MODULE_ID . '/install/unstep.php'
+            );
+            return;
+        }
+        
+        // Второй шаг - выполняем удаление с параметрами из формы
+        $deleteGroups = $request->get('delete_groups') == 'Y';
+        $deleteTables = $request->get('delete_tables') == 'Y';
+        $deleteCrmFields = $request->get('delete_crm_fields') == 'Y';
+        $deleteSettings = $request->get('delete_settings') == 'Y';
+        $deleteFiles = $request->get('delete_files') == 'Y';
+        
+        $options = [
+            'delete_groups' => $deleteGroups,
+            'delete_tables' => $deleteTables,
+            'delete_crm_fields' => $deleteCrmFields,
+            'delete_settings' => $deleteSettings,
+            'delete_files' => $deleteFiles
+        ];
 
         $this->UnInstallEvents();
-        $this->UnInstallFiles();
-        $this->UnInstallDB();
+        
+        if ($options['delete_files']) {
+            $this->UnInstallFiles();
+        }
+        
+        if ($options['delete_tables'] || $options['delete_groups'] || $options['delete_crm_fields'] || $options['delete_settings']) {
+            $this->UnInstallDB($options);
+        }
+        
         ModuleManager::unRegisterModule($this->MODULE_ID);
+        
+        // Показываем результат удаления
+        $APPLICATION->IncludeAdminFile(
+            Loc::getMessage('ARTMAX_CALENDAR_UNINSTALL_TITLE'),
+            $_SERVER['DOCUMENT_ROOT'] . '/local/modules/' . $this->MODULE_ID . '/install/unstep.php'
+        );
     }
 
     public function InstallDB()
@@ -95,12 +183,27 @@ class artmax_calendar extends CModule
             PHONE varchar(50),
             EMAIL varchar(255),
             TIMEZONE_NAME varchar(50) DEFAULT 'Europe/Moscow',
+            IS_ACTIVE tinyint(1) DEFAULT 1,
             CREATED_AT datetime DEFAULT CURRENT_TIMESTAMP,
             UPDATED_AT datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             PRIMARY KEY (ID)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
         ";
 
+        // Таблица настроек модуля
+        $sqlModuleSettings = "
+        CREATE TABLE IF NOT EXISTS artmax_calendar_module_settings (
+            ID INT AUTO_INCREMENT PRIMARY KEY,
+            SETTING_KEY VARCHAR(100) NOT NULL UNIQUE COMMENT 'Ключ настройки',
+            SETTING_VALUE TEXT DEFAULT NULL COMMENT 'Значение настройки (JSON или строка)',
+            SETTING_TYPE ENUM('string', 'int', 'json', 'bool') DEFAULT 'string' COMMENT 'Тип значения',
+            DESCRIPTION TEXT DEFAULT NULL COMMENT 'Описание настройки',
+            CREATED_AT TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UPDATED_AT TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            INDEX idx_key (SETTING_KEY)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        ";
+        
         // Таблица связи филиалов и сотрудников
         $sqlBranchesSettings = "
         CREATE TABLE IF NOT EXISTS artmax_calendar_branch_employees (
@@ -135,12 +238,51 @@ class artmax_calendar extends CModule
         $connection->query($sqlEvents);
         $connection->query($sqlBranches);
         $connection->query($sqlBranchesSettings);
+        $connection->query($sqlModuleSettings);
         $connection->query($sqlEventJournal);
+        
+        // Создаем таблицы для системы прав доступа
+        $this->createPermissionsTables();
+        
+        // Создаем группы пользователей
+        try {
+            $this->createUserGroups();
+        } catch (\Exception $e) {
+            \CEventLog::Add([
+                'SEVERITY' => 'ERROR',
+                'AUDIT_TYPE_ID' => 'ARTMAX_CALENDAR_INSTALL_GROUPS_ERROR',
+                'MODULE_ID' => 'artmax.calendar',
+                'OBJECT_ID' => 0,
+                'DESCRIPTION' => 'Критическая ошибка создания групп при установке: ' . $e->getMessage()
+            ]);
+            global $APPLICATION;
+            $APPLICATION->ThrowException('Ошибка создания групп пользователей: ' . $e->getMessage());
+            throw $e;
+        }
+        
+        // Создаем базовые права
+        $this->createDefaultPermissions();
+        
+        // Назначаем права группам по умолчанию
+        $this->assignDefaultPermissions();
+        
+        // Проверяем и добавляем колонку IS_ACTIVE, если её нет (миграция для существующих установок)
+        try {
+            $checkSql = "SHOW COLUMNS FROM artmax_calendar_branches LIKE 'IS_ACTIVE'";
+            $checkResult = $connection->query($checkSql);
+            if ($checkResult->getSelectedRowsCount() == 0) {
+                // Колонка отсутствует, добавляем её
+                $alterSql = "ALTER TABLE artmax_calendar_branches ADD COLUMN IS_ACTIVE tinyint(1) DEFAULT 1";
+                $connection->query($alterSql);
+            }
+        } catch (\Exception $e) {
+            // Игнорируем ошибку, возможно таблица ещё не создана
+        }
         
         // Создаем первый филиал по умолчанию
         $sqlDefaultBranch = "
-        INSERT INTO artmax_calendar_branches (NAME, ADDRESS, PHONE, EMAIL, TIMEZONE_NAME) 
-        VALUES ('Филиал - 1', '', '', '', 'Europe/Moscow')
+        INSERT INTO artmax_calendar_branches (NAME, ADDRESS, PHONE, EMAIL, TIMEZONE_NAME, IS_ACTIVE) 
+        VALUES ('Филиал - 1', '', '', '', 'Europe/Moscow', 1)
         ";
         $connection->query($sqlDefaultBranch);
         
@@ -170,10 +312,13 @@ class artmax_calendar extends CModule
                     'SEVERITY' => 'ERROR',
                     'AUDIT_TYPE_ID' => 'ARTMAX_CALENDAR_INSTALL_BRANCH_ENUM_ERROR',
                     'MODULE_ID' => 'artmax.calendar',
+                    'OBJECT_ID' => $defaultBranchId ?: 0,
                     'DESCRIPTION' => 'Ошибка добавления филиала в enum: ' . $e->getMessage()
                 ]);
             }
         }
+        
+        return true;
     }
     
     /**
@@ -238,36 +383,146 @@ class artmax_calendar extends CModule
         }
     }
 
-    public function UnInstallDB()
+    public function UnInstallDB($options = null)
     {
+        // Если параметры не переданы, используем значения по умолчанию (полное удаление)
+        if ($options === null) {
+            $options = [
+                'delete_groups' => true,
+                'delete_tables' => true,
+                'delete_crm_fields' => true,
+                'delete_settings' => true
+            ];
+        }
+        
+        // Удаление групп пользователей
+        if ($options['delete_groups']) {
+            $this->deleteUserGroups();
+        }
+        
         // Удаление таблиц базы данных
-        $connection = \Bitrix\Main\Application::getConnection();
-        $connection->query("DROP TABLE IF EXISTS artmax_calendar_event_journal");
-        $connection->query("DROP TABLE IF EXISTS artmax_calendar_branch_employees");
-        $connection->query("DROP TABLE IF EXISTS artmax_calendar_events");
-        $connection->query("DROP TABLE IF EXISTS artmax_calendar_branches");
+        if ($options['delete_tables']) {
+            $connection = \Bitrix\Main\Application::getConnection();
+            $connection->query("DROP TABLE IF EXISTS artmax_calendar_group_links");
+            $connection->query("DROP TABLE IF EXISTS artmax_calendar_access_rights");
+            $connection->query("DROP TABLE IF EXISTS artmax_calendar_permissions");
+            $connection->query("DROP TABLE IF EXISTS artmax_calendar_user_groups");
+            $connection->query("DROP TABLE IF EXISTS artmax_calendar_event_journal");
+            $connection->query("DROP TABLE IF EXISTS artmax_calendar_branch_employees");
+            $connection->query("DROP TABLE IF EXISTS artmax_calendar_events");
+            $connection->query("DROP TABLE IF EXISTS artmax_calendar_branches");
+            $connection->query("DROP TABLE IF EXISTS artmax_calendar_module_settings");
+        }
         
-        // Удаляем пользовательское поле бронирования
-        $this->deleteDealBookingField();
-        
-        // Удаляем пользовательские поля
-        $this->deleteDealConfirmationField();
-        $this->deleteDealVisitField();
-        $this->deleteDealServiceField();
-        $this->deleteDealSourceField();
-        $this->deleteDealAmountField();
-        $this->deleteDealBranchField();
+        // Удаляем пользовательские поля CRM
+        if ($options['delete_crm_fields']) {
+            $this->deleteDealBookingField();
+            $this->deleteDealConfirmationField();
+            $this->deleteDealVisitField();
+            $this->deleteDealServiceField();
+            $this->deleteDealSourceField();
+            $this->deleteDealAmountField();
+            $this->deleteDealBranchField();
+        }
         
         // Удаляем настройки модуля
-        \Bitrix\Main\Config\Option::delete('artmax.calendar', ['name' => 'menu_item_id']);
-        \Bitrix\Main\Config\Option::delete('artmax.calendar', ['name' => 'custom_section_id']);
-        \Bitrix\Main\Config\Option::delete('artmax.calendar', ['name' => 'deal_booking_field']);
-        \Bitrix\Main\Config\Option::delete('artmax.calendar', ['name' => 'deal_confirmation_field']);
-        \Bitrix\Main\Config\Option::delete('artmax.calendar', ['name' => 'deal_visit_field']);
-        \Bitrix\Main\Config\Option::delete('artmax.calendar', ['name' => 'deal_service_field']);
-        \Bitrix\Main\Config\Option::delete('artmax.calendar', ['name' => 'deal_source_field']);
-        \Bitrix\Main\Config\Option::delete('artmax.calendar', ['name' => 'deal_amount_field']);
-        \Bitrix\Main\Config\Option::delete('artmax.calendar', ['name' => 'deal_branch_field']);
+        if ($options['delete_settings']) {
+            \Bitrix\Main\Config\Option::delete('artmax.calendar', ['name' => 'menu_item_id']);
+            \Bitrix\Main\Config\Option::delete('artmax.calendar', ['name' => 'custom_section_id']);
+            \Bitrix\Main\Config\Option::delete('artmax.calendar', ['name' => 'deal_booking_field']);
+            \Bitrix\Main\Config\Option::delete('artmax.calendar', ['name' => 'deal_confirmation_field']);
+            \Bitrix\Main\Config\Option::delete('artmax.calendar', ['name' => 'deal_visit_field']);
+            \Bitrix\Main\Config\Option::delete('artmax.calendar', ['name' => 'deal_service_field']);
+            \Bitrix\Main\Config\Option::delete('artmax.calendar', ['name' => 'deal_source_field']);
+            \Bitrix\Main\Config\Option::delete('artmax.calendar', ['name' => 'deal_amount_field']);
+            \Bitrix\Main\Config\Option::delete('artmax.calendar', ['name' => 'deal_branch_field']);
+        }
+    }
+    
+    /**
+     * Удаление групп пользователей, созданных модулем
+     */
+    private function deleteUserGroups()
+    {
+        try {
+            $deletedCount = 0;
+            $processedIds = []; // Чтобы не удалять одну группу дважды
+            
+            // Получаем все группы и фильтруем их
+            $rsGroups = \CGroup::GetList(
+                $by = 'ID',
+                $order = 'ASC'
+            );
+            
+            while ($group = $rsGroups->Fetch()) {
+                if ($group && isset($group['ID'])) {
+                    $groupId = (int)$group['ID'];
+                    
+                    // Пропускаем системные группы (ID 1 и 2)
+                    if ($groupId <= 2) {
+                        continue;
+                    }
+                    
+                    // Пропускаем уже обработанные группы
+                    if (in_array($groupId, $processedIds)) {
+                        continue;
+                    }
+                    
+                    $groupName = $group['NAME'] ?? '';
+                    $stringId = $group['STRING_ID'] ?? '';
+                    
+                    // Проверяем, что группа создана модулем по названию или STRING_ID
+                    $isModuleGroup = false;
+                    
+                    if (strpos($groupName, 'Артмакс.Календарь') === 0) {
+                        $isModuleGroup = true;
+                    } elseif (!empty($stringId) && strpos($stringId, 'artmax_calendar_') === 0) {
+                        $isModuleGroup = true;
+                    }
+                    
+                    if ($isModuleGroup) {
+                        $groupObj = new \CGroup();
+                        if ($groupObj->Delete($groupId)) {
+                            $deletedCount++;
+                            $processedIds[] = $groupId;
+                            \CEventLog::Add([
+                                'SEVERITY' => 'INFO',
+                                'AUDIT_TYPE_ID' => 'ARTMAX_CALENDAR_GROUP_DELETED',
+                                'MODULE_ID' => 'artmax.calendar',
+                                'OBJECT_ID' => $groupId,
+                                'DESCRIPTION' => 'Удалена группа: ' . $groupName . ' (ID: ' . $groupId . ', STRING_ID: ' . $stringId . ')'
+                            ]);
+                        } else {
+                            \CEventLog::Add([
+                                'SEVERITY' => 'ERROR',
+                                'AUDIT_TYPE_ID' => 'ARTMAX_CALENDAR_GROUP_DELETE_ERROR',
+                                'MODULE_ID' => 'artmax.calendar',
+                                'OBJECT_ID' => $groupId,
+                                'DESCRIPTION' => 'Ошибка удаления группы: ' . $groupName . ' (ID: ' . $groupId . '). ' . ($groupObj->LAST_ERROR ?: 'Неизвестная ошибка')
+                            ]);
+                        }
+                    }
+                }
+            }
+            
+            if ($deletedCount > 0) {
+            \CEventLog::Add([
+                'SEVERITY' => 'INFO',
+                'AUDIT_TYPE_ID' => 'ARTMAX_CALENDAR_GROUPS_DELETED',
+                'MODULE_ID' => 'artmax.calendar',
+                'OBJECT_ID' => 0,
+                'DESCRIPTION' => 'Удалено групп пользователей: ' . $deletedCount
+            ]);
+            }
+        } catch (\Exception $e) {
+            \CEventLog::Add([
+                'SEVERITY' => 'ERROR',
+                'AUDIT_TYPE_ID' => 'ARTMAX_CALENDAR_DELETE_GROUPS_ERROR',
+                'MODULE_ID' => 'artmax.calendar',
+                'OBJECT_ID' => 0,
+                'DESCRIPTION' => 'Ошибка удаления групп пользователей: ' . $e->getMessage()
+            ]);
+        }
     }
     
     /**
@@ -754,6 +1009,7 @@ class artmax_calendar extends CModule
                 'SEVERITY' => 'WARNING',
                 'AUDIT_TYPE_ID' => 'ARTMAX_CALENDAR_BRANCH_ENUM_INVALID_PARAMS',
                 'MODULE_ID' => 'artmax.calendar',
+                'OBJECT_ID' => $branchId,
                 'DESCRIPTION' => 'Неверные параметры для добавления филиала в enum: branchId=' . $branchId . ', branchName=' . $branchName
             ]);
             return;
@@ -764,6 +1020,7 @@ class artmax_calendar extends CModule
                 'SEVERITY' => 'ERROR',
                 'AUDIT_TYPE_ID' => 'ARTMAX_CALENDAR_BRANCH_ENUM_CRM_NOT_LOADED',
                 'MODULE_ID' => 'artmax.calendar',
+                'OBJECT_ID' => $branchId,
                 'DESCRIPTION' => 'Модуль CRM не загружен при добавлении филиала в enum'
             ]);
             return;
@@ -775,6 +1032,7 @@ class artmax_calendar extends CModule
                 'SEVERITY' => 'ERROR',
                 'AUDIT_TYPE_ID' => 'ARTMAX_CALENDAR_BRANCH_ENUM_NO_FIELD_CODE',
                 'MODULE_ID' => 'artmax.calendar',
+                'OBJECT_ID' => $branchId,
                 'DESCRIPTION' => 'Не найден код поля для добавления филиала в enum'
             ]);
             return;
@@ -790,6 +1048,7 @@ class artmax_calendar extends CModule
                 'SEVERITY' => 'ERROR',
                 'AUDIT_TYPE_ID' => 'ARTMAX_CALENDAR_BRANCH_ENUM_FIELD_NOT_FOUND',
                 'MODULE_ID' => 'artmax.calendar',
+                'OBJECT_ID' => $branchId,
                 'DESCRIPTION' => 'Поле ' . $fieldCode . ' не найдено для добавления филиала в enum'
             ]);
             return;
@@ -820,6 +1079,7 @@ class artmax_calendar extends CModule
                 'SEVERITY' => 'INFO',
                 'AUDIT_TYPE_ID' => 'ARTMAX_CALENDAR_BRANCH_ENUM_ALREADY_EXISTS',
                 'MODULE_ID' => 'artmax.calendar',
+                'OBJECT_ID' => $branchId,
                 'DESCRIPTION' => 'Филиал "' . $branchName . '" (ID: ' . $branchId . ') уже существует в enum поля ' . $fieldCode
             ]);
             return;
@@ -840,6 +1100,7 @@ class artmax_calendar extends CModule
                 'SEVERITY' => 'INFO',
                 'AUDIT_TYPE_ID' => 'ARTMAX_CALENDAR_BRANCH_ENUM_ADDED',
                 'MODULE_ID' => 'artmax.calendar',
+                'OBJECT_ID' => $branchId,
                 'DESCRIPTION' => 'Филиал "' . $branchName . '" (ID: ' . $branchId . ') успешно добавлен в enum поля ' . $fieldCode
             ]);
         } else {
@@ -847,6 +1108,7 @@ class artmax_calendar extends CModule
                 'SEVERITY' => 'ERROR',
                 'AUDIT_TYPE_ID' => 'ARTMAX_CALENDAR_BRANCH_ENUM_ADD_FAILED',
                 'MODULE_ID' => 'artmax.calendar',
+                'OBJECT_ID' => $branchId,
                 'DESCRIPTION' => 'Ошибка добавления филиала "' . $branchName . '" (ID: ' . $branchId . ') в enum поля ' . $fieldCode
             ]);
         }
@@ -875,6 +1137,8 @@ class artmax_calendar extends CModule
             \Artmax\Calendar\EventHandlers::onModuleInstall();
             \Artmax\Calendar\EventHandlers::createCustomSection();
         }
+        
+        return true;
     }
 
     public function UnInstallEvents()
@@ -905,6 +1169,7 @@ class artmax_calendar extends CModule
                     'SEVERITY' => 'ERROR',
                     'AUDIT_TYPE_ID' => 'ARTMAX_CALENDAR_UNINSTALL_EVENTS_ERROR',
                     'MODULE_ID' => 'artmax.calendar',
+                    'OBJECT_ID' => 0,
                     'DESCRIPTION' => 'Ошибка отмены регистрации событий: ' . $e->getMessage()
                 ]);
             }
@@ -917,6 +1182,7 @@ class artmax_calendar extends CModule
                     'SEVERITY' => 'ERROR',
                     'AUDIT_TYPE_ID' => 'ARTMAX_CALENDAR_UNINSTALL_SECTION_ERROR',
                     'MODULE_ID' => 'artmax.calendar',
+                    'OBJECT_ID' => 0,
                     'DESCRIPTION' => 'Ошибка удаления настраиваемого раздела: ' . $e->getMessage()
                 ]);
             }
@@ -930,11 +1196,25 @@ class artmax_calendar extends CModule
         
         $this->createAdminLinks(
             $_SERVER["DOCUMENT_ROOT"]."/local/modules/".$this->MODULE_ID."/install/admin/",
-            $_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/".$this->MODULE_ID."/admin/",
+            $_SERVER["DOCUMENT_ROOT"]."/bitrix/admin/",
             $this->MODULE_ID . '_'
         );
 
-        // Копируем компоненты
+        // Явно проверяем и создаем файл настроек, если он не был создан
+        $settingsSourceFile = $_SERVER["DOCUMENT_ROOT"]."/local/modules/".$this->MODULE_ID."/install/admin/artmax_calendar_settings.php";
+        $settingsLinkFile = $_SERVER["DOCUMENT_ROOT"]."/bitrix/admin/".$this->MODULE_ID."_artmax_calendar_settings.php";
+        
+        if (file_exists($settingsSourceFile) && !file_exists($settingsLinkFile)) {
+            $linkContent = '<?php require($_SERVER["DOCUMENT_ROOT"] . "/local/modules/' . $this->MODULE_ID . '/install/admin/artmax_calendar_settings.php"); ?>';
+            $result = file_put_contents($settingsLinkFile, $linkContent);
+            if ($result !== false) {
+                file_put_contents($_SERVER["DOCUMENT_ROOT"]."/copy_error.log", "Явно создан линк настроек: $settingsLinkFile\n", FILE_APPEND);
+            } else {
+                file_put_contents($_SERVER["DOCUMENT_ROOT"]."/copy_error.log", "Ошибка явного создания линка настроек: $settingsLinkFile\n", FILE_APPEND);
+            }
+        }
+
+        // Копируем компоненты из install/components в local/components
         $componentsFrom = $_SERVER['DOCUMENT_ROOT'] . '/local/modules/' . $this->MODULE_ID . '/install/components/';
         $componentsTo = $_SERVER['DOCUMENT_ROOT'] . '/local/components/';
         if (is_dir($componentsFrom)) {
@@ -942,22 +1222,6 @@ class artmax_calendar extends CModule
             file_put_contents($_SERVER["DOCUMENT_ROOT"]."/copy_error.log", "Компоненты скопированы из $componentsFrom в $componentsTo\n", FILE_APPEND);
         } else {
             file_put_contents($_SERVER["DOCUMENT_ROOT"]."/copy_error.log", "Папка компонентов не найдена: $componentsFrom\n", FILE_APPEND);
-        }
-
-        // Копируем актуальные файлы компонента calendar из рабочей папки
-        $calendarFrom = $_SERVER['DOCUMENT_ROOT'] . '/local/components/artmax/calendar/';
-        $calendarTo = $_SERVER['DOCUMENT_ROOT'] . '/local/components/artmax/calendar/';
-        if (is_dir($calendarFrom)) {
-            // Создаем папку, если её нет
-            if (!is_dir($calendarTo)) {
-                mkdir($calendarTo, 0775, true);
-            }
-            
-            // Копируем все файлы из папки calendar
-            $this->copyDirectoryContents($calendarFrom, $calendarTo);
-            file_put_contents($_SERVER["DOCUMENT_ROOT"]."/copy_error.log", "Актуальные файлы календаря скопированы из $calendarFrom в $calendarTo\n", FILE_APPEND);
-        } else {
-            file_put_contents($_SERVER["DOCUMENT_ROOT"]."/copy_error.log", "Папка календаря не найдена: $calendarFrom\n", FILE_APPEND);
         }
 
         // Копируем JS
@@ -1061,7 +1325,10 @@ class artmax_calendar extends CModule
             file_put_contents($_SERVER["DOCUMENT_ROOT"]."/copy_error.log", "Файл проверки классов не найден: $classesFrom\n", FILE_APPEND);
         }
 
+
         // AJAX endpoint теперь копируется вместе с остальными файлами компонента
+        
+        return true;
     }
 
     public function UnInstallFiles()
@@ -1096,26 +1363,67 @@ class artmax_calendar extends CModule
             file_put_contents($_SERVER["DOCUMENT_ROOT"]."/copy_error.log", "AJAX endpoint удален: $ajaxFile\n", FILE_APPEND);
         }
 
+        // Удаляем файлы, скопированные напрямую в /bitrix/admin/
+        $adminFilesToDelete = [
+            'artmax_calendar_menu.php',
+            'artmax_calendar_register.php',
+            'artmax_calendar_classes.php'
+        ];
+        
+        foreach ($adminFilesToDelete as $fileName) {
+            $filePath = $_SERVER['DOCUMENT_ROOT'] . '/bitrix/admin/' . $fileName;
+            if (file_exists($filePath)) {
+                unlink($filePath);
+                file_put_contents($_SERVER["DOCUMENT_ROOT"]."/copy_error.log", "Файл $fileName удален: $filePath\n", FILE_APPEND);
+            }
+        }
+
     }
 
     private function createAdminLinks($fromDir, $toDir, $prefix = '', $exclude = ['.', '..', 'menu.php'])
     {
         if (is_dir($fromDir)) {
-            if ($dir = opendir($fromDir)) {
-                while (false !== $item = readdir($dir)) {
-                    if (in_array($item, $exclude)) continue;
-                    $linkFile = $toDir . $prefix . $item;
-                    $linkContent = '<?php require($_SERVER["DOCUMENT_ROOT"] . "/local/modules/' . $this->MODULE_ID . '/install/admin/' . $item . '"); ?>';
-                    $result = file_put_contents($linkFile, $linkContent);
-                    if ($result === false) {
-                        file_put_contents($_SERVER["DOCUMENT_ROOT"]."/copy_error.log", "Не удалось создать $linkFile\n", FILE_APPEND);
-                    } else {
-                        file_put_contents($_SERVER["DOCUMENT_ROOT"]."/copy_error.log", "Создан линк: $linkFile\n", FILE_APPEND);
+            // Используем более надежный способ чтения директории
+            $files = scandir($fromDir);
+            if ($files === false) {
+                file_put_contents($_SERVER["DOCUMENT_ROOT"]."/copy_error.log", "Не удалось прочитать содержимое папки $fromDir\n", FILE_APPEND);
+                return;
+            }
+
+            foreach ($files as $item) {
+                if (in_array($item, $exclude)) {
+                    continue;
+                }
+
+                // Пропускаем директории
+                $itemPath = $fromDir . '/' . $item;
+                if (is_dir($itemPath)) {
+                    continue;
+                }
+
+                // Пропускаем не PHP файлы
+                if (pathinfo($item, PATHINFO_EXTENSION) !== 'php') {
+                    continue;
+                }
+
+                $linkFile = $toDir . $prefix . $item;
+                $linkContent = '<?php require($_SERVER["DOCUMENT_ROOT"] . "/local/modules/' . $this->MODULE_ID . '/install/admin/' . $item . '"); ?>';
+                
+                // Создаем директорию, если её нет
+                $linkDir = dirname($linkFile);
+                if (!is_dir($linkDir)) {
+                    if (!mkdir($linkDir, 0755, true)) {
+                        file_put_contents($_SERVER["DOCUMENT_ROOT"]."/copy_error.log", "Не удалось создать директорию $linkDir\n", FILE_APPEND);
+                        continue;
                     }
                 }
-                closedir($dir);
-            } else {
-                file_put_contents($_SERVER["DOCUMENT_ROOT"]."/copy_error.log", "Не удалось открыть папку $fromDir\n", FILE_APPEND);
+
+                $result = file_put_contents($linkFile, $linkContent);
+                if ($result === false) {
+                    file_put_contents($_SERVER["DOCUMENT_ROOT"]."/copy_error.log", "Не удалось создать $linkFile (ошибка: " . error_get_last()['message'] . ")\n", FILE_APPEND);
+                } else {
+                    file_put_contents($_SERVER["DOCUMENT_ROOT"]."/copy_error.log", "Создан линк: $linkFile (размер: $result байт)\n", FILE_APPEND);
+                }
             }
         } else {
             file_put_contents($_SERVER["DOCUMENT_ROOT"]."/copy_error.log", "Папка $fromDir не найдена\n", FILE_APPEND);
@@ -1170,6 +1478,10 @@ class artmax_calendar extends CModule
             return false;
         }
 
+        // Нормализуем пути: убираем лишние слэши
+        $source = rtrim($source, '/\\') . DIRECTORY_SEPARATOR;
+        $destination = rtrim($destination, '/\\') . DIRECTORY_SEPARATOR;
+
         if (!is_dir($destination)) {
             if (!mkdir($destination, 0775, true)) {
                 file_put_contents($_SERVER["DOCUMENT_ROOT"]."/copy_error.log", "Не удалось создать папку $destination\n", FILE_APPEND);
@@ -1183,7 +1495,9 @@ class artmax_calendar extends CModule
         );
 
         foreach ($iterator as $item) {
-            $target = $destination . DIRECTORY_SEPARATOR . $iterator->getSubPathName();
+            // Используем правильное объединение путей
+            $subPath = $iterator->getSubPathName();
+            $target = $destination . str_replace('/', DIRECTORY_SEPARATOR, $subPath);
             
             if ($item->isDir()) {
                 if (!is_dir($target)) {
@@ -1201,6 +1515,402 @@ class artmax_calendar extends CModule
         }
 
         return true;
+    }
+    
+    /**
+     * Возвращает HTML для страницы настроек модуля
+     * Это метод вызывается Bitrix для отображения ссылки на настройки в разделе "Настройки модулей"
+     * Метод должен возвращать массив с ключом 'HTML' или строку
+     */
+    public function GetModuleRight()
+    {
+        // Проверяем, что модуль установлен
+        if (!\Bitrix\Main\ModuleManager::isModuleInstalled($this->MODULE_ID)) {
+            return '';
+        }
+        
+        // Возвращаем ссылку на настройки модуля
+        // Bitrix автоматически проверит права доступа при переходе по ссылке
+        $settingsUrl = '/bitrix/admin/artmax.calendar_artmax_calendar_settings.php?lang=' . LANGUAGE_ID;
+        return '<a href="' . $settingsUrl . '">Настройки модуля календаря</a>';
+    }
+
+    /**
+     * Создание таблиц для системы прав доступа
+     */
+    private function createPermissionsTables()
+    {
+        $connection = \Bitrix\Main\Application::getConnection();
+        
+        // Таблица информации о группах и пользователях
+        $sqlUserGroups = "
+        CREATE TABLE IF NOT EXISTS artmax_calendar_user_groups (
+            ID INT AUTO_INCREMENT PRIMARY KEY,
+            GROUP_ID INT NOT NULL COMMENT 'ID группы в Bitrix (b_group.ID)',
+            GROUP_NAME VARCHAR(255) NOT NULL COMMENT 'Название группы',
+            USER_ID INT DEFAULT NULL COMMENT 'ID пользователя, если право назначено пользователю',
+            CREATED_AT TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UPDATED_AT TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            INDEX idx_group_id (GROUP_ID),
+            INDEX idx_user_id (USER_ID),
+            INDEX idx_group_user (GROUP_ID, USER_ID)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        ";
+        
+        // Таблица перечня доступных прав
+        $sqlPermissions = "
+        CREATE TABLE IF NOT EXISTS artmax_calendar_permissions (
+            ID INT AUTO_INCREMENT PRIMARY KEY,
+            CODE VARCHAR(100) NOT NULL UNIQUE COMMENT 'Код права (например: create_event, edit_event)',
+            NAME VARCHAR(255) NOT NULL COMMENT 'Название права на русском',
+            DESCRIPTION TEXT DEFAULT NULL COMMENT 'Описание права',
+            CREATED_AT TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_code (CODE)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        ";
+        
+        // Таблица прав доступа
+        $sqlAccessRights = "
+        CREATE TABLE IF NOT EXISTS artmax_calendar_access_rights (
+            ID INT AUTO_INCREMENT PRIMARY KEY,
+            PERMISSION_ID INT NOT NULL COMMENT 'ID права из artmax_calendar_permissions',
+            ENTITY_TYPE ENUM('user', 'group') NOT NULL COMMENT 'Тип сущности: user или group',
+            ENTITY_ID INT NOT NULL COMMENT 'ID пользователя или группы',
+            CREATED_AT TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY unique_permission_entity (PERMISSION_ID, ENTITY_TYPE, ENTITY_ID),
+            INDEX idx_entity_type (ENTITY_TYPE),
+            INDEX idx_entity_id (ENTITY_ID),
+            INDEX idx_permission (PERMISSION_ID),
+            FOREIGN KEY (PERMISSION_ID) REFERENCES artmax_calendar_permissions(ID) ON DELETE CASCADE ON UPDATE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        ";
+        
+        // Таблица связей групп календаря с группами Bitrix (для наследования пользователей)
+        $sqlGroupLinks = "
+        CREATE TABLE IF NOT EXISTS artmax_calendar_group_links (
+            ID INT AUTO_INCREMENT PRIMARY KEY,
+            CALENDAR_GROUP_ID INT NOT NULL COMMENT 'ID группы календаря (из artmax_calendar_user_groups.GROUP_ID)',
+            BITRIX_GROUP_ID INT NOT NULL COMMENT 'ID группы Bitrix (из b_group.ID)',
+            CREATED_AT TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY unique_calendar_bitrix (CALENDAR_GROUP_ID, BITRIX_GROUP_ID),
+            INDEX idx_calendar_group (CALENDAR_GROUP_ID),
+            INDEX idx_bitrix_group (BITRIX_GROUP_ID)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        ";
+        
+        try {
+            $connection->query($sqlUserGroups);
+            $connection->query($sqlPermissions);
+            $connection->query($sqlAccessRights);
+            $connection->query($sqlGroupLinks);
+        } catch (\Exception $e) {
+            \CEventLog::Add([
+                'SEVERITY' => 'ERROR',
+                'AUDIT_TYPE_ID' => 'ARTMAX_CALENDAR_CREATE_PERMISSIONS_TABLES_ERROR',
+                'MODULE_ID' => 'artmax.calendar',
+                'OBJECT_ID' => 0,
+                'DESCRIPTION' => 'Ошибка создания таблиц прав доступа: ' . $e->getMessage()
+            ]);
+        }
+    }
+
+    /**
+     * Создание групп пользователей в Bitrix
+     */
+    private function createUserGroups()
+    {
+        $groups = [
+            [
+                'NAME' => 'Артмакс.Календарь | Администраторы',
+                'DESCRIPTION' => 'Группа администраторов календаря клиники. Полный доступ ко всем функциям.',
+                'C_SORT' => 100
+            ]
+        ];
+        
+        $connection = \Bitrix\Main\Application::getConnection();
+        
+        foreach ($groups as $groupData) {
+            $groupId = null;
+            
+            // Проверяем, существует ли уже группа с таким названием
+            // Используем более надежный способ поиска - перебираем все группы
+            $rsGroups = \CGroup::GetList($by = 'ID', $order = 'ASC');
+            $groupFound = false;
+            
+            if ($rsGroups) {
+                while ($group = $rsGroups->Fetch()) {
+                    if (isset($group['NAME']) && $group['NAME'] === $groupData['NAME']) {
+                        $groupId = (int)$group['ID'];
+                        $groupFound = true;
+                        break;
+                    }
+                }
+            }
+            
+            // Также проверяем по STRING_ID, если группа еще не найдена
+            if (!$groupFound) {
+                $stringId = 'artmax_calendar_' . mb_strtolower(str_replace([' ', '|', '-'], ['_', '_', '_'], $groupData['NAME']));
+                $stringId = preg_replace('/[^a-z0-9_]/', '', $stringId);
+                
+                $rsGroups = \CGroup::GetList($by = 'ID', $order = 'ASC');
+                if ($rsGroups) {
+                    while ($group = $rsGroups->Fetch()) {
+                        if (isset($group['STRING_ID']) && $group['STRING_ID'] === $stringId) {
+                            $groupId = (int)$group['ID'];
+                            $groupFound = true;
+                            break;
+                        }
+                    }
+                }
+            }
+            
+            if (!$groupFound) {
+                // Создаем новую группу
+                $groupObj = new \CGroup();
+                
+                // Формируем STRING_ID для группы (должен быть уникальным и без спецсимволов)
+                $stringId = 'artmax_calendar_' . mb_strtolower(str_replace([' ', '|', '-'], ['_', '_', '_'], $groupData['NAME']));
+                $stringId = preg_replace('/[^a-z0-9_]/', '', $stringId);
+                
+                $fields = [
+                    'ACTIVE' => 'Y',
+                    'C_SORT' => $groupData['C_SORT'],
+                    'NAME' => $groupData['NAME'],
+                    'DESCRIPTION' => $groupData['DESCRIPTION'],
+                    'STRING_ID' => $stringId
+                ];
+                
+                $groupId = $groupObj->Add($fields);
+                
+                if (!$groupId || !is_numeric($groupId) || (int)$groupId <= 0) {
+                    $errorMessage = $groupObj->LAST_ERROR ?: 'Неизвестная ошибка';
+                    \CEventLog::Add([
+                        'SEVERITY' => 'ERROR',
+                        'AUDIT_TYPE_ID' => 'ARTMAX_CALENDAR_CREATE_GROUP_ERROR',
+                        'MODULE_ID' => 'artmax.calendar',
+                        'OBJECT_ID' => 0,
+                        'DESCRIPTION' => 'Ошибка создания группы: ' . $groupData['NAME'] . '. ' . $errorMessage
+                    ]);
+                    error_log('Ошибка создания группы "' . $groupData['NAME'] . '": ' . $errorMessage);
+                    // Выбрасываем исключение, чтобы установка не продолжилась без группы
+                    throw new \Exception('Не удалось создать группу "' . $groupData['NAME'] . '": ' . $errorMessage);
+                }
+                
+                $groupId = (int)$groupId;
+                
+                // Проверяем, что группа действительно создана в базе данных
+                $checkGroup = \CGroup::GetByID($groupId);
+                if (!$checkGroup || !$checkGroup->Fetch()) {
+                    $errorMessage = 'Группа не найдена в базе данных после создания (ID: ' . $groupId . ')';
+                    \CEventLog::Add([
+                        'SEVERITY' => 'ERROR',
+                        'AUDIT_TYPE_ID' => 'ARTMAX_CALENDAR_GROUP_NOT_FOUND_AFTER_CREATE',
+                        'MODULE_ID' => 'artmax.calendar',
+                        'OBJECT_ID' => $groupId,
+                        'DESCRIPTION' => 'Ошибка проверки созданной группы: ' . $groupData['NAME'] . '. ' . $errorMessage
+                    ]);
+                    throw new \Exception('Не удалось проверить созданную группу "' . $groupData['NAME'] . '": ' . $errorMessage);
+                }
+                
+                // Логируем успешное создание группы
+                \CEventLog::Add([
+                    'SEVERITY' => 'INFO',
+                    'AUDIT_TYPE_ID' => 'ARTMAX_CALENDAR_GROUP_CREATED',
+                    'MODULE_ID' => 'artmax.calendar',
+                    'OBJECT_ID' => $groupId,
+                    'DESCRIPTION' => 'Создана группа: ' . $groupData['NAME'] . ' (ID: ' . $groupId . ', STRING_ID: ' . $stringId . ')'
+                ]);
+            } else {
+                // Логируем, что группа уже существует
+                \CEventLog::Add([
+                    'SEVERITY' => 'INFO',
+                    'AUDIT_TYPE_ID' => 'ARTMAX_CALENDAR_GROUP_EXISTS',
+                    'MODULE_ID' => 'artmax.calendar',
+                    'OBJECT_ID' => $groupId,
+                    'DESCRIPTION' => 'Группа уже существует: ' . $groupData['NAME'] . ' (ID: ' . $groupId . ')'
+                ]);
+            }
+            
+            // Сохраняем информацию о группе в таблицу
+            if ($groupId) {
+                try {
+                    $sqlCheck = "SELECT ID FROM artmax_calendar_user_groups WHERE GROUP_ID = " . (int)$groupId . " AND USER_ID IS NULL";
+                    $result = $connection->query($sqlCheck);
+                    
+                    if ($result->getSelectedRowsCount() == 0) {
+                        $sqlInsert = "
+                        INSERT INTO artmax_calendar_user_groups (GROUP_ID, GROUP_NAME, USER_ID) 
+                        VALUES (" . (int)$groupId . ", '" . $connection->getSqlHelper()->forSql($groupData['NAME']) . "', NULL)
+                        ";
+                        $connection->query($sqlInsert);
+                    } else {
+                        // Обновляем название группы, если оно изменилось
+                        $sqlUpdate = "
+                        UPDATE artmax_calendar_user_groups 
+                        SET GROUP_NAME = '" . $connection->getSqlHelper()->forSql($groupData['NAME']) . "'
+                        WHERE GROUP_ID = " . (int)$groupId . " AND USER_ID IS NULL
+                        ";
+                        $connection->query($sqlUpdate);
+                    }
+                } catch (\Exception $e) {
+                    \CEventLog::Add([
+                        'SEVERITY' => 'ERROR',
+                        'AUDIT_TYPE_ID' => 'ARTMAX_CALENDAR_SAVE_GROUP_INFO_ERROR',
+                        'MODULE_ID' => 'artmax.calendar',
+                        'OBJECT_ID' => $groupId ?: 0,
+                        'DESCRIPTION' => 'Ошибка сохранения информации о группе: ' . $groupData['NAME'] . '. ' . $e->getMessage()
+                    ]);
+                }
+            }
+        }
+    }
+
+    /**
+     * Создание базовых прав доступа
+     */
+    private function createDefaultPermissions()
+    {
+        $permissions = [
+            ['CODE' => 'calendar.view', 'NAME' => 'Просмотр календаря', 'DESCRIPTION' => 'Право на просмотр календаря и записей'],
+            ['CODE' => 'calendar.create', 'NAME' => 'Создание записи', 'DESCRIPTION' => 'Право на создание новых записей в календаре'],
+            ['CODE' => 'calendar.edit', 'NAME' => 'Редактирование записи', 'DESCRIPTION' => 'Право на редактирование существующих записей'],
+            ['CODE' => 'calendar.delete', 'NAME' => 'Удаление записи', 'DESCRIPTION' => 'Право на удаление записей из календаря'],
+            ['CODE' => 'calendar.move', 'NAME' => 'Перемещение записи', 'DESCRIPTION' => 'Право на перемещение записей в календаре'],
+            ['CODE' => 'calendar.confirm', 'NAME' => 'Подтверждение записи', 'DESCRIPTION' => 'Право на подтверждение записей'],
+            ['CODE' => 'calendar.manage_schedule', 'NAME' => 'Управление расписанием', 'DESCRIPTION' => 'Право на управление расписанием врачей'],
+            ['CODE' => 'calendar.manage_branches', 'NAME' => 'Управление филиалами', 'DESCRIPTION' => 'Право на управление филиалами клиники'],
+            ['CODE' => 'calendar.manage_employees', 'NAME' => 'Управление сотрудниками', 'DESCRIPTION' => 'Право на управление сотрудниками'],
+            ['CODE' => 'calendar.manage_groups', 'NAME' => 'Управление группами и правами', 'DESCRIPTION' => 'Право на создание групп пользователей и управление правами доступа'],
+            ['CODE' => 'calendar.admin', 'NAME' => 'Полный доступ', 'DESCRIPTION' => 'Полный административный доступ ко всем функциям календаря']
+        ];
+        
+        $connection = \Bitrix\Main\Application::getConnection();
+        $sqlHelper = $connection->getSqlHelper();
+        
+        foreach ($permissions as $permission) {
+            try {
+                // Проверяем, существует ли уже право
+                $sqlCheck = "SELECT ID FROM artmax_calendar_permissions WHERE CODE = '" . $sqlHelper->forSql($permission['CODE']) . "'";
+                $result = $connection->query($sqlCheck);
+                
+                if ($result->getSelectedRowsCount() == 0) {
+                    $sqlInsert = "
+                    INSERT INTO artmax_calendar_permissions (CODE, NAME, DESCRIPTION) 
+                    VALUES (
+                        '" . $sqlHelper->forSql($permission['CODE']) . "',
+                        '" . $sqlHelper->forSql($permission['NAME']) . "',
+                        '" . $sqlHelper->forSql($permission['DESCRIPTION']) . "'
+                    )
+                    ";
+                    $connection->query($sqlInsert);
+                }
+            } catch (\Exception $e) {
+                \CEventLog::Add([
+                    'SEVERITY' => 'ERROR',
+                    'AUDIT_TYPE_ID' => 'ARTMAX_CALENDAR_CREATE_PERMISSION_ERROR',
+                    'MODULE_ID' => 'artmax.calendar',
+                    'OBJECT_ID' => 0,
+                    'DESCRIPTION' => 'Ошибка создания права: ' . $permission['CODE'] . '. ' . $e->getMessage()
+                ]);
+            }
+        }
+    }
+
+    /**
+     * Назначение прав группам по умолчанию
+     */
+    private function assignDefaultPermissions()
+    {
+        $connection = \Bitrix\Main\Application::getConnection();
+        $sqlHelper = $connection->getSqlHelper();
+        
+        // Получаем ID группы администраторов
+        $adminGroupId = $this->getGroupIdByName('Артмакс.Календарь | Администраторы');
+        
+        if (!$adminGroupId) {
+            \CEventLog::Add([
+                'SEVERITY' => 'ERROR',
+                'AUDIT_TYPE_ID' => 'ARTMAX_CALENDAR_GROUPS_NOT_FOUND',
+                'MODULE_ID' => 'artmax.calendar',
+                'OBJECT_ID' => 0,
+                'DESCRIPTION' => 'Не удалось найти группу администраторов для назначения прав'
+            ]);
+            return;
+        }
+        
+        // Администраторы - все права
+        $adminPermissions = [
+            'calendar.view', 'calendar.create', 'calendar.edit', 'calendar.delete',
+            'calendar.move', 'calendar.confirm', 'calendar.manage_schedule',
+            'calendar.manage_branches', 'calendar.manage_employees', 'calendar.manage_groups', 'calendar.admin'
+        ];
+        
+        // Назначаем права администраторам
+        $this->assignPermissionsToGroup($adminGroupId, $adminPermissions);
+    }
+
+    /**
+     * Получение ID группы по названию
+     */
+    private function getGroupIdByName($groupName)
+    {
+        $group = \CGroup::GetList(
+            $by = 'ID',
+            $order = 'ASC',
+            ['NAME' => $groupName]
+        )->Fetch();
+        
+        return $group ? (int)$group['ID'] : null;
+    }
+
+    /**
+     * Назначение прав группе
+     */
+    private function assignPermissionsToGroup($groupId, $permissionCodes)
+    {
+        $connection = \Bitrix\Main\Application::getConnection();
+        $sqlHelper = $connection->getSqlHelper();
+        
+        foreach ($permissionCodes as $permissionCode) {
+            try {
+                // Получаем ID права
+                $sqlPermission = "SELECT ID FROM artmax_calendar_permissions WHERE CODE = '" . $sqlHelper->forSql($permissionCode) . "'";
+                $result = $connection->query($sqlPermission);
+                $permission = $result->fetch();
+                
+                if (!$permission) {
+                    continue;
+                }
+                
+                $permissionId = (int)$permission['ID'];
+                
+                // Проверяем, не назначено ли уже это право
+                $sqlCheck = "
+                SELECT ID FROM artmax_calendar_access_rights 
+                WHERE PERMISSION_ID = " . $permissionId . " 
+                AND ENTITY_TYPE = 'group' 
+                AND ENTITY_ID = " . (int)$groupId . "
+                ";
+                $checkResult = $connection->query($sqlCheck);
+                
+                if ($checkResult->getSelectedRowsCount() == 0) {
+                    // Назначаем право
+                    $sqlInsert = "
+                    INSERT INTO artmax_calendar_access_rights (PERMISSION_ID, ENTITY_TYPE, ENTITY_ID) 
+                    VALUES (" . $permissionId . ", 'group', " . (int)$groupId . ")
+                    ";
+                    $connection->query($sqlInsert);
+                }
+            } catch (\Exception $e) {
+                \CEventLog::Add([
+                    'SEVERITY' => 'ERROR',
+                    'AUDIT_TYPE_ID' => 'ARTMAX_CALENDAR_ASSIGN_PERMISSION_ERROR',
+                    'MODULE_ID' => 'artmax.calendar',
+                    'OBJECT_ID' => $groupId,
+                    'DESCRIPTION' => 'Ошибка назначения права ' . $permissionCode . ' группе ' . $groupId . ': ' . $e->getMessage()
+                ]);
+            }
+        }
     }
 
 
