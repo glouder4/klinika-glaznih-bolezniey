@@ -3063,7 +3063,7 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
     /**
      * Сохранение настроек филиала
      */
-    public function saveBranchSettingsAction($branchId, $timezoneName, $employeeIds, $branchName = null)
+    public function saveBranchSettingsAction($branchId, $timezoneName, $employeeIds, $branchName = null, $address = null, $phone = null, $email = null)
     {
         global $USER;
         if (!$USER || !$USER->IsAuthorized()) {
@@ -3077,22 +3077,38 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
 
             $calendar = new \Artmax\Calendar\Calendar();
             
-            // Обновляем название филиала
-            if (!empty($branchName)) {
-                $branchObj = new \Artmax\Calendar\Branch();
-                $updateResult = $branchObj->updateBranch($branchId, $branchName);
+            // Обновляем филиал (название, адрес, телефон, email)
+            $branchObj = new \Artmax\Calendar\Branch();
+            $updateData = [];
+
+            if ($branchName !== null) $updateData['name'] = $branchName;
+            if ($address !== null) $updateData['address'] = $address;
+            if ($phone !== null) $updateData['phone'] = $phone;
+            if ($email !== null) $updateData['email'] = $email;
+
+            // Если есть что обновлять
+            if (!empty($updateData)) {
+                $updateResult = $branchObj->updateBranch($branchId,
+                    $updateData['name'] ?? null,
+                    $updateData['address'] ?? null,
+                    $updateData['phone'] ?? null,
+                    $updateData['email'] ?? null
+                );
+
                 if (!$updateResult) {
-                    return ['success' => false, 'error' => 'Ошибка обновления названия филиала'];
+                    return ['success' => false, 'error' => 'Ошибка обновления данных филиала'];
                 }
-                
-                // Обновляем страницы раздела для отображения нового названия
-                try {
-                    \Artmax\Calendar\EventHandlers::updateSectionPages();
-                    
-                    // Дополнительно обновляем конкретную страницу филиала в настраиваемом разделе
-                    \Artmax\Calendar\EventHandlers::updateBranchPageTitle($branchId, $branchName);
-                } catch (\Exception $e) {
-                    error_log('Ошибка обновления страниц раздела: ' . $e->getMessage());
+
+                // Обновляем страницы раздела только если изменилось название
+                if (isset($updateData['name'])) {
+                    try {
+                        \Artmax\Calendar\EventHandlers::updateSectionPages();
+
+                        // Дополнительно обновляем конкретную страницу филиала в настраиваемом разделе
+                        \Artmax\Calendar\EventHandlers::updateBranchPageTitle($branchId, $updateData['name']);
+                    } catch (\Exception $e) {
+                        error_log('Ошибка обновления страниц раздела: ' . $e->getMessage());
+                    }
                 }
             }
             
@@ -3278,6 +3294,29 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
     /**
      * Получение сотрудников филиала
      */
+    public function getAvailableEmployeesForBranchAction($branchId)
+    {
+        artmax_log("getAvailableEmployeesForBranchAction: Called with branchId = " . $branchId);
+        try {
+            if (!CModule::IncludeModule('artmax.calendar')) {
+                artmax_log("getAvailableEmployeesForBranchAction: Module not included");
+                return ['success' => false, 'error' => 'Модуль календаря не установлен'];
+            }
+
+            artmax_log("getAvailableEmployeesForBranchAction: Creating Calendar object");
+            $calendar = new \Artmax\Calendar\Calendar();
+            artmax_log("getAvailableEmployeesForBranchAction: Calling getAvailableEmployeesForBranch");
+            $employees = $calendar->getAvailableEmployeesForBranch($branchId);
+            artmax_log("getAvailableEmployeesForBranchAction: Got " . count($employees) . " employees");
+
+            return ['success' => true, 'employees' => $employees];
+        } catch (\Exception $e) {
+            artmax_log("getAvailableEmployeesForBranchAction: Exception: " . $e->getMessage());
+            artmax_log("getAvailableEmployeesForBranchAction: Stack trace: " . $e->getTraceAsString());
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+
     public function getBranchEmployeesAction($branchId)
     {
         global $USER;

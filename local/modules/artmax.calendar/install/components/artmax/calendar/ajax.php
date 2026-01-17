@@ -10,6 +10,18 @@ require($_SERVER['DOCUMENT_ROOT'].'/bitrix/modules/main/include/prolog_before.ph
 // Подключаем класс компонента
 require_once($_SERVER['DOCUMENT_ROOT'].'/local/components/artmax/calendar/class.php');
 
+// Определяем функцию artmax_log, если она не определена
+if (!function_exists('artmax_log')) {
+    function artmax_log($message) {
+        $logFile = $_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log';
+        $timestamp = date('Y-m-d H:i:s');
+        $logMessage = "[{$timestamp}] {$message}\n";
+        @file_put_contents($logFile, $logMessage, FILE_APPEND | LOCK_EX);
+        // Также пишем в error_log как fallback
+        error_log('ArtMax Calendar: ' . $message);
+    }
+}
+
 /**
  * Конвертирует дату из российского формата в стандартный для SQL
  */
@@ -1090,27 +1102,48 @@ switch ($action) {
         $timezoneName = $_POST['timezone_name'] ?? '';
         $employeeIds = $_POST['employee_ids'] ?? '[]';
         $branchName = $_POST['branch_name'] ?? '';
-        
+        $address = $_POST['address'] ?? '';
+        $phone = $_POST['phone'] ?? '';
+        $email = $_POST['email'] ?? '';
+
         if (empty($branchId)) {
             die(json_encode(['success' => false, 'error' => 'ID филиала не указан']));
         }
-        
+
         try {
             $component = new ArtmaxCalendarComponent();
-            $result = $component->saveBranchSettingsAction($branchId, $timezoneName, $employeeIds, $branchName);
+            $result = $component->saveBranchSettingsAction($branchId, $timezoneName, $employeeIds, $branchName, $address, $phone, $email);
             die(json_encode($result));
         } catch (Exception $e) {
             die(json_encode(['success' => false, 'error' => 'Ошибка сохранения настроек филиала: ' . $e->getMessage()]));
         }
         break;
 
+    case 'getAvailableEmployeesForBranch':
+        $branchId = $_POST['branchId'] ?? $_POST['branch_id'] ?? 0;
+
+        // Отладочная информация
+        artmax_log("AJAX getAvailableEmployeesForBranch: branchId = " . $branchId);
+        artmax_log("AJAX getAvailableEmployeesForBranch: POST data = " . json_encode($_POST));
+        error_log("AJAX getAvailableEmployeesForBranch: branchId = " . $branchId);
+        error_log("AJAX getAvailableEmployeesForBranch: POST data = " . json_encode($_POST));
+
+        try {
+            $component = new ArtmaxCalendarComponent();
+            $result = $component->getAvailableEmployeesForBranchAction($branchId);
+            die(json_encode($result));
+        } catch (Exception $e) {
+            die(json_encode(['success' => false, 'error' => 'Ошибка получения доступных сотрудников: ' . $e->getMessage()]));
+        }
+        break;
+
     case 'getBranchEmployees':
         $branchId = $_POST['branchId'] ?? $_POST['branch_id'] ?? 0;
-        
+
         // Отладочная информация
         error_log("AJAX getBranchEmployees: branchId = " . $branchId);
         error_log("AJAX getBranchEmployees: POST data = " . json_encode($_POST));
-        
+
         try {
             $component = new ArtmaxCalendarComponent();
             $result = $component->getBranchEmployeesAction($branchId);

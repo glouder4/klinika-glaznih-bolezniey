@@ -8,6 +8,7 @@ function initializeBranchSettingsForm() {
     let selectedEmployees = [];
     let allEmployees = [];
     let branchId = window.branchSettingsData ? window.branchSettingsData.branchId : null;
+    let employeesGroupMode = window.branchSettingsData ? window.branchSettingsData.employeesGroupMode : 'individual';
     
     // Функция закрытия SidePanel
     window.closeSidePanel = function() {
@@ -30,9 +31,40 @@ function initializeBranchSettingsForm() {
         return tokenInput ? tokenInput.value : '';
     }
 
-    // Загрузка всех сотрудников
+    // Валидация email
+    function validateEmail(email) {
+        const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        return re.test(email);
+    }
+
+    // Вспомогательная функция для отображения ошибок
+    function showFieldError(fieldId, errorId, message) {
+        const field = document.getElementById(fieldId);
+        const error = document.getElementById(errorId);
+        const fieldContainer = field ? (field.closest('.artmax-form-field') || field.closest('.artmax-event-title-section')) : null;
+
+        if (fieldContainer) {
+            fieldContainer.classList.add('error');
+        }
+
+        if (error) {
+            error.textContent = message;
+            error.style.display = 'block';
+        }
+    }
+
+    // Загрузка доступных сотрудников для филиала
     function loadEmployees() {
+        console.log('loadEmployees: Starting, branchId =', branchId);
+        
+        if (!branchId) {
+            console.error('loadEmployees: branchId is not defined!');
+            return;
+        }
+        
         const csrfToken = getCSRFToken();
+        console.log('loadEmployees: Sending AJAX request to getAvailableEmployeesForBranch, branchId =', branchId);
+        
         fetch('/local/components/artmax/calendar/ajax.php', {
             method: 'POST',
             headers: {
@@ -41,16 +73,30 @@ function initializeBranchSettingsForm() {
                 'X-Bitrix-Csrf-Token': csrfToken
             },
             body: new URLSearchParams({
-                action: 'getEmployees',
+                action: 'getAvailableEmployeesForBranch',
+                branch_id: branchId,
                 sessid: csrfToken
             })
         })
-        .then(response => response.json())
+        .then(response => {
+            console.log('loadEmployees: Response received, status =', response.status);
+            return response.json();
+        })
         .then(data => {
+            console.log('loadEmployees: Response data =', data);
             if (data.success && data.employees) {
+                console.log('loadEmployees: Loaded', data.employees.length, 'employees');
                 allEmployees = data.employees;
+
+                // Проверяем, есть ли сотрудники из старых групп
+                const hasOldGroupEmployees = data.employees.some(emp => emp._from_old_group);
+                const noticeElement = document.getElementById('old-group-notice');
+                if (noticeElement) {
+                    noticeElement.style.display = hasOldGroupEmployees ? 'block' : 'none';
+                }
+
                 renderEmployeeOptions(allEmployees);
-                
+
                 // После загрузки всех сотрудников загружаем выбранных сотрудников филиала
                 if (branchId) {
                     loadBranchEmployees(branchId);
@@ -60,7 +106,7 @@ function initializeBranchSettingsForm() {
             }
         })
         .catch(error => {
-            console.error('Ошибка при загрузке сотрудников:', error);
+            console.error('loadEmployees: Ошибка при загрузке сотрудников:', error);
         });
     }
 
@@ -153,10 +199,11 @@ function initializeBranchSettingsForm() {
                 option.classList.add('selected');
             }
             
+            const isFromOldGroup = employee._from_old_group;
             option.innerHTML = `
-                <input type="checkbox" id="emp-${employee.ID}" value="${employee.ID}" 
+                <input type="checkbox" id="emp-${employee.ID}" value="${employee.ID}"
                        ${isSelected ? 'checked' : ''}>
-                <label for="emp-${employee.ID}">${employee.NAME} ${employee.LAST_NAME}</label>
+                <label for="emp-${employee.ID}">${employee.NAME} ${employee.LAST_NAME}${isFromOldGroup ? ' <em style="color: #666; font-size: 11px;">(из предыдущей группы)</em>' : ''}</label>
             `;
             
             option.addEventListener('click', (e) => {
@@ -330,11 +377,61 @@ function initializeBranchSettingsForm() {
     // Функция сохранения настроек филиала
     window.saveBranchSettings = function() {
         const form = document.getElementById('branch-settings-form');
-        const formData = new FormData(form);
         
+        if (!form) {
+            console.error('saveBranchSettings: Form not found!');
+            return;
+        }
+
+        // Валидация формы
+        let isValid = true;
+
+        try {
+            // Очищаем предыдущие ошибки
+            document.querySelectorAll('.artmax-field-error').forEach(error => {
+                error.style.display = 'none';
+            });
+
+            document.querySelectorAll('.artmax-form-field, .artmax-event-title-section').forEach(field => {
+                field.classList.remove('error');
+            });
+
+            // Проверяем обязательные поля
+            const name = document.getElementById('branch-name');
+            const email = document.getElementById('branch-email');
+
+            // Проверка названия филиала (обязательное поле)
+            if (!name) {
+                console.error('saveBranchSettings: name field not found!');
+                isValid = false;
+                showFieldError('branch-name', 'name-error', 'Поле названия филиала не найдено');
+            } else if (!name.value || !name.value.trim()) {
+                isValid = false;
+                showFieldError('branch-name', 'name-error', 'Заполните название филиала');
+            }
+
+            // Валидация email (опциональное поле - только если поле существует и заполнено)
+            if (email && email.value && typeof email.value === 'string' && email.value.trim()) {
+                if (!validateEmail(email.value.trim())) {
+                    isValid = false;
+                    showFieldError('branch-email', 'email-error', 'Введите корректный email');
+                }
+            }
+        } catch (e) {
+            console.error('saveBranchSettings: Error during validation:', e);
+            alert('Ошибка при валидации формы: ' + e.message);
+            return;
+        }
+
+        if (!isValid) {
+            return;
+        }
+
+        const formData = new FormData(form);
+
         // Добавляем action для AJAX обработчика
         formData.append('action', 'saveBranchSettings');
-        
+
         // Добавляем выбранных сотрудников
         const employeeIds = selectedEmployees.map(emp => emp.ID);
         formData.append('employee_ids', JSON.stringify(employeeIds));
@@ -368,11 +465,17 @@ function initializeBranchSettingsForm() {
                 }
                 
                 // Отправляем сообщение родительскому окну
-                if (window.parent) {
+                if (window.parent && window.parent !== window) {
+                    console.log('Sending postMessage to parent:', {
+                        type: 'calendar:branchSettingsSaved',
+                        branchId: branchId
+                    });
                     window.parent.postMessage({
                         type: 'calendar:branchSettingsSaved',
                         branchId: branchId
-                    }, '*');
+                    }, window.location.origin);
+                } else {
+                    console.log('Parent window not available for postMessage');
                 }
                 
                 // Закрываем SidePanel без редиректа
