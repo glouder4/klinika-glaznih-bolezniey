@@ -84,6 +84,13 @@
         // Загрузка сотрудников для селекторов форм
         loadEmployeesForSelectors();
         
+        // Инициализация переключателя выбора врача (для пользователей с правом просмотра чужих записей)
+        if (window.HAS_VIEW_OTHERS_PERMISSION) {
+            // Перемещаем переключатель в uiToolbarContainer
+            moveEmployeeFilterToToolbar();
+            initEmployeeFilter();
+        }
+        
         // Инициализация обработчиков для модального окна настроек филиала
         initBranchModal();
 
@@ -4356,6 +4363,117 @@
         const selector = document.getElementById(selectorId);
         if (selector) {
             selector.value = employeeId || '';
+        }
+    }
+
+    // Перемещение переключателя выбора врача в контейнер uiToolbarContainer
+    function moveEmployeeFilterToToolbar() {
+        const filterContainer = document.getElementById('employee-filter-container');
+        if (!filterContainer) return;
+
+        // Ждем, пока контейнер uiToolbarContainer будет создан
+        const moveFilter = function() {
+            const toolbarContainer = document.getElementById('uiToolbarContainer');
+            if (toolbarContainer) {
+                // Клонируем содержимое контейнера (убираем обертку)
+                const filterContent = filterContainer.querySelector('.calendar-employee-filter');
+                if (filterContent) {
+                    // Удаляем скрытие и добавляем в toolbar
+                    filterContent.style.display = 'inline-flex';
+                    toolbarContainer.appendChild(filterContent);
+                    // Удаляем исходный контейнер
+                    filterContainer.remove();
+                    console.log('Переключатель выбора врача перемещен в uiToolbarContainer');
+                }
+            } else {
+                // Если контейнер еще не создан, повторяем попытку через 100ms
+                setTimeout(moveFilter, 100);
+            }
+        };
+
+        // Пытаемся переместить сразу, если контейнер уже существует
+        moveFilter();
+    }
+
+    // Инициализация переключателя выбора врача для просмотра записей
+    function initEmployeeFilter() {
+        const filterSelect = document.getElementById('employee-filter-select');
+        if (!filterSelect) return;
+
+        // Загружаем список сотрудников филиала
+        const branchId = getBranchId() || 1;
+        const csrfToken = getCSRFToken();
+        
+        fetch('/local/components/artmax/calendar/ajax.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-Bitrix-Csrf-Token': csrfToken
+            },
+            body: new URLSearchParams({
+                action: 'getAvailableEmployeesForBranch',
+                branchId: branchId,
+                sessid: csrfToken
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.employees) {
+                // Добавляем опции других врачей (кроме текущего пользователя)
+                data.employees.forEach(employee => {
+                    if (employee.ID != window.CURRENT_USER_ID) {
+                        const option = document.createElement('option');
+                        option.value = employee.ID;
+                        option.textContent = `${employee.NAME} ${employee.LAST_NAME}`.trim() || employee.LOGIN;
+                        // Проверяем, выбран ли этот врач в URL параметре
+                        const urlParams = new URLSearchParams(window.location.search);
+                        if (urlParams.get('employee_id') == employee.ID) {
+                            option.selected = true;
+                        }
+                        filterSelect.appendChild(option);
+                    }
+                });
+            }
+        })
+        .catch(error => {
+            console.error('Ошибка при загрузке сотрудников для переключателя:', error);
+        });
+
+        // Обработчик изменения выбора врача
+        filterSelect.addEventListener('change', function() {
+            const selectedEmployeeId = this.value;
+            const urlParams = new URLSearchParams(window.location.search);
+            
+            // Обновляем или удаляем параметр employee_id
+            if (selectedEmployeeId && selectedEmployeeId !== '0') {
+                urlParams.set('employee_id', selectedEmployeeId);
+            } else {
+                urlParams.delete('employee_id');
+            }
+            
+            // Обновляем URL и перезагружаем страницу
+            const newUrl = window.location.pathname + '?' + urlParams.toString();
+            window.location.href = newUrl;
+        });
+
+        // Устанавливаем текущее значение из URL параметра
+        const urlParams = new URLSearchParams(window.location.search);
+        const employeeIdParam = urlParams.get('employee_id');
+        if (employeeIdParam) {
+            filterSelect.value = employeeIdParam;
+        } else {
+            // Для врачей с правом view_others по умолчанию "Мои записи", для остальных "Все записи"
+            if (window.HAS_VIEW_OTHERS_PERMISSION && !window.IS_ADMIN && window.CURRENT_USER_ID) {
+                // Устанавливаем "Мои записи" и добавляем параметр в URL для корректной фильтрации
+                filterSelect.value = window.CURRENT_USER_ID;
+                urlParams.set('employee_id', window.CURRENT_USER_ID);
+                const newUrl = window.location.pathname + '?' + urlParams.toString();
+                // Обновляем URL без перезагрузки страницы, чтобы сохранить состояние
+                window.history.replaceState({}, '', newUrl);
+            } else {
+                filterSelect.value = '0'; // "Все записи" по умолчанию для админов
+            }
         }
     }
 

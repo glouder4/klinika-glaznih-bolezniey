@@ -66,6 +66,22 @@ class EventHandlers
         $customSectionId = \Bitrix\Main\Config\Option::get('artmax.calendar', 'custom_section_id', '');
         if (!$customSectionId) {
             self::createCustomSection();
+        } else {
+            // Проверяем, что страницы для филиалов созданы
+            if (class_exists('\Bitrix\Intranet\CustomSection\Entity\CustomSectionPageTable')) {
+                try {
+                    $pages = \Bitrix\Intranet\CustomSection\Entity\CustomSectionPageTable::getList([
+                        'filter' => ['CUSTOM_SECTION_ID' => $customSectionId]
+                    ])->fetchAll();
+                    
+                    // Если страниц нет, создаем их заново
+                    if (empty($pages)) {
+                        self::createSectionPages($customSectionId);
+                    }
+                } catch (\Exception $e) {
+                    // Игнорируем ошибки при проверке страниц
+                }
+            }
         }
         
         // Показываем сообщение об удалении модуля на странице списка модулей

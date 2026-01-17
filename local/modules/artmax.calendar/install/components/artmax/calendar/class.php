@@ -84,12 +84,45 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
             $dateTo = $endDate->format('Y-m-d');
             
             // Определяем employeeId для фильтрации
-            // Администраторы видят все события, обычные пользователи (врачи) видят только свои записи
+            // Пользователи с правом calendar.view_others видят все записи, остальные - только свои
             $employeeId = null;
             global $USER;
-            if ($USER && $USER->IsAuthorized() && !$USER->IsAdmin()) {
-                // Для обычного пользователя показываем только записи к нему как к врачу
-                $employeeId = $USER->GetID();
+            $hasViewOthersPermission = false;
+            
+            if ($USER && $USER->IsAuthorized()) {
+                // Проверяем право на просмотр чужих записей
+                if ($USER->IsAdmin()) {
+                    $hasViewOthersPermission = true;
+                } else {
+                    try {
+                        $permissionsObj = new \Artmax\Calendar\Permissions();
+                        $hasViewOthersPermission = $permissionsObj->hasPermission($USER->GetID(), 'calendar.view_others');
+                    } catch (\Exception $e) {
+                        // Если ошибка проверки прав, используем безопасный вариант - только свои записи
+                        $hasViewOthersPermission = false;
+                    }
+                }
+                
+                // Если есть право на просмотр чужих, проверяем параметр employee_id из GET (для переключателя)
+                if ($hasViewOthersPermission) {
+                    if (isset($_GET['employee_id']) && $_GET['employee_id'] !== '') {
+                        $employeeId = (int)$_GET['employee_id'];
+                        // Если 0, то показываем все записи
+                        if ($employeeId === 0) {
+                            $employeeId = null;
+                        }
+                    } else {
+                        // Если параметра нет: для админов "Все записи", для врачей с правом view_others "Мои записи"
+                        if ($USER->IsAdmin()) {
+                            $employeeId = null; // Админы видят все записи по умолчанию
+                        } else {
+                            $employeeId = $USER->GetID(); // Врачи с правом view_others видят свои записи по умолчанию
+                        }
+                    }
+                } else {
+                    // Без права на просмотр чужих - показываем только свои записи
+                    $employeeId = $USER->GetID();
+                }
             }
             
             file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
@@ -156,6 +189,34 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
 
         // Формируем данные для шаблона
         global $USER;
+        
+        // Проверяем право на просмотр чужих записей для шаблона
+        $hasViewOthersPermission = false;
+        if ($USER && $USER->IsAuthorized()) {
+            if ($USER->IsAdmin()) {
+                $hasViewOthersPermission = true;
+                error_log("HAS_VIEW_OTHERS_PERMISSION: User is admin, setting to true");
+            } else {
+                try {
+                    $permissionsObj = new \Artmax\Calendar\Permissions();
+                    $userId = $USER->GetID();
+                    $hasViewOthersPermission = $permissionsObj->hasPermission($userId, 'calendar.view_others');
+                    
+                    // Отладочная информация
+                    error_log("HAS_VIEW_OTHERS_PERMISSION: User ID = " . $userId . ", hasPermission result = " . ($hasViewOthersPermission ? 'true' : 'false'));
+                    
+                    // Дополнительная отладка: проверяем группы пользователя
+                    $userGroups = \CUser::GetUserGroup($userId);
+                    error_log("HAS_VIEW_OTHERS_PERMISSION: User groups = " . implode(', ', $userGroups));
+                } catch (\Exception $e) {
+                    $hasViewOthersPermission = false;
+                    error_log("HAS_VIEW_OTHERS_PERMISSION: Exception = " . $e->getMessage());
+                }
+            }
+        } else {
+            error_log("HAS_VIEW_OTHERS_PERMISSION: User not authorized or not set");
+        }
+        
         $this->arResult = [
             'BRANCH' => $branch,
             'EVENTS' => $events,
@@ -165,6 +226,7 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
             'CURRENT_USER_ID' => $USER ? $USER->GetID() : 0,
             'IS_ADMIN' => $USER && $USER->IsAdmin(),
             'CAN_ADD_EVENTS' => $USER ? $USER->IsAuthorized() : false,
+            'HAS_VIEW_OTHERS_PERMISSION' => $hasViewOthersPermission,
         ];
 
         // Добавляем панельные кнопки для администраторов
@@ -207,11 +269,10 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
             $this->arResult['SHOW_BRANCH_BUTTONS'] = false;
         }
         
-        // Добавляем кнопку "Группы и права" для всех пользователей с правом manage_groups
-        // (независимо от статуса администратора)
-        if ($USER && $USER->IsAuthorized()) {
-            $this->addPermissionsButton();
-        }
+        // Пункт "Группы и права" будет добавлен в меню кнопки настроек
+        
+        // Добавляем навигацию по месяцам для всех пользователей
+        $this->addMonthNavigation();
 
         // Подключаем шаблон
         $this->includeComponentTemplate();
@@ -262,20 +323,67 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                 ]
             ], ButtonLocation::AFTER_TITLE);
 
-            // Кнопка "Настройки филиала" (только иконка с полупрозрачным фоном)
+            // Кнопка "Настройки" с выпадающим меню (только иконка)
+            $menuItems = [
+                [
+                    'text' => 'Настройки филиала',
+                    'title' => 'Настроить параметры текущего филиала',
+                    'onclick' => new \Bitrix\UI\Buttons\JsHandler('openBranchModal')
+                ]
+            ];
+            
+            // Проверяем право на управление группами и добавляем пункт "Группы и права"
+            $hasManageGroupsPermission = false;
+            try {
+                if (class_exists('\Artmax\Calendar\Permissions')) {
+                    $permissionsObj = new \Artmax\Calendar\Permissions();
+                    $hasManageGroupsPermission = $permissionsObj->hasPermission($USER->GetID(), 'calendar.manage_groups');
+                }
+            } catch (\Exception $e) {
+                // Игнорируем ошибки
+            }
+            
+            if ($hasManageGroupsPermission) {
+                // Добавляем JavaScript функцию для редиректа, если её еще нет
+                global $APPLICATION;
+                $jsFunction = '
+                    <script>
+                    if (typeof window.redirectToPermissionsPage === "undefined") {
+                        window.redirectToPermissionsPage = function() {
+                            window.location.href = "/bitrix/admin/artmax.calendar_artmax_calendar_permissions.php?lang=' . LANGUAGE_ID . '";
+                        };
+                    }
+                    </script>
+                ';
+                $APPLICATION->AddHeadString($jsFunction);
+                
+                $menuItems[] = [
+                    'text' => 'Группы и права',
+                    'title' => 'Управление группами пользователей и правами доступа',
+                    'onclick' => new \Bitrix\UI\Buttons\JsHandler('redirectToPermissionsPage')
+                ];
+            }
+            
             Toolbar::addButton([
                 'text' => '',
-                'title' => 'Настроить параметры текущего филиала',
+                'title' => 'Настройки',
                 'icon' => \Bitrix\UI\Buttons\Icon::SETTING,
                 'dataset' => [
                     'toolbar-collapsed-icon' => \Bitrix\UI\Buttons\Icon::SETTING
                 ],
-                'onclick' => 'openBranchModal',
+                'menu' => [
+                    'items' => $menuItems
+                ],
                 'classList' => ['calendar-settings-btn']
             ], ButtonLocation::AFTER_TITLE);
         }
+    }
 
-
+    /**
+     * Добавляет навигацию по месяцам (для всех пользователей)
+     */
+    private function addMonthNavigation()
+    {
         // Блок навигации по месяцам в pagetitle-below через отложенные функции
         global $APPLICATION;
         
@@ -425,15 +533,53 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
             ]
         ]);
 
-        // Кнопка "Настройки филиала" (только иконка)
+        // Кнопка "Настройки" с выпадающим меню (только иконка)
+        global $USER;
+        $menuItems = [
+            [
+                "TEXT" => "Настройки филиала",
+                "TITLE" => "Настроить параметры текущего филиала",
+                "LINK" => "javascript:openBranchModal();"
+            ]
+        ];
+        
+        // Проверяем право на управление группами и добавляем пункт "Группы и права"
+        $hasManageGroupsPermission = false;
+        try {
+            if (class_exists('\Artmax\Calendar\Permissions')) {
+                $permissionsObj = new \Artmax\Calendar\Permissions();
+                $hasManageGroupsPermission = $permissionsObj->hasPermission($USER->GetID(), 'calendar.manage_groups') || $USER->IsAdmin();
+            }
+        } catch (\Exception $e) {
+            // Игнорируем ошибки
+        }
+        
+        if ($hasManageGroupsPermission) {
+            $jsFunction = '
+                <script>
+                if (typeof window.redirectToPermissionsPage === "undefined") {
+                    window.redirectToPermissionsPage = function() {
+                        window.location.href = "/bitrix/admin/artmax.calendar_artmax_calendar_permissions.php?lang=' . LANGUAGE_ID . '";
+                    };
+                }
+                </script>
+            ';
+            $APPLICATION->AddHeadString($jsFunction);
+            
+            $menuItems[] = [
+                "TEXT" => "Группы и права",
+                "TITLE" => "Управление группами пользователей и правами доступа",
+                "LINK" => "javascript:redirectToPermissionsPage();"
+            ];
+        }
+        
         $APPLICATION->AddPanelButton([
             "TEXT" => "",
-            "TITLE" => "Настроить параметры текущего филиала",       
+            "TITLE" => "Настройки",       
             "ICON" => "bx-icon-settings",  
-            "ONCLICK" => "openBranchModal",
             "SORT" => 20,
-            "HINT" => "Настроить часовой пояс, сотрудников и другие параметры филиала",
-            "MENU" => false
+            "HINT" => "Настройки календаря",
+            "MENU" => $menuItems
         ]);
     }
     
@@ -747,15 +893,48 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
             }
             
             // Определяем employeeId для фильтрации
-            // Администраторы видят все события, обычные пользователи (врачи) видят только свои записи
+            // Пользователи с правом calendar.view_others видят все записи, остальные - только свои
             $employeeId = null;
             global $USER;
-            if ($USER && $USER->IsAuthorized() && !$USER->IsAdmin()) {
-                // Для обычного пользователя показываем только записи к нему как к врачу
-                $employeeId = $USER->GetID();
+            $hasViewOthersPermission = false;
+            
+            if ($USER && $USER->IsAuthorized()) {
+                // Проверяем право на просмотр чужих записей
+                if ($USER->IsAdmin()) {
+                    $hasViewOthersPermission = true;
+                } else {
+                    try {
+                        $permissionsObj = new \Artmax\Calendar\Permissions();
+                        $hasViewOthersPermission = $permissionsObj->hasPermission($USER->GetID(), 'calendar.view_others');
+                    } catch (\Exception $e) {
+                        // Если ошибка проверки прав, используем безопасный вариант - только свои записи
+                        $hasViewOthersPermission = false;
+                    }
+                }
+                
+                // Если есть право на просмотр чужих, проверяем параметр employee_id из POST (для переключателя)
+                if ($hasViewOthersPermission) {
+                    if (isset($_POST['employee_id']) && $_POST['employee_id'] !== '') {
+                        $employeeId = (int)$_POST['employee_id'];
+                        // Если 0, то показываем все записи
+                        if ($employeeId === 0) {
+                            $employeeId = null;
+                        }
+                    } else {
+                        // Если параметра нет: для админов "Все записи", для врачей с правом view_others "Мои записи"
+                        if ($USER->IsAdmin()) {
+                            $employeeId = null; // Админы видят все записи по умолчанию
+                        } else {
+                            $employeeId = $USER->GetID(); // Врачи с правом view_others видят свои записи по умолчанию
+                        }
+                    }
+                } else {
+                    // Без права на просмотр чужих - показываем только свои записи
+                    $employeeId = $USER->GetID();
+                }
             }
             
-            error_log("AJAX getEventsAction: Current user ID=" . ($USER ? $USER->GetID() : 'none') . ", IsAdmin=" . ($USER && $USER->IsAdmin() ? 'yes' : 'no') . ", Filter employeeId=" . ($employeeId ?? 'null'));
+            error_log("AJAX getEventsAction: Current user ID=" . ($USER ? $USER->GetID() : 'none') . ", IsAdmin=" . ($USER && $USER->IsAdmin() ? 'yes' : 'no') . ", HasViewOthersPermission=" . ($hasViewOthersPermission ? 'yes' : 'no') . ", Filter employeeId=" . ($employeeId ?? 'null'));
             
             $calendarObj = new \Artmax\Calendar\Calendar();
             $events = $calendarObj->getEventsByBranch($branchId, $dateFrom, $dateTo, null, null, $employeeId);

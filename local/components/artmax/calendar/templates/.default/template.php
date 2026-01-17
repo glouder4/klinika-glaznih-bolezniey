@@ -9,10 +9,15 @@ echo '<!-- STATIC LOAD DEBUG: Total events = ' . count($arResult['EVENTS']) . ' 
 echo '<!-- STATIC LOAD DEBUG: Events by date keys = ' . implode(', ', array_keys($arResult['EVENTS_BY_DATE'])) . ' -->';
 
 // Передаем IS_ADMIN в JavaScript
+// Отладочная информация
+$hasViewOthers = isset($arResult['HAS_VIEW_OTHERS_PERMISSION']) ? $arResult['HAS_VIEW_OTHERS_PERMISSION'] : false;
+echo '<!-- DEBUG: HAS_VIEW_OTHERS_PERMISSION = ' . ($hasViewOthers ? 'true' : 'false') . ' -->';
 ?>
 <script>
     window.IS_ADMIN = <?= $arResult['IS_ADMIN'] ? 'true' : 'false' ?>;
     window.CURRENT_USER_ID = <?= $arResult['CURRENT_USER_ID'] ?>;
+    window.HAS_VIEW_OTHERS_PERMISSION = <?= $hasViewOthers ? 'true' : 'false' ?>;
+    console.log('HAS_VIEW_OTHERS_PERMISSION:', <?= $hasViewOthers ? 'true' : 'false' ?>);
 </script>
 
 <!-- ИСПРАВЛЕНИЕ: CSS стили для отображения заметок врачам (только просмотр) -->
@@ -182,6 +187,42 @@ $totalDays = 42; // 6 недель * 7 дней
   
     <!-- Основной календарь -->
     <div class="calendar-main">
+
+        <!-- Переключатель выбора врача (будет перемещен в uiToolbarContainer через JavaScript) -->
+        <?php 
+        $hasViewOthers = isset($arResult['HAS_VIEW_OTHERS_PERMISSION']) ? $arResult['HAS_VIEW_OTHERS_PERMISSION'] : false;
+        echo '<!-- DEBUG: Переключатель будет показан: ' . ($hasViewOthers ? 'ДА' : 'НЕТ') . ' -->';
+        if ($hasViewOthers): 
+        ?>
+        <div id="employee-filter-container" style="display: none;">
+            <div class="calendar-employee-filter">
+                <div class="employee-filter-wrapper">
+                    <select id="employee-filter-select" class="employee-filter-select">
+                        <?php 
+                        $currentEmployeeId = isset($_GET['employee_id']) ? (int)$_GET['employee_id'] : null;
+                        $isAdmin = $arResult['IS_ADMIN'] ?? false;
+                        $hasViewOthers = $arResult['HAS_VIEW_OTHERS_PERMISSION'] ?? false;
+                        $currentUserId = $arResult['CURRENT_USER_ID'] ?? 0;
+                        
+                        // Определяем выбранное значение: если в URL нет employee_id, для врачей с правом view_others по умолчанию "Мои записи"
+                        if ($currentEmployeeId === null) {
+                            // Если параметра нет: для врачей с правом view_others "Мои записи", для админов "Все записи"
+                            $selectedValue = (!$isAdmin && $hasViewOthers) ? $currentUserId : 0;
+                        } else {
+                            $selectedValue = $currentEmployeeId;
+                        }
+                        ?>
+                        <option value="0" <?= $selectedValue === 0 ? 'selected' : '' ?>>Все записи</option>
+                        <?php if (!$isAdmin && $hasViewOthers): ?>
+                        <!-- Опция "Мои записи" доступна только врачам с правом просмотра чужих записей (но не админам) -->
+                        <option value="<?= $currentUserId ?>" <?= $selectedValue == $currentUserId ? 'selected' : '' ?>>Мои записи</option>
+                        <?php endif; ?>
+                        <!-- Опции других врачей будут загружены через JavaScript -->
+                    </select>
+                </div>
+            </div>
+        </div>
+        <?php endif; ?>
 
         <div class="calendar-grid">
             <!-- Заголовки дней недели -->

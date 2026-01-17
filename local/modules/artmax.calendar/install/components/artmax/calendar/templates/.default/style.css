@@ -5288,3 +5288,63 @@ input:checked + .toggle-slider:before {
 .deal-card-add-btn:hover .ui-icon-set {
     --ui-icon-set__icon-color: #28a745;
 }
+
+/* Стили для переключателя выбора врача в тулбаре (Material Design floating label) */
+.calendar-employee-filter {
+    display: inline-flex;
+    align-items: center;
+}
+
+.employee-filter-wrapper {
+    position: relative;
+    display: inline-block;
+    min-width: 200px;
+    margin: 0 8px;
+}
+
+.employee-filter-select {
+    width: 100%;
+    padding: 12px 36px 12px 12px;
+    font-size: 14px;
+    line-height: 20px;
+    color: #333;
+    background-color: #fff;
+    border: 1px solid #c4c4c4;
+    border-radius: 4px;
+    outline: none;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%23666' d='M6 8L0 0h12z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    background-size: 12px 8px;
+    cursor: pointer;
+}
+
+.employee-filter-select:hover {
+    border-color: #9e9e9e;
+}
+
+.employee-filter-select:focus {
+    border-color: #2fc6f6;
+    box-shadow: 0 0 0 1px #2fc6f6;
+}
+
+.employee-filter-label {
+    position: absolute;
+    top: -7px;
+    left: 8px;
+    font-size: 11px;
+    line-height: 1;
+    color: #767676;
+    pointer-events: none;
+    transition: color 0.2s ease;
+    background-color: #fff;
+    padding: 0 4px;
+    white-space: nowrap;
+    z-index: 1;
+}
+
+.employee-filter-select:focus + .employee-filter-label {
+    color: #2fc6f6;
+}

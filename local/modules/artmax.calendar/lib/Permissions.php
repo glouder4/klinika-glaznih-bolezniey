@@ -414,6 +414,7 @@ class Permissions
         // Проверяем существование необходимых таблиц
         if (!$this->tableExists('artmax_calendar_permissions') || !$this->tableExists('artmax_calendar_access_rights')) {
             // Если таблицы не созданы, возвращаем false (нет прав)
+            error_log('hasPermission: Tables do not exist');
             return false;
         }
         
@@ -431,11 +432,13 @@ class Permissions
             $row = $result->fetch();
             
             if ($row && $row['cnt'] > 0) {
+                error_log('hasPermission: User ' . $userId . ' has permission ' . $permissionCode . ' directly');
                 return true;
             }
             
             // Проверяем через группы
             $userGroups = \CUser::GetUserGroup($userId);
+            error_log('hasPermission: Checking groups for user ' . $userId . ' with permission ' . $permissionCode . ', groups: ' . implode(', ', $userGroups));
             
             foreach ($userGroups as $groupId) {
                 $groupId = (int)$groupId;
@@ -451,7 +454,10 @@ class Permissions
                     $resultGroup = $this->connection->query($sqlGroup);
                     $rowGroup = $resultGroup->fetch();
                     
+                    error_log('hasPermission: Group ' . $groupId . ' has permission ' . $permissionCode . ': ' . ($rowGroup && $rowGroup['cnt'] > 0 ? 'YES (cnt=' . $rowGroup['cnt'] . ')' : 'NO'));
+                    
                     if ($rowGroup && $rowGroup['cnt'] > 0) {
+                        error_log('hasPermission: User ' . $userId . ' has permission ' . $permissionCode . ' through group ' . $groupId);
                         return true;
                     }
                 }
@@ -459,9 +465,11 @@ class Permissions
         } catch (\Exception $e) {
             // В случае ошибки возвращаем false (нет прав)
             error_log('Ошибка проверки прав доступа: ' . $e->getMessage());
+            error_log('hasPermission: Exception trace: ' . $e->getTraceAsString());
             return false;
         }
         
+        error_log('hasPermission: User ' . $userId . ' does NOT have permission ' . $permissionCode);
         return false;
     }
 

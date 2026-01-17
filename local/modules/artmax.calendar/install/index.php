@@ -279,17 +279,29 @@ class artmax_calendar extends CModule
             // Игнорируем ошибку, возможно таблица ещё не создана
         }
         
-        // Создаем первый филиал по умолчанию
-        $sqlDefaultBranch = "
-        INSERT INTO artmax_calendar_branches (NAME, ADDRESS, PHONE, EMAIL, TIMEZONE_NAME, IS_ACTIVE) 
-        VALUES ('Филиал - 1', '', '', '', 'Europe/Moscow', 1)
-        ";
-        $connection->query($sqlDefaultBranch);
+        // Создаем первый филиал по умолчанию (только если его еще нет)
+        // Проверяем, существует ли уже филиал с таким названием
+        $checkBranchSql = "SELECT ID FROM artmax_calendar_branches WHERE NAME = 'Филиал - 1' LIMIT 1";
+        $checkResult = $connection->query($checkBranchSql);
+        $existingBranch = $checkResult->fetch();
+        $defaultBranchId = null;
         
-        // Получаем ID созданного филиала (более надежный способ)
-        $result = $connection->query("SELECT ID FROM artmax_calendar_branches WHERE NAME = 'Филиал - 1' ORDER BY ID DESC LIMIT 1");
-        $row = $result->fetch();
-        $defaultBranchId = $row ? (int)$row['ID'] : null;
+        if (!$existingBranch) {
+            // Филиала еще нет, создаем его
+            $sqlDefaultBranch = "
+            INSERT INTO artmax_calendar_branches (NAME, ADDRESS, PHONE, EMAIL, TIMEZONE_NAME, IS_ACTIVE) 
+            VALUES ('Филиал - 1', '', '', '', 'Europe/Moscow', 1)
+            ";
+            $connection->query($sqlDefaultBranch);
+            
+            // Получаем ID созданного филиала (более надежный способ)
+            $result = $connection->query("SELECT ID FROM artmax_calendar_branches WHERE NAME = 'Филиал - 1' ORDER BY ID DESC LIMIT 1");
+            $row = $result->fetch();
+            $defaultBranchId = $row ? (int)$row['ID'] : null;
+        } else {
+            // Филиал уже существует, используем его ID
+            $defaultBranchId = (int)$existingBranch['ID'];
+        }
         
         // Создаем пользовательское поле "Бронирование" для сделки
         $this->createDealBookingField();
@@ -1772,6 +1784,7 @@ class artmax_calendar extends CModule
     {
         $permissions = [
             ['CODE' => 'calendar.view', 'NAME' => 'Просмотр календаря', 'DESCRIPTION' => 'Право на просмотр календаря и записей'],
+            ['CODE' => 'calendar.view_others', 'NAME' => 'Просмотр чужих записей', 'DESCRIPTION' => 'Право на просмотр записей других врачей'],
             ['CODE' => 'calendar.create', 'NAME' => 'Создание записи', 'DESCRIPTION' => 'Право на создание новых записей в календаре'],
             ['CODE' => 'calendar.edit', 'NAME' => 'Редактирование записи', 'DESCRIPTION' => 'Право на редактирование существующих записей'],
             ['CODE' => 'calendar.delete', 'NAME' => 'Удаление записи', 'DESCRIPTION' => 'Право на удаление записей из календаря'],
