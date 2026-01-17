@@ -545,6 +545,16 @@ if ($isAjaxRequest) {
         case 'get_branches_list':
             // Возвращает HTML со списком филиалов для обновления вкладки
             try {
+                // Инициализируем connection для AJAX запроса
+                if (!isset($connection)) {
+                    $connection = \Bitrix\Main\Application::getConnection();
+                }
+                
+                // Инициализируем timezoneManager для AJAX запроса
+                if (!isset($timezoneManager)) {
+                    $timezoneManager = new \Artmax\Calendar\TimezoneManager();
+                }
+                
                 $branchesList = [];
 
                 // Получаем филиалы с безопасной обработкой ошибок
@@ -670,14 +680,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $groupId = (int)$_POST['branch_employees_group_id'];
             $oldGroupId = $moduleSettings->getBranchEmployeesGroupId();
 
+            artmax_log("Saving branch_employees_group_id: oldGroupId = " . ($oldGroupId ?? 'null') . ", newGroupId = " . $groupId);
+
             if ($groupId > 0) {
                 $moduleSettings->setBranchEmployeesGroupId($groupId);
                 $successMessage = 'Настройки успешно сохранены.';
+                
+                // Проверяем, что настройка сохранилась
+                $savedGroupId = $moduleSettings->getBranchEmployeesGroupId();
+                artmax_log("branch_employees_group_id saved: savedGroupId = " . ($savedGroupId ?? 'null'));
             } else {
                 // Если выбрано "Не использовать группу", удаляем настройку
                 // Привязки сотрудников сохраняются для возможного возврата к групповому режиму
                 $moduleSettings->delete('branch_employees_group_id');
                 $successMessage = 'Настройки успешно сохранены. Режим переключен на индивидуальную настройку.';
+                artmax_log("branch_employees_group_id deleted");
             }
         }
     }
@@ -1037,6 +1054,9 @@ CJSCore::Init(['jquery', 'ui.buttons', 'ui.tabs']);
 <script>
 // Обработчик сообщений от дочерних окон
 window.addEventListener('message', function(event) {
+    // Пропускаем логирование всех postMessage, чтобы не засорять консоль
+    // Раскомментируйте строку ниже для отладки, если нужно
+    // console.log('Received postMessage:', data);
     // Проверяем происхождение сообщения для безопасности
     if (event.origin !== window.location.origin) {
         console.log('Message blocked: wrong origin', event.origin);
@@ -1044,7 +1064,9 @@ window.addEventListener('message', function(event) {
     }
 
     var data = event.data;
-    console.log('Received postMessage:', data);
+    // Пропускаем логирование всех postMessage, чтобы не засорять консоль
+    // Раскомментируйте строку ниже для отладки, если нужно
+    // console.log('Received postMessage:', data);
 
     if (data && data.type) {
         switch (data.type) {

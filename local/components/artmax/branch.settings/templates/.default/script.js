@@ -55,7 +55,16 @@ function initializeBranchSettingsForm() {
 
     // Загрузка доступных сотрудников для филиала
     function loadEmployees() {
+        console.log('loadEmployees: Starting, branchId =', branchId);
+        
+        if (!branchId) {
+            console.error('loadEmployees: branchId is not defined!');
+            return;
+        }
+        
         const csrfToken = getCSRFToken();
+        console.log('loadEmployees: Sending AJAX request to getAvailableEmployeesForBranch, branchId =', branchId);
+        
         fetch('/local/components/artmax/calendar/ajax.php', {
             method: 'POST',
             headers: {
@@ -69,9 +78,14 @@ function initializeBranchSettingsForm() {
                 sessid: csrfToken
             })
         })
-        .then(response => response.json())
+        .then(response => {
+            console.log('loadEmployees: Response received, status =', response.status);
+            return response.json();
+        })
         .then(data => {
+            console.log('loadEmployees: Response data =', data);
             if (data.success && data.employees) {
+                console.log('loadEmployees: Loaded', data.employees.length, 'employees');
                 allEmployees = data.employees;
 
                 // Проверяем, есть ли сотрудники из старых групп
@@ -92,7 +106,7 @@ function initializeBranchSettingsForm() {
             }
         })
         .catch(error => {
-            console.error('Ошибка при загрузке сотрудников:', error);
+            console.error('loadEmployees: Ошибка при загрузке сотрудников:', error);
         });
     }
 
@@ -363,32 +377,50 @@ function initializeBranchSettingsForm() {
     // Функция сохранения настроек филиала
     window.saveBranchSettings = function() {
         const form = document.getElementById('branch-settings-form');
+        
+        if (!form) {
+            console.error('saveBranchSettings: Form not found!');
+            return;
+        }
 
         // Валидация формы
         let isValid = true;
 
-        // Очищаем предыдущие ошибки
-        document.querySelectorAll('.artmax-field-error').forEach(error => {
-            error.style.display = 'none';
-        });
+        try {
+            // Очищаем предыдущие ошибки
+            document.querySelectorAll('.artmax-field-error').forEach(error => {
+                error.style.display = 'none';
+            });
 
-        document.querySelectorAll('.artmax-form-field, .artmax-event-title-section').forEach(field => {
-            field.classList.remove('error');
-        });
+            document.querySelectorAll('.artmax-form-field, .artmax-event-title-section').forEach(field => {
+                field.classList.remove('error');
+            });
 
-        // Проверяем обязательные поля
-        const name = document.getElementById('branch-name');
-        const email = document.getElementById('branch-email');
+            // Проверяем обязательные поля
+            const name = document.getElementById('branch-name');
+            const email = document.getElementById('branch-email');
 
-        if (!name.value.trim()) {
-            isValid = false;
-            showFieldError('branch-name', 'name-error', 'Заполните название филиала');
-        }
+            // Проверка названия филиала (обязательное поле)
+            if (!name) {
+                console.error('saveBranchSettings: name field not found!');
+                isValid = false;
+                showFieldError('branch-name', 'name-error', 'Поле названия филиала не найдено');
+            } else if (!name.value || !name.value.trim()) {
+                isValid = false;
+                showFieldError('branch-name', 'name-error', 'Заполните название филиала');
+            }
 
-        // Валидация email, если он указан
-        if (email.value.trim() && !validateEmail(email.value.trim())) {
-            isValid = false;
-            showFieldError('branch-email', 'email-error', 'Введите корректный email');
+            // Валидация email (опциональное поле - только если поле существует и заполнено)
+            if (email && email.value && typeof email.value === 'string' && email.value.trim()) {
+                if (!validateEmail(email.value.trim())) {
+                    isValid = false;
+                    showFieldError('branch-email', 'email-error', 'Введите корректный email');
+                }
+            }
+        } catch (e) {
+            console.error('saveBranchSettings: Error during validation:', e);
+            alert('Ошибка при валидации формы: ' + e.message);
+            return;
         }
 
         if (!isValid) {

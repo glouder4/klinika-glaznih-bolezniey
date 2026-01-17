@@ -769,6 +769,7 @@ class Calendar
         try {
             $moduleSettings = new \Artmax\Calendar\ModuleSettings();
             $employeesGroupId = $moduleSettings->getBranchEmployeesGroupId();
+            artmax_log("getAvailableEmployeesForBranch: branchId = " . $branchId . ", employeesGroupId = " . ($employeesGroupId ?? 'null'));
 
             $employees = [];
 
@@ -801,6 +802,7 @@ class Calendar
                     );
 
                     $groupUserIds = [];
+                    $groupUsersCount = 0;
                     while ($user = $groupUsers->Fetch()) {
                         $employees[] = [
                             'ID' => $user['ID'],
@@ -810,7 +812,10 @@ class Calendar
                             'EMAIL' => $user['EMAIL'] ?: ''
                         ];
                         $groupUserIds[] = $user['ID'];
+                        $groupUsersCount++;
+                        artmax_log("getAvailableEmployeesForBranch: Found user from group " . $employeesGroupId . ": ID=" . $user['ID'] . ", NAME=" . $user['NAME'] . ", LAST_NAME=" . $user['LAST_NAME']);
                     }
+                    artmax_log("getAvailableEmployeesForBranch: Total users found in group " . $employeesGroupId . ": " . $groupUsersCount);
                 } else {
                     // Виртуальная группа - нет пользователей из Bitrix группы
                     $groupUserIds = [];
@@ -845,6 +850,7 @@ class Calendar
                     }
                 }
 
+                artmax_log("getAvailableEmployeesForBranch: Returning " . count($employees) . " total employees for branch " . $branchId);
                 return $employees;
             }
 

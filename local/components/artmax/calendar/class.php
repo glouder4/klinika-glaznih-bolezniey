@@ -3296,16 +3296,23 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
      */
     public function getAvailableEmployeesForBranchAction($branchId)
     {
+        artmax_log("getAvailableEmployeesForBranchAction: Called with branchId = " . $branchId);
         try {
             if (!CModule::IncludeModule('artmax.calendar')) {
+                artmax_log("getAvailableEmployeesForBranchAction: Module not included");
                 return ['success' => false, 'error' => 'Модуль календаря не установлен'];
             }
 
+            artmax_log("getAvailableEmployeesForBranchAction: Creating Calendar object");
             $calendar = new \Artmax\Calendar\Calendar();
+            artmax_log("getAvailableEmployeesForBranchAction: Calling getAvailableEmployeesForBranch");
             $employees = $calendar->getAvailableEmployeesForBranch($branchId);
+            artmax_log("getAvailableEmployeesForBranchAction: Got " . count($employees) . " employees");
 
             return ['success' => true, 'employees' => $employees];
         } catch (\Exception $e) {
+            artmax_log("getAvailableEmployeesForBranchAction: Exception: " . $e->getMessage());
+            artmax_log("getAvailableEmployeesForBranchAction: Stack trace: " . $e->getTraceAsString());
             return ['success' => false, 'error' => $e->getMessage()];
         }
     }
