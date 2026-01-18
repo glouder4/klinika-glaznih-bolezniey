@@ -1783,18 +1783,19 @@ class artmax_calendar extends CModule
     private function createDefaultPermissions()
     {
         $permissions = [
-            ['CODE' => 'calendar.view', 'NAME' => 'Просмотр календаря', 'DESCRIPTION' => 'Право на просмотр календаря и записей'],
             ['CODE' => 'calendar.view_others', 'NAME' => 'Просмотр чужих записей', 'DESCRIPTION' => 'Право на просмотр записей других врачей'],
             ['CODE' => 'calendar.create', 'NAME' => 'Создание записи', 'DESCRIPTION' => 'Право на создание новых записей в календаре'],
             ['CODE' => 'calendar.edit', 'NAME' => 'Редактирование записи', 'DESCRIPTION' => 'Право на редактирование существующих записей'],
             ['CODE' => 'calendar.delete', 'NAME' => 'Удаление записи', 'DESCRIPTION' => 'Право на удаление записей из календаря'],
             ['CODE' => 'calendar.move', 'NAME' => 'Перемещение записи', 'DESCRIPTION' => 'Право на перемещение записей в календаре'],
             ['CODE' => 'calendar.confirm', 'NAME' => 'Подтверждение записи', 'DESCRIPTION' => 'Право на подтверждение записей'],
+            ['CODE' => 'calendar.change_employee', 'NAME' => 'Смена ответственного врача', 'DESCRIPTION' => 'Право на смену ответственного врача в записи'],
+            ['CODE' => 'calendar.edit_title', 'NAME' => 'Редактирование названия записи', 'DESCRIPTION' => 'Право на редактирование названия записей'],
+            ['CODE' => 'calendar.edit_others_notes', 'NAME' => 'Редактирование заметок чужих записей', 'DESCRIPTION' => 'Право на редактирование заметок в чужих записях'],
             ['CODE' => 'calendar.manage_schedule', 'NAME' => 'Управление расписанием', 'DESCRIPTION' => 'Право на управление расписанием врачей'],
             ['CODE' => 'calendar.manage_branches', 'NAME' => 'Управление филиалами', 'DESCRIPTION' => 'Право на управление филиалами клиники'],
             ['CODE' => 'calendar.manage_employees', 'NAME' => 'Управление сотрудниками', 'DESCRIPTION' => 'Право на управление сотрудниками'],
-            ['CODE' => 'calendar.manage_groups', 'NAME' => 'Управление группами и правами', 'DESCRIPTION' => 'Право на создание групп пользователей и управление правами доступа'],
-            ['CODE' => 'calendar.admin', 'NAME' => 'Полный доступ', 'DESCRIPTION' => 'Полный административный доступ ко всем функциям календаря']
+            ['CODE' => 'calendar.manage_groups', 'NAME' => 'Управление группами и правами', 'DESCRIPTION' => 'Право на создание групп пользователей и управление правами доступа']
         ];
         
         $connection = \Bitrix\Main\Application::getConnection();
@@ -1853,9 +1854,10 @@ class artmax_calendar extends CModule
         
         // Администраторы - все права
         $adminPermissions = [
-            'calendar.view', 'calendar.create', 'calendar.edit', 'calendar.delete',
-            'calendar.move', 'calendar.confirm', 'calendar.manage_schedule',
-            'calendar.manage_branches', 'calendar.manage_employees', 'calendar.manage_groups', 'calendar.admin'
+            'calendar.view_others', 'calendar.create', 'calendar.edit', 'calendar.delete',
+            'calendar.move', 'calendar.confirm', 'calendar.change_employee', 'calendar.edit_title',
+            'calendar.edit_others_notes', 'calendar.manage_schedule',
+            'calendar.manage_branches', 'calendar.manage_employees', 'calendar.manage_groups'
         ];
         
         // Назначаем права администраторам

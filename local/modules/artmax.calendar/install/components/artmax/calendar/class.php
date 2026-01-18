@@ -192,29 +192,45 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
         
         // Проверяем право на просмотр чужих записей для шаблона
         $hasViewOthersPermission = false;
+        $hasCreatePermission = false;
+        $hasManageGroupsPermission = false;
         if ($USER && $USER->IsAuthorized()) {
             if ($USER->IsAdmin()) {
                 $hasViewOthersPermission = true;
+                $hasCreatePermission = true;
+                $hasManageGroupsPermission = true;
                 error_log("HAS_VIEW_OTHERS_PERMISSION: User is admin, setting to true");
+                error_log("HAS_CREATE_PERMISSION: User is admin, setting to true");
+                error_log("HAS_MANAGE_GROUPS_PERMISSION: User is admin, setting to true");
             } else {
                 try {
                     $permissionsObj = new \Artmax\Calendar\Permissions();
                     $userId = $USER->GetID();
                     $hasViewOthersPermission = $permissionsObj->hasPermission($userId, 'calendar.view_others');
+                    $hasCreatePermission = $permissionsObj->hasPermission($userId, 'calendar.create');
+                    $hasManageGroupsPermission = $permissionsObj->hasPermission($userId, 'calendar.manage_groups');
                     
                     // Отладочная информация
                     error_log("HAS_VIEW_OTHERS_PERMISSION: User ID = " . $userId . ", hasPermission result = " . ($hasViewOthersPermission ? 'true' : 'false'));
+                    error_log("HAS_CREATE_PERMISSION: User ID = " . $userId . ", hasPermission result = " . ($hasCreatePermission ? 'true' : 'false'));
+                    error_log("HAS_MANAGE_GROUPS_PERMISSION: User ID = " . $userId . ", hasPermission result = " . ($hasManageGroupsPermission ? 'true' : 'false'));
                     
                     // Дополнительная отладка: проверяем группы пользователя
                     $userGroups = \CUser::GetUserGroup($userId);
                     error_log("HAS_VIEW_OTHERS_PERMISSION: User groups = " . implode(', ', $userGroups));
                 } catch (\Exception $e) {
                     $hasViewOthersPermission = false;
+                    $hasCreatePermission = false;
+                    $hasManageGroupsPermission = false;
                     error_log("HAS_VIEW_OTHERS_PERMISSION: Exception = " . $e->getMessage());
+                    error_log("HAS_CREATE_PERMISSION: Exception = " . $e->getMessage());
+                    error_log("HAS_MANAGE_GROUPS_PERMISSION: Exception = " . $e->getMessage());
                 }
             }
         } else {
             error_log("HAS_VIEW_OTHERS_PERMISSION: User not authorized or not set");
+            error_log("HAS_CREATE_PERMISSION: User not authorized or not set");
+            error_log("HAS_MANAGE_GROUPS_PERMISSION: User not authorized or not set");
         }
         
         $this->arResult = [
@@ -227,6 +243,8 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
             'IS_ADMIN' => $USER && $USER->IsAdmin(),
             'CAN_ADD_EVENTS' => $USER ? $USER->IsAuthorized() : false,
             'HAS_VIEW_OTHERS_PERMISSION' => $hasViewOthersPermission,
+            'HAS_CREATE_PERMISSION' => $hasCreatePermission,
+            'HAS_MANAGE_GROUPS_PERMISSION' => $hasManageGroupsPermission,
         ];
 
         // Добавляем панельные кнопки для администраторов
@@ -269,7 +287,10 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
             $this->arResult['SHOW_BRANCH_BUTTONS'] = false;
         }
         
-        // Пункт "Группы и права" будет добавлен в меню кнопки настроек
+        // Добавляем кнопку "Настройки" с соответствующими пунктами для не-админов с правами
+        if (!$USER->IsAdmin() && ($this->arResult['HAS_MANAGE_GROUPS_PERMISSION'] || $this->arResult['HAS_MANAGE_BRANCHES_PERMISSION'] ?? false)) {
+            $this->addSettingsButtonForNonAdmins();
+        }
         
         // Добавляем навигацию по месяцам для всех пользователей
         $this->addMonthNavigation();
@@ -587,11 +608,11 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
      * Управляет звездочкой "Добавить в избранное" в тулбаре
      */
     /**
-     * Добавляет кнопку "Группы и права" для пользователей с соответствующим правом
+     * Добавляет кнопку "Настройки" с пунктом "Группы и права" для не-админов с правом manage_groups
      */
-    private function addPermissionsButton()
+    private function addSettingsButtonForNonAdmins()
     {
-        global $USER;
+        global $USER, $APPLICATION;
         
         if (!$USER || !$USER->IsAuthorized()) {
             return;
@@ -603,48 +624,40 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
         }
         
         try {
-            // Проверяем наличие класса Permissions
-            if (!class_exists('\Artmax\Calendar\Permissions')) {
-                return;
-            }
+            // Добавляем JavaScript функцию для редиректа
+            $jsFunction = '
+                <script>
+                if (typeof window.redirectToPermissionsPage === "undefined") {
+                    window.redirectToPermissionsPage = function() {
+                        window.location.href = "/bitrix/admin/artmax.calendar_artmax_calendar_permissions.php?lang=' . LANGUAGE_ID . '";
+                    };
+                }
+                </script>
+            ';
+            $APPLICATION->AddHeadString($jsFunction);
             
-            $permissionsObj = new \Artmax\Calendar\Permissions();
-            
-            // Безопасно проверяем права доступа с обработкой ошибок
-            $hasManageGroupsPermission = false;
-            try {
-                $hasManageGroupsPermission = $permissionsObj->hasPermission($USER->GetID(), 'calendar.manage_groups') || $USER->IsAdmin();
-            } catch (\Exception $permException) {
-                // Если таблицы не созданы или другая ошибка - просто не показываем кнопку
-                error_log('Ошибка проверки прав доступа: ' . $permException->getMessage());
-                return;
-            }
-            
-            if ($hasManageGroupsPermission) {
-                // Добавляем JavaScript функцию для редиректа
-                global $APPLICATION;
-                $jsFunction = '
-                    <script>
-                    if (typeof window.redirectToPermissionsPage === "undefined") {
-                        window.redirectToPermissionsPage = function() {
-                            window.location.href = "/bitrix/admin/artmax.calendar_artmax_calendar_permissions.php?lang=' . LANGUAGE_ID . '";
-                        };
-                    }
-                    </script>
-                ';
-                $APPLICATION->AddHeadString($jsFunction);
-                
-                Toolbar::addButton([
-                    'text' => 'Группы и права',
-                    'title' => 'Управление группами пользователей и правами доступа',
-                    'icon' => \Bitrix\UI\Buttons\Icon::SETTING,
-                    'onclick' => new \Bitrix\UI\Buttons\JsHandler('redirectToPermissionsPage'),
-                    'classList' => ['calendar-permissions-btn']
-                ], ButtonLocation::AFTER_TITLE);
-            }
+            // Кнопка "Настройки" только с пунктом "Группы и права"
+            Toolbar::addButton([
+                'text' => '',
+                'title' => 'Настройки',
+                'icon' => \Bitrix\UI\Buttons\Icon::SETTING,
+                'dataset' => [
+                    'toolbar-collapsed-icon' => \Bitrix\UI\Buttons\Icon::SETTING
+                ],
+                'menu' => [
+                    'items' => [
+                        [
+                            'text' => 'Группы и права',
+                            'title' => 'Управление группами пользователей и правами доступа',
+                            'onclick' => new \Bitrix\UI\Buttons\JsHandler('redirectToPermissionsPage')
+                        ]
+                    ]
+                ],
+                'classList' => ['calendar-settings-btn']
+            ], ButtonLocation::AFTER_TITLE);
         } catch (\Exception $e) {
-            // Если произошла ошибка (например, таблицы не созданы), просто не показываем кнопку
-            error_log('Ошибка при добавлении кнопки "Группы и права": ' . $e->getMessage());
+            // Если произошла ошибка, просто не показываем кнопку
+            error_log('Ошибка при добавлении кнопки "Настройки" для не-админов: ' . $e->getMessage());
         }
     }
 

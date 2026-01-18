@@ -810,6 +810,10 @@ var ArtMaxPermissions = {
                         <?php
                         $groupPermissions = $permissionsObj->getGroupPermissions($group['GROUP_ID']);
                         $groupUsers = $permissionsObj->getGroupUsers($group['GROUP_ID']);
+                        
+                        // Проверяем права доступа к файлам Bitrix
+                        $fileAccessRights = $permissionsObj->checkBitrixFileAccessRights($group['GROUP_ID']);
+                        $allFoldersHaveAccess = $fileAccessRights['/page/'] && $fileAccessRights['/local/components/artmax/'] && $fileAccessRights['/local/modules/artmax.calendar/'];
                         ?>
                         <div style="color: #666; font-size: 14px; margin-top: 5px;">
                             Права: <?= count($groupPermissions) ?> | 
@@ -818,6 +822,27 @@ var ArtMaxPermissions = {
                                 | Привязанных групп: <?= count($group['LINKED_GROUPS']) ?>
                             <?php endif; ?>
                         </div>
+                        <?php if (!empty($group['LINKED_GROUPS'])): ?>
+                            <div style="margin-top: 8px; padding: 8px; background: <?= $allFoldersHaveAccess ? '#e8f5e9' : '#fff3e0' ?>; border-radius: 4px; font-size: 12px; border-left: 3px solid <?= $allFoldersHaveAccess ? '#4caf50' : '#ff9800' ?>;">
+                                <strong>Права доступа к файлам Bitrix:</strong>
+                                <div style="margin-top: 4px;">
+                                    <span style="display: inline-block; margin: 2px 5px; padding: 2px 6px; background: <?= $fileAccessRights['/page/'] ? '#c8e6c9' : '#ffccbc' ?>; border-radius: 3px; font-size: 11px;">
+                                        /page/ <?= $fileAccessRights['/page/'] ? '✓' : '✗' ?>
+                                    </span>
+                                    <span style="display: inline-block; margin: 2px 5px; padding: 2px 6px; background: <?= $fileAccessRights['/local/components/artmax/'] ? '#c8e6c9' : '#ffccbc' ?>; border-radius: 3px; font-size: 11px;">
+                                        /local/components/artmax/ <?= $fileAccessRights['/local/components/artmax/'] ? '✓' : '✗' ?>
+                                    </span>
+                                    <span style="display: inline-block; margin: 2px 5px; padding: 2px 6px; background: <?= $fileAccessRights['/local/modules/artmax.calendar/'] ? '#c8e6c9' : '#ffccbc' ?>; border-radius: 3px; font-size: 11px;">
+                                        /local/modules/artmax.calendar/ <?= $fileAccessRights['/local/modules/artmax.calendar/'] ? '✓' : '✗' ?>
+                                    </span>
+                                </div>
+                                <?php if (!$allFoldersHaveAccess): ?>
+                                    <div style="margin-top: 6px; color: #e65100; font-size: 11px;">
+                                        ⚠️ Необходимо выдать права "Чтение" для всех папок (см. <a href="/bitrix/admin/fileman_file_access.php" target="_blank" style="color: #1976d2; text-decoration: underline;">Права доступа</a>)
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+                        <?php endif; ?>
                         <?php if (!empty($group['LINKED_GROUPS'])): ?>
                             <div style="margin-top: 8px; padding: 8px; background: #f8f9fa; border-radius: 4px; font-size: 12px;">
                                 <strong>Привязанные группы Bitrix:</strong>

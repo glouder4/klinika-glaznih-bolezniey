@@ -821,4 +821,108 @@ class Permissions
             return false;
         }
     }
+
+    /**
+     * Проверить права доступа группы к файлам Bitrix
+     * @param int $calendarGroupId ID группы календаря
+     * @return array Статус прав доступа для каждой папки
+     */
+    public function checkBitrixFileAccessRights($calendarGroupId)
+    {
+        try {
+            // Получаем привязанные группы Bitrix
+            $linkedGroups = $this->getLinkedBitrixGroups($calendarGroupId);
+            
+            if (empty($linkedGroups)) {
+                return [
+                    '/page/' => false,
+                    '/local/components/artmax/' => false,
+                    '/local/modules/artmax.calendar/' => false
+                ];
+            }
+            
+            // Проверяем права доступа для всех привязанных групп
+            $result = [
+                '/page/' => false,
+                '/local/components/artmax/' => false,
+                '/local/modules/artmax.calendar/' => false
+            ];
+            
+            // Папки для проверки
+            $foldersToCheck = [
+                '/page/',
+                '/local/components/artmax/',
+                '/local/modules/artmax.calendar/'
+            ];
+            
+            // Проверяем права доступа через API Bitrix
+            foreach ($linkedGroups as $linkedGroup) {
+                $bitrixGroupId = (int)$linkedGroup['BITRIX_GROUP_ID'];
+                
+                foreach ($foldersToCheck as $folder) {
+                    if ($result[$folder]) {
+                        continue; // Уже есть права
+                    }
+                    
+                    // Проверяем права доступа через таблицу b_file_access
+                    // В Bitrix права доступа к файлам/папкам хранятся в b_file_access
+                    try {
+                        if ($this->tableExists('b_file_access')) {
+                            // В Bitrix файлы/папки могут иметь путь в формате SUBDIR
+                            // Проверяем права доступа для группы через таблицу b_file_access
+                            // Структура b_file_access: FILE_ID, GROUP_ID, ACCESS_CODE (R, W, X и т.д.)
+                            
+                            // Сначала пытаемся найти папку по пути через b_file
+                            $folderPath = ltrim($folder, '/');
+                            $folderName = basename(rtrim($folder, '/'));
+                            
+                            if ($this->tableExists('b_file')) {
+                                $sql = "
+                                SELECT f.ID 
+                                FROM b_file f
+                                WHERE f.SUBDIR LIKE '" . $this->sqlHelper->forSql($folderPath . '%') . "'
+                                OR (f.SUBDIR = '" . $this->sqlHelper->forSql($folderPath) . "' AND f.FILE_NAME = '')
+                                LIMIT 1
+                                ";
+                                
+                                $fileResult = $this->connection->query($sql);
+                                $fileRow = $fileResult->fetch();
+                                
+                                if ($fileRow && isset($fileRow['ID'])) {
+                                    $fileId = (int)$fileRow['ID'];
+                                    
+                                    // Проверяем права доступа для этой группы
+                                    $accessSql = "
+                                    SELECT COUNT(*) as cnt
+                                    FROM b_file_access
+                                    WHERE FILE_ID = " . $fileId . "
+                                    AND GROUP_ID = " . $bitrixGroupId . "
+                                    AND (ACCESS_CODE = 'R' OR ACCESS_CODE LIKE 'R%')
+                                    ";
+                                    $accessResult = $this->connection->query($accessSql);
+                                    $accessRow = $accessResult->fetch();
+                                    
+                                    if ($accessRow && isset($accessRow['cnt']) && $accessRow['cnt'] > 0) {
+                                        $result[$folder] = true;
+                                    }
+                                }
+                            }
+                        }
+                    } catch (\Exception $e) {
+                        // Игнорируем ошибки проверки для конкретной папки
+                        error_log('Ошибка проверки прав доступа для папки ' . $folder . ': ' . $e->getMessage());
+                    }
+                }
+            }
+            
+            return $result;
+        } catch (\Exception $e) {
+            error_log('Ошибка проверки прав доступа к файлам Bitrix: ' . $e->getMessage());
+            return [
+                '/page/' => false,
+                '/local/components/artmax/' => false,
+                '/local/modules/artmax.calendar/' => false
+            ];
+        }
+    }
 }

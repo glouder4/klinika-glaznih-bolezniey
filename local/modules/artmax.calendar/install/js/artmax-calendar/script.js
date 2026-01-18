@@ -46,6 +46,11 @@
                 if (e.target.closest('.calendar-event')) {
                     return;
                 }
+
+                // Проверяем право на создание событий
+                if (!window.HAS_CREATE_PERMISSION) {
+                    return;
+                }
                 
                 const date = this.getAttribute('data-date');
                 if (date) {
@@ -94,6 +99,10 @@
         const createBtn = document.querySelector('.btn-create');
         if (createBtn) {
             createBtn.addEventListener('click', function() {
+                // Проверяем право на создание событий
+                if (!window.HAS_CREATE_PERMISSION) {
+                    return;
+                }
                 const today = new Date().toISOString().split('T')[0];
                 openEventForm(today);
             });
@@ -203,6 +212,12 @@
 
     // Функции для работы с календарем
     function openEventForm(date) {
+        // Проверяем право на создание событий
+        if (!window.HAS_CREATE_PERMISSION) {
+            console.log('openEventForm: User does not have permission to create events');
+            return;
+        }
+
         const modal = document.getElementById('eventFormModal');
         if (modal) {
             // Устанавливаем выбранную дату

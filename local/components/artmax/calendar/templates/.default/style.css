@@ -2299,11 +2299,35 @@ input:checked + .toggle-slider:before {
         line-height: 1;
     }
     
-    /* Скрываем все дополнительные элементы */
-    .calendar-event .event-time,
-    .calendar-event .event-icons,
-    .calendar-event .event-arrow {
+    /* Скрываем только время на планшетах, но оставляем иконки и стрелку */
+    .calendar-event .event-time > span {
         display: none !important;
+    }
+    
+    /* Показываем стрелку на планшетах (уменьшенный размер) */
+    .calendar-event .event-arrow {
+        display: block !important;
+        font-size: 8px !important;
+        padding: 1px 2px !important;
+        margin-left: 4px !important;
+        opacity: 0.7 !important;
+    }
+    
+    /* Показываем иконки на планшетах */
+    .calendar-event .event-icons {
+        display: flex !important;
+        gap: 1px !important;
+        align-items: center !important;
+        margin-left: 2px !important;
+    }
+    
+    .calendar-event .event-icon {
+        font-size: 6px !important;
+        opacity: 0.3 !important;
+    }
+    
+    .calendar-event .event-icon.active {
+        opacity: 1 !important;
     }
     
     /* Показываем только заголовок события */
@@ -2363,11 +2387,35 @@ input:checked + .toggle-slider:before {
         line-height: 1;
     }
     
-    /* Скрываем все дополнительные элементы */
-    .calendar-event .event-time,
-    .calendar-event .event-icons,
-    .calendar-event .event-arrow {
+    /* Скрываем только время на очень маленьких экранах, но оставляем иконки и стрелку */
+    .calendar-event .event-time > span {
         display: none !important;
+    }
+    
+    /* Показываем стрелку на очень маленьких экранах (уменьшенный размер) */
+    .calendar-event .event-arrow {
+        display: block !important;
+        font-size: 7px !important;
+        padding: 1px 2px !important;
+        margin-left: 3px !important;
+        opacity: 0.7 !important;
+    }
+    
+    /* Показываем иконки даже на очень маленьких экранах */
+    .calendar-event .event-icons {
+        display: flex !important;
+        gap: 1px !important;
+        align-items: center !important;
+        margin-left: 2px !important;
+    }
+    
+    .calendar-event .event-icon {
+        font-size: 5px !important;
+        opacity: 0.3 !important;
+    }
+    
+    .calendar-event .event-icon.active {
+        opacity: 1 !important;
     }
     
     /* Показываем только заголовок события */

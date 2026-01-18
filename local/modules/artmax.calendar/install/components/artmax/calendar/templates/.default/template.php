@@ -11,13 +11,21 @@ echo '<!-- STATIC LOAD DEBUG: Events by date keys = ' . implode(', ', array_keys
 // Передаем IS_ADMIN в JavaScript
 // Отладочная информация
 $hasViewOthers = isset($arResult['HAS_VIEW_OTHERS_PERMISSION']) ? $arResult['HAS_VIEW_OTHERS_PERMISSION'] : false;
+$hasCreate = isset($arResult['HAS_CREATE_PERMISSION']) ? $arResult['HAS_CREATE_PERMISSION'] : false;
+$hasManageGroups = isset($arResult['HAS_MANAGE_GROUPS_PERMISSION']) ? $arResult['HAS_MANAGE_GROUPS_PERMISSION'] : false;
 echo '<!-- DEBUG: HAS_VIEW_OTHERS_PERMISSION = ' . ($hasViewOthers ? 'true' : 'false') . ' -->';
+echo '<!-- DEBUG: HAS_CREATE_PERMISSION = ' . ($hasCreate ? 'true' : 'false') . ' -->';
+echo '<!-- DEBUG: HAS_MANAGE_GROUPS_PERMISSION = ' . ($hasManageGroups ? 'true' : 'false') . ' -->';
 ?>
 <script>
     window.IS_ADMIN = <?= $arResult['IS_ADMIN'] ? 'true' : 'false' ?>;
     window.CURRENT_USER_ID = <?= $arResult['CURRENT_USER_ID'] ?>;
     window.HAS_VIEW_OTHERS_PERMISSION = <?= $hasViewOthers ? 'true' : 'false' ?>;
+    window.HAS_CREATE_PERMISSION = <?= $hasCreate ? 'true' : 'false' ?>;
+    window.HAS_MANAGE_GROUPS_PERMISSION = <?= $hasManageGroups ? 'true' : 'false' ?>;
     console.log('HAS_VIEW_OTHERS_PERMISSION:', <?= $hasViewOthers ? 'true' : 'false' ?>);
+    console.log('HAS_CREATE_PERMISSION:', <?= $hasCreate ? 'true' : 'false' ?>);
+    console.log('HAS_MANAGE_GROUPS_PERMISSION:', <?= $hasManageGroups ? 'true' : 'false' ?>);
 </script>
 
 <!-- ИСПРАВЛЕНИЕ: CSS стили для отображения заметок врачам (только просмотр) -->
@@ -191,6 +199,7 @@ $totalDays = 42; // 6 недель * 7 дней
         <!-- Переключатель выбора врача (будет перемещен в uiToolbarContainer через JavaScript) -->
         <?php 
         $hasViewOthers = isset($arResult['HAS_VIEW_OTHERS_PERMISSION']) ? $arResult['HAS_VIEW_OTHERS_PERMISSION'] : false;
+        $hasManageGroups = isset($arResult['HAS_MANAGE_GROUPS_PERMISSION']) ? $arResult['HAS_MANAGE_GROUPS_PERMISSION'] : false;
         echo '<!-- DEBUG: Переключатель будет показан: ' . ($hasViewOthers ? 'ДА' : 'НЕТ') . ' -->';
         if ($hasViewOthers): 
         ?>

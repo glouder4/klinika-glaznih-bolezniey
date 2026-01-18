@@ -64,9 +64,15 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
             $currentMonth = $currentDate->format('n');
             
             // Отладочная информация о выбранной дате
-            error_log("PHP COMPONENT: URL date param = " . ($_GET['date'] ?? 'not set'));
-            error_log("PHP COMPONENT: Using date = " . $currentDate->format('Y-m-d'));
-            error_log("PHP COMPONENT: currentYear = $currentYear, currentMonth = $currentMonth");
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
+                "PHP COMPONENT: URL date param = " . ($_GET['date'] ?? 'not set') . "\n", 
+                FILE_APPEND | LOCK_EX);
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
+                "PHP COMPONENT: Using date = " . $currentDate->format('Y-m-d') . "\n", 
+                FILE_APPEND | LOCK_EX);
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
+                "PHP COMPONENT: currentYear = $currentYear, currentMonth = $currentMonth\n", 
+                FILE_APPEND | LOCK_EX);
             
             // Формируем диапазон дат для календарной сетки (включая дни предыдущего и следующего месяца)
             $firstDay = new DateTime("$currentYear-$currentMonth-01");
@@ -105,11 +111,13 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                 
                 // Если есть право на просмотр чужих, проверяем параметр employee_id из GET (для переключателя)
                 if ($hasViewOthersPermission) {
-                    if (isset($_GET['employee_id']) && $_GET['employee_id'] !== '') {
-                        $employeeId = (int)$_GET['employee_id'];
-                        // Если 0, то показываем все записи
-                        if ($employeeId === 0) {
+                    if (isset($_GET['employee_id'])) {
+                        $employeeIdParam = $_GET['employee_id'];
+                        // Если параметр равен '0' или 'all', показываем все записи
+                        if ($employeeIdParam === '0' || $employeeIdParam === 'all' || $employeeIdParam === '') {
                             $employeeId = null;
+                        } else {
+                            $employeeId = (int)$employeeIdParam;
                         }
                     } else {
                         // Если параметра нет: для админов "Все записи", для врачей с правом view_others "Мои записи"
@@ -160,25 +168,39 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
             unset($event); // Разрываем ссылку после foreach
             
             // Отладочная информация
-            error_log("=== STATIC LOAD START ===");
-            error_log("STATIC LOAD: dateFrom=$dateFrom, dateTo=$dateTo, events count=" . count($events));
-            error_log("STATIC LOAD: currentYear=$currentYear, currentMonth=$currentMonth");
-            error_log("STATIC LOAD: startDate=" . $startDate->format('Y-m-d') . ", endDate=" . $endDate->format('Y-m-d'));
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
+                "=== STATIC LOAD START ===\n", 
+                FILE_APPEND | LOCK_EX);
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
+                "STATIC LOAD: dateFrom=$dateFrom, dateTo=$dateTo, events count=" . count($events) . "\n", 
+                FILE_APPEND | LOCK_EX);
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
+                "STATIC LOAD: currentYear=$currentYear, currentMonth=$currentMonth\n", 
+                FILE_APPEND | LOCK_EX);
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
+                "STATIC LOAD: startDate=" . $startDate->format('Y-m-d') . ", endDate=" . $endDate->format('Y-m-d') . "\n", 
+                FILE_APPEND | LOCK_EX);
 
             // Группируем события по датам для отображения в календаре
             $eventsByDate = [];
             foreach ($events as $event) {
                 $convertedDate = $this->convertRussianDateToStandard($event['DATE_FROM']);
                 $dateKey = date('Y-m-d', strtotime($convertedDate));
-                error_log("STATIC LOAD: event ID={$event['ID']}, original DATE_FROM={$event['DATE_FROM']}, converted={$convertedDate}, dateKey={$dateKey}");
+                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
+                    "STATIC LOAD: event ID={$event['ID']}, original DATE_FROM={$event['DATE_FROM']}, converted={$convertedDate}, dateKey={$dateKey}\n", 
+                    FILE_APPEND | LOCK_EX);
                 if (!isset($eventsByDate[$dateKey])) {
                     $eventsByDate[$dateKey] = [];
                 }
                 $eventsByDate[$dateKey][] = $event;
             }
             
-            error_log("STATIC LOAD: eventsByDate keys=" . implode(', ', array_keys($eventsByDate)));
-            error_log("=== STATIC LOAD END ===");
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
+                "STATIC LOAD: eventsByDate keys=" . implode(', ', array_keys($eventsByDate)) . "\n", 
+                FILE_APPEND | LOCK_EX);
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
+                "=== STATIC LOAD END ===\n", 
+                FILE_APPEND | LOCK_EX);
 
             // Получаем список всех филиалов для навигации
             $allBranches = $branchObj->getBranches();
@@ -192,29 +214,206 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
         
         // Проверяем право на просмотр чужих записей для шаблона
         $hasViewOthersPermission = false;
+        $hasCreatePermission = false;
+        $hasManageGroupsPermission = false;
+        $hasManageBranchesPermission = false;
+        $hasManageSchedulePermission = false;
+        $hasDeletePermission = false;
+        $hasChangeEmployeePermission = false;
+        $hasEditTitlePermission = false;
+        $hasEditOthersNotesPermission = false;
+        $hasEditPermission = false;
+        $hasMovePermission = false;
+        $hasConfirmPermission = false;
         if ($USER && $USER->IsAuthorized()) {
             if ($USER->IsAdmin()) {
                 $hasViewOthersPermission = true;
-                error_log("HAS_VIEW_OTHERS_PERMISSION: User is admin, setting to true");
+                $hasCreatePermission = true;
+                $hasManageGroupsPermission = true;
+                $hasManageBranchesPermission = true;
+                $hasManageSchedulePermission = true;
+                $hasDeletePermission = true;
+                $hasChangeEmployeePermission = true;
+                $hasEditTitlePermission = true;
+                $hasEditOthersNotesPermission = true;
+                $hasEditPermission = true;
+                $hasMovePermission = true;
+                $hasConfirmPermission = true;
+                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
+                    "HAS_VIEW_OTHERS_PERMISSION: User is admin, setting to true\n", 
+                    FILE_APPEND | LOCK_EX);
+                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
+                    "HAS_CREATE_PERMISSION: User is admin, setting to true\n", 
+                    FILE_APPEND | LOCK_EX);
+                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
+                    "HAS_MANAGE_GROUPS_PERMISSION: User is admin, setting to true\n", 
+                    FILE_APPEND | LOCK_EX);
+                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
+                    "HAS_MANAGE_BRANCHES_PERMISSION: User is admin, setting to true\n", 
+                    FILE_APPEND | LOCK_EX);
+                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
+                    "HAS_MANAGE_SCHEDULE_PERMISSION: User is admin, setting to true\n", 
+                    FILE_APPEND | LOCK_EX);
+                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
+                    "HAS_DELETE_PERMISSION: User is admin, setting to true\n", 
+                    FILE_APPEND | LOCK_EX);
+                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
+                    "HAS_CHANGE_EMPLOYEE_PERMISSION: User is admin, setting to true\n", 
+                    FILE_APPEND | LOCK_EX);
+                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
+                    "HAS_EDIT_TITLE_PERMISSION: User is admin, setting to true\n", 
+                    FILE_APPEND | LOCK_EX);
+                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
+                    "HAS_EDIT_OTHERS_NOTES_PERMISSION: User is admin, setting to true\n", 
+                    FILE_APPEND | LOCK_EX);
+                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
+                    "HAS_EDIT_PERMISSION: User is admin, setting to true\n", 
+                    FILE_APPEND | LOCK_EX);
+                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
+                    "HAS_MOVE_PERMISSION: User is admin, setting to true\n", 
+                    FILE_APPEND | LOCK_EX);
+                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
+                    "HAS_CONFIRM_PERMISSION: User is admin, setting to true\n", 
+                    FILE_APPEND | LOCK_EX);
             } else {
                 try {
                     $permissionsObj = new \Artmax\Calendar\Permissions();
                     $userId = $USER->GetID();
                     $hasViewOthersPermission = $permissionsObj->hasPermission($userId, 'calendar.view_others');
+                    $hasCreatePermission = $permissionsObj->hasPermission($userId, 'calendar.create');
+                    $hasManageGroupsPermission = $permissionsObj->hasPermission($userId, 'calendar.manage_groups');
+                    $hasManageBranchesPermission = $permissionsObj->hasPermission($userId, 'calendar.manage_branches');
+                    $hasManageSchedulePermission = $permissionsObj->hasPermission($userId, 'calendar.manage_schedule');
+                    $hasDeletePermission = $permissionsObj->hasPermission($userId, 'calendar.delete');
+                    $hasChangeEmployeePermission = $permissionsObj->hasPermission($userId, 'calendar.change_employee');
+                    $hasEditTitlePermission = $permissionsObj->hasPermission($userId, 'calendar.edit_title');
+                    $hasEditOthersNotesPermission = $permissionsObj->hasPermission($userId, 'calendar.edit_others_notes');
+                    $hasEditPermission = $permissionsObj->hasPermission($userId, 'calendar.edit');
+                    $hasMovePermission = $permissionsObj->hasPermission($userId, 'calendar.move');
+                    $hasConfirmPermission = $permissionsObj->hasPermission($userId, 'calendar.confirm');
                     
                     // Отладочная информация
-                    error_log("HAS_VIEW_OTHERS_PERMISSION: User ID = " . $userId . ", hasPermission result = " . ($hasViewOthersPermission ? 'true' : 'false'));
+                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
+                        "HAS_VIEW_OTHERS_PERMISSION: User ID = " . $userId . ", hasPermission result = " . ($hasViewOthersPermission ? 'true' : 'false') . "\n", 
+                        FILE_APPEND | LOCK_EX);
+                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
+                        "HAS_CREATE_PERMISSION: User ID = " . $userId . ", hasPermission result = " . ($hasCreatePermission ? 'true' : 'false') . "\n", 
+                        FILE_APPEND | LOCK_EX);
+                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
+                        "HAS_MANAGE_GROUPS_PERMISSION: User ID = " . $userId . ", hasPermission result = " . ($hasManageGroupsPermission ? 'true' : 'false') . "\n", 
+                        FILE_APPEND | LOCK_EX);
+                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
+                        "HAS_MANAGE_BRANCHES_PERMISSION: User ID = " . $userId . ", hasPermission result = " . ($hasManageBranchesPermission ? 'true' : 'false') . "\n", 
+                        FILE_APPEND | LOCK_EX);
+                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
+                        "HAS_MANAGE_SCHEDULE_PERMISSION: User ID = " . $userId . ", hasPermission result = " . ($hasManageSchedulePermission ? 'true' : 'false') . "\n", 
+                        FILE_APPEND | LOCK_EX);
+                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
+                        "HAS_DELETE_PERMISSION: User ID = " . $userId . ", hasPermission result = " . ($hasDeletePermission ? 'true' : 'false') . "\n", 
+                        FILE_APPEND | LOCK_EX);
+                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
+                        "HAS_CHANGE_EMPLOYEE_PERMISSION: User ID = " . $userId . ", hasPermission result = " . ($hasChangeEmployeePermission ? 'true' : 'false') . "\n", 
+                        FILE_APPEND | LOCK_EX);
+                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
+                        "HAS_EDIT_TITLE_PERMISSION: User ID = " . $userId . ", hasPermission result = " . ($hasEditTitlePermission ? 'true' : 'false') . "\n", 
+                        FILE_APPEND | LOCK_EX);
+                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
+                        "HAS_EDIT_OTHERS_NOTES_PERMISSION: User ID = " . $userId . ", hasPermission result = " . ($hasEditOthersNotesPermission ? 'true' : 'false') . "\n", 
+                        FILE_APPEND | LOCK_EX);
                     
                     // Дополнительная отладка: проверяем группы пользователя
                     $userGroups = \CUser::GetUserGroup($userId);
-                    error_log("HAS_VIEW_OTHERS_PERMISSION: User groups = " . implode(', ', $userGroups));
+                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
+                        "HAS_VIEW_OTHERS_PERMISSION: User groups = " . implode(', ', $userGroups) . "\n", 
+                        FILE_APPEND | LOCK_EX);
                 } catch (\Exception $e) {
                     $hasViewOthersPermission = false;
-                    error_log("HAS_VIEW_OTHERS_PERMISSION: Exception = " . $e->getMessage());
+                    $hasCreatePermission = false;
+                    $hasManageGroupsPermission = false;
+                    $hasManageBranchesPermission = false;
+                    $hasManageSchedulePermission = false;
+                    $hasDeletePermission = false;
+                    $hasChangeEmployeePermission = false;
+                    $hasEditTitlePermission = false;
+                    $hasEditOthersNotesPermission = false;
+                    $hasEditPermission = false;
+                    $hasMovePermission = false;
+                    $hasConfirmPermission = false;
+                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
+                        "HAS_VIEW_OTHERS_PERMISSION: Exception = " . $e->getMessage() . "\n", 
+                        FILE_APPEND | LOCK_EX);
+                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
+                        "HAS_CREATE_PERMISSION: Exception = " . $e->getMessage() . "\n", 
+                        FILE_APPEND | LOCK_EX);
+                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
+                        "HAS_MANAGE_GROUPS_PERMISSION: Exception = " . $e->getMessage() . "\n", 
+                        FILE_APPEND | LOCK_EX);
+                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
+                        "HAS_MANAGE_BRANCHES_PERMISSION: Exception = " . $e->getMessage() . "\n", 
+                        FILE_APPEND | LOCK_EX);
+                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
+                        "HAS_MANAGE_SCHEDULE_PERMISSION: Exception = " . $e->getMessage() . "\n", 
+                        FILE_APPEND | LOCK_EX);
+                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
+                        "HAS_DELETE_PERMISSION: Exception = " . $e->getMessage() . "\n", 
+                        FILE_APPEND | LOCK_EX);
+                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
+                        "HAS_CHANGE_EMPLOYEE_PERMISSION: Exception = " . $e->getMessage() . "\n", 
+                        FILE_APPEND | LOCK_EX);
+                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
+                        "HAS_EDIT_PERMISSION: Exception = " . $e->getMessage() . "\n", 
+                        FILE_APPEND | LOCK_EX);
+                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
+                        "HAS_MOVE_PERMISSION: Exception = " . $e->getMessage() . "\n", 
+                        FILE_APPEND | LOCK_EX);
+                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
+                        "HAS_CONFIRM_PERMISSION: Exception = " . $e->getMessage() . "\n", 
+                        FILE_APPEND | LOCK_EX);
+                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
+                        "HAS_EDIT_TITLE_PERMISSION: Exception = " . $e->getMessage() . "\n", 
+                        FILE_APPEND | LOCK_EX);
+                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
+                        "HAS_EDIT_OTHERS_NOTES_PERMISSION: Exception = " . $e->getMessage() . "\n", 
+                        FILE_APPEND | LOCK_EX);
                 }
             }
         } else {
-            error_log("HAS_VIEW_OTHERS_PERMISSION: User not authorized or not set");
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
+                "HAS_VIEW_OTHERS_PERMISSION: User not authorized or not set\n", 
+                FILE_APPEND | LOCK_EX);
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
+                "HAS_CREATE_PERMISSION: User not authorized or not set\n", 
+                FILE_APPEND | LOCK_EX);
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
+                "HAS_MANAGE_GROUPS_PERMISSION: User not authorized or not set\n", 
+                FILE_APPEND | LOCK_EX);
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
+                "HAS_MANAGE_BRANCHES_PERMISSION: User not authorized or not set\n", 
+                FILE_APPEND | LOCK_EX);
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
+                "HAS_MANAGE_SCHEDULE_PERMISSION: User not authorized or not set\n", 
+                FILE_APPEND | LOCK_EX);
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
+                "HAS_DELETE_PERMISSION: User not authorized or not set\n", 
+                FILE_APPEND | LOCK_EX);
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
+                "HAS_CHANGE_EMPLOYEE_PERMISSION: User not authorized or not set\n", 
+                FILE_APPEND | LOCK_EX);
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
+                "HAS_EDIT_TITLE_PERMISSION: User not authorized or not set\n", 
+                FILE_APPEND | LOCK_EX);
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
+                "HAS_EDIT_OTHERS_NOTES_PERMISSION: User not authorized or not set\n", 
+                FILE_APPEND | LOCK_EX);
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
+                "HAS_EDIT_PERMISSION: User not authorized or not set\n", 
+                FILE_APPEND | LOCK_EX);
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
+                "HAS_MOVE_PERMISSION: User not authorized or not set\n", 
+                FILE_APPEND | LOCK_EX);
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
+                "HAS_CONFIRM_PERMISSION: User not authorized or not set\n", 
+                FILE_APPEND | LOCK_EX);
         }
         
         $this->arResult = [
@@ -227,49 +426,60 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
             'IS_ADMIN' => $USER && $USER->IsAdmin(),
             'CAN_ADD_EVENTS' => $USER ? $USER->IsAuthorized() : false,
             'HAS_VIEW_OTHERS_PERMISSION' => $hasViewOthersPermission,
+            'HAS_CREATE_PERMISSION' => $hasCreatePermission,
+            'HAS_MANAGE_GROUPS_PERMISSION' => $hasManageGroupsPermission,
+            'HAS_MANAGE_BRANCHES_PERMISSION' => $hasManageBranchesPermission,
+            'HAS_MANAGE_SCHEDULE_PERMISSION' => $hasManageSchedulePermission,
+            'HAS_DELETE_PERMISSION' => $hasDeletePermission,
+            'HAS_CHANGE_EMPLOYEE_PERMISSION' => $hasChangeEmployeePermission,
+            'HAS_EDIT_TITLE_PERMISSION' => $hasEditTitlePermission,
+            'HAS_EDIT_OTHERS_NOTES_PERMISSION' => $hasEditOthersNotesPermission,
+            'HAS_EDIT_PERMISSION' => $hasEditPermission,
+            'HAS_MOVE_PERMISSION' => $hasMovePermission,
+            'HAS_CONFIRM_PERMISSION' => $hasConfirmPermission,
         ];
 
-        // Добавляем панельные кнопки для администраторов
-        if ($USER && $USER->IsAdmin()) {
+        // Добавляем панельные кнопки (кнопка "Настройки" показывается всем с правами, "Создать" - только админам)
+        if ($USER && $USER->IsAuthorized()) {
             $this->addPanelButtons();
             
-            // Управляем звездочкой "Добавить в избранное"
-            $this->manageFavoriteStar();
-            
-            // Также добавляем данные для отображения кнопок в шаблоне
-            $this->arResult['SHOW_BRANCH_BUTTONS'] = true;
-            $this->arResult['BRANCH_BUTTONS'] = [
-                'create_menu' => [
-                    'text' => 'Создать',
-                    'title' => 'Создать новый элемент',
-                    'icon' => '➕',
-                    'menu' => [
-                        [
-                            'text' => 'Создать расписание',
-                            'title' => 'Создать новое расписание',
-                            'icon' => '📅',
-                            'onclick' => 'openScheduleModal()'
-                        ],
-                        [
-                            'text' => 'Создать филиал',
-                            'title' => 'Создать новый филиал клиники',
-                            'icon' => '🏢',
-                            'onclick' => 'openAddBranchModal()'
+            // Управляем звездочкой "Добавить в избранное" (только для админов)
+            if ($USER->IsAdmin()) {
+                $this->manageFavoriteStar();
+                
+                // Также добавляем данные для отображения кнопок в шаблоне
+                $this->arResult['SHOW_BRANCH_BUTTONS'] = true;
+                $this->arResult['BRANCH_BUTTONS'] = [
+                    'create_menu' => [
+                        'text' => 'Создать',
+                        'title' => 'Создать новый элемент',
+                        'icon' => '➕',
+                        'menu' => [
+                            [
+                                'text' => 'Создать расписание',
+                                'title' => 'Создать новое расписание',
+                                'icon' => '📅',
+                                'onclick' => 'openScheduleModal()'
+                            ],
+                            [
+                                'text' => 'Создать филиал',
+                                'title' => 'Создать новый филиал клиники',
+                                'icon' => '🏢',
+                                'onclick' => 'openAddBranchModal()'
+                            ]
                         ]
+                    ],
+                    'branch_settings' => [
+                        'text' => '',
+                        'title' => 'Настроить параметры текущего филиала',
+                        'icon' => '⚙️',
+                        'onclick' => 'openBranchModal()'
                     ]
-                ],
-                'branch_settings' => [
-                    'text' => '',
-                    'title' => 'Настроить параметры текущего филиала',
-                    'icon' => '⚙️',
-                    'onclick' => 'openBranchModal()'
-                ]
-            ];
-        } else {
-            $this->arResult['SHOW_BRANCH_BUTTONS'] = false;
+                ];
+            } else {
+                $this->arResult['SHOW_BRANCH_BUTTONS'] = false;
+            }
         }
-        
-        // Пункт "Группы и права" будет добавлен в меню кнопки настроек
         
         // Добавляем навигацию по месяцам для всех пользователей
         $this->addMonthNavigation();
@@ -300,8 +510,29 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
     {
         global $USER;
         
-        // Кнопка "Создать" с выпадающим меню (только для администраторов)
-        if ($USER && $USER->IsAdmin()) {
+        // Кнопка "Создать" с выпадающим меню - показываем всем с соответствующими правами
+        $createMenuItems = [];
+        
+        // Проверяем право на управление расписанием
+        $hasManageSchedulePermission = $this->arResult['HAS_MANAGE_SCHEDULE_PERMISSION'] ?? false;
+        if ($hasManageSchedulePermission) {
+            $createMenuItems[] = [
+                'text' => 'Создать расписание',
+                'onclick' => new \Bitrix\UI\Buttons\JsHandler('openScheduleModal')
+            ];
+        }
+        
+        // Проверяем право на управление филиалами
+        $hasManageBranchesPermission = $this->arResult['HAS_MANAGE_BRANCHES_PERMISSION'] ?? false;
+        if ($hasManageBranchesPermission) {
+            $createMenuItems[] = [
+                'text' => 'Создать филиал',
+                'onclick' => new \Bitrix\UI\Buttons\JsHandler('openAddBranchModal')
+            ];
+        }
+        
+        // Показываем кнопку "Создать" только если есть хотя бы один пункт меню
+        if (!empty($createMenuItems)) {
             Toolbar::addButton([
                 'text' => 'Создать',
                 'title' => 'Создать новый элемент',
@@ -310,60 +541,50 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                     'toolbar-collapsed-icon' => \Bitrix\UI\Buttons\Icon::ADD
                 ],
                 'menu' => [
-                    'items' => [
-                        [
-                            'text' => 'Создать расписание',
-                            'onclick' => new \Bitrix\UI\Buttons\JsHandler('openScheduleModal')
-                        ],
-                        [
-                            'text' => 'Создать филиал',
-                            'onclick' => new \Bitrix\UI\Buttons\JsHandler('openAddBranchModal')
-                        ]
-                    ]
+                    'items' => $createMenuItems
                 ]
             ], ButtonLocation::AFTER_TITLE);
+        }
 
-            // Кнопка "Настройки" с выпадающим меню (только иконка)
-            $menuItems = [
-                [
-                    'text' => 'Настройки филиала',
-                    'title' => 'Настроить параметры текущего филиала',
-                    'onclick' => new \Bitrix\UI\Buttons\JsHandler('openBranchModal')
-                ]
+        // Кнопка "Настройки" с выпадающим меню - показываем всем с соответствующими правами
+        $menuItems = [];
+        
+        // Проверяем право на управление филиалами
+        $hasManageBranchesPermission = $this->arResult['HAS_MANAGE_BRANCHES_PERMISSION'] ?? false;
+        if ($hasManageBranchesPermission) {
+            $menuItems[] = [
+                'text' => 'Настройки филиала',
+                'title' => 'Настроить параметры текущего филиала',
+                'onclick' => new \Bitrix\UI\Buttons\JsHandler('openBranchModal')
             ];
-            
-            // Проверяем право на управление группами и добавляем пункт "Группы и права"
-            $hasManageGroupsPermission = false;
-            try {
-                if (class_exists('\Artmax\Calendar\Permissions')) {
-                    $permissionsObj = new \Artmax\Calendar\Permissions();
-                    $hasManageGroupsPermission = $permissionsObj->hasPermission($USER->GetID(), 'calendar.manage_groups');
+        }
+        
+        // Проверяем право на управление группами
+        $hasManageGroupsPermission = $this->arResult['HAS_MANAGE_GROUPS_PERMISSION'] ?? false;
+        if ($hasManageGroupsPermission) {
+            // Добавляем JavaScript функцию для редиректа, если её еще нет
+            global $APPLICATION;
+            $langId = defined('LANGUAGE_ID') ? LANGUAGE_ID : (defined('LANG') ? LANG : 'ru');
+            $jsFunction = '
+                <script>
+                if (typeof window.redirectToPermissionsPage === "undefined") {
+                    window.redirectToPermissionsPage = function() {
+                        window.location.href = "/bitrix/admin/artmax.calendar_artmax_calendar_permissions.php?lang=' . $langId . '";
+                    };
                 }
-            } catch (\Exception $e) {
-                // Игнорируем ошибки
-            }
+                </script>
+            ';
+            $APPLICATION->AddHeadString($jsFunction);
             
-            if ($hasManageGroupsPermission) {
-                // Добавляем JavaScript функцию для редиректа, если её еще нет
-                global $APPLICATION;
-                $jsFunction = '
-                    <script>
-                    if (typeof window.redirectToPermissionsPage === "undefined") {
-                        window.redirectToPermissionsPage = function() {
-                            window.location.href = "/bitrix/admin/artmax.calendar_artmax_calendar_permissions.php?lang=' . LANGUAGE_ID . '";
-                        };
-                    }
-                    </script>
-                ';
-                $APPLICATION->AddHeadString($jsFunction);
-                
-                $menuItems[] = [
-                    'text' => 'Группы и права',
-                    'title' => 'Управление группами пользователей и правами доступа',
-                    'onclick' => new \Bitrix\UI\Buttons\JsHandler('redirectToPermissionsPage')
-                ];
-            }
-            
+            $menuItems[] = [
+                'text' => 'Группы и права',
+                'title' => 'Управление группами пользователей и правами доступа',
+                'onclick' => new \Bitrix\UI\Buttons\JsHandler('redirectToPermissionsPage')
+            ];
+        }
+        
+        // Показываем кнопку "Настройки" только если есть хотя бы один пункт меню
+        if (!empty($menuItems)) {
             Toolbar::addButton([
                 'text' => '',
                 'title' => 'Настройки',
@@ -475,7 +696,8 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                 </button>
                 </div>
                 
-                <div class="nav-right" style="display: flex; align-items: center;">
+                <div class="nav-right" style="display: flex; align-items: center;">' . 
+                (($this->arResult['HAS_DELETE_PERMISSION'] ?? false) ? '
                     <button class="ui-btn ui-btn-empty nav-btn clear-all-btn" 
                             onclick="clearAllEvents()"
                             title="Удалить все события"
@@ -498,7 +720,7 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                             onmouseover="this.style.background=\'rgba(220, 53, 69, 0.2)\'"
                             onmouseout="this.style.background=\'rgba(220, 53, 69, 0.1)\'">
                         🗑️ Удалить все
-                    </button>
+                    </button>' : '') . '
                 </div>
             </div>
         ');
@@ -586,68 +808,6 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
     /**
      * Управляет звездочкой "Добавить в избранное" в тулбаре
      */
-    /**
-     * Добавляет кнопку "Группы и права" для пользователей с соответствующим правом
-     */
-    private function addPermissionsButton()
-    {
-        global $USER;
-        
-        if (!$USER || !$USER->IsAuthorized()) {
-            return;
-        }
-        
-        // Проверяем, доступен ли современный API тулбара
-        if (!class_exists('\Bitrix\UI\Toolbar\Facade\Toolbar')) {
-            return;
-        }
-        
-        try {
-            // Проверяем наличие класса Permissions
-            if (!class_exists('\Artmax\Calendar\Permissions')) {
-                return;
-            }
-            
-            $permissionsObj = new \Artmax\Calendar\Permissions();
-            
-            // Безопасно проверяем права доступа с обработкой ошибок
-            $hasManageGroupsPermission = false;
-            try {
-                $hasManageGroupsPermission = $permissionsObj->hasPermission($USER->GetID(), 'calendar.manage_groups') || $USER->IsAdmin();
-            } catch (\Exception $permException) {
-                // Если таблицы не созданы или другая ошибка - просто не показываем кнопку
-                error_log('Ошибка проверки прав доступа: ' . $permException->getMessage());
-                return;
-            }
-            
-            if ($hasManageGroupsPermission) {
-                // Добавляем JavaScript функцию для редиректа
-                global $APPLICATION;
-                $jsFunction = '
-                    <script>
-                    if (typeof window.redirectToPermissionsPage === "undefined") {
-                        window.redirectToPermissionsPage = function() {
-                            window.location.href = "/bitrix/admin/artmax.calendar_artmax_calendar_permissions.php?lang=' . LANGUAGE_ID . '";
-                        };
-                    }
-                    </script>
-                ';
-                $APPLICATION->AddHeadString($jsFunction);
-                
-                Toolbar::addButton([
-                    'text' => 'Группы и права',
-                    'title' => 'Управление группами пользователей и правами доступа',
-                    'icon' => \Bitrix\UI\Buttons\Icon::SETTING,
-                    'onclick' => new \Bitrix\UI\Buttons\JsHandler('redirectToPermissionsPage'),
-                    'classList' => ['calendar-permissions-btn']
-                ], ButtonLocation::AFTER_TITLE);
-            }
-        } catch (\Exception $e) {
-            // Если произошла ошибка (например, таблицы не созданы), просто не показываем кнопку
-            error_log('Ошибка при добавлении кнопки "Группы и права": ' . $e->getMessage());
-        }
-    }
-
     private function manageFavoriteStar()
     {
         // Проверяем, доступен ли современный API тулбара
@@ -914,11 +1074,13 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                 
                 // Если есть право на просмотр чужих, проверяем параметр employee_id из POST (для переключателя)
                 if ($hasViewOthersPermission) {
-                    if (isset($_POST['employee_id']) && $_POST['employee_id'] !== '') {
-                        $employeeId = (int)$_POST['employee_id'];
-                        // Если 0, то показываем все записи
-                        if ($employeeId === 0) {
+                    if (isset($_POST['employee_id'])) {
+                        $employeeIdParam = $_POST['employee_id'];
+                        // Если параметр равен '0' или 'all', показываем все записи
+                        if ($employeeIdParam === '0' || $employeeIdParam === 'all' || $employeeIdParam === '') {
                             $employeeId = null;
+                        } else {
+                            $employeeId = (int)$employeeIdParam;
                         }
                     } else {
                         // Если параметра нет: для админов "Все записи", для врачей с правом view_others "Мои записи"
@@ -934,7 +1096,9 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                 }
             }
             
-            error_log("AJAX getEventsAction: Current user ID=" . ($USER ? $USER->GetID() : 'none') . ", IsAdmin=" . ($USER && $USER->IsAdmin() ? 'yes' : 'no') . ", HasViewOthersPermission=" . ($hasViewOthersPermission ? 'yes' : 'no') . ", Filter employeeId=" . ($employeeId ?? 'null'));
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
+                "AJAX getEventsAction: Current user ID=" . ($USER ? $USER->GetID() : 'none') . ", IsAdmin=" . ($USER && $USER->IsAdmin() ? 'yes' : 'no') . ", HasViewOthersPermission=" . ($hasViewOthersPermission ? 'yes' : 'no') . ", Filter employeeId=" . ($employeeId ?? 'null') . "\n", 
+                FILE_APPEND | LOCK_EX);
             
             $calendarObj = new \Artmax\Calendar\Calendar();
             $events = $calendarObj->getEventsByBranch($branchId, $dateFrom, $dateTo, null, null, $employeeId);
@@ -1627,7 +1791,20 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
 
             // Проверяем права на просмотр
             // Админы видят всё, создатель события видит, врач события видит
-            if (!$USER->IsAdmin() && 
+            // Также проверяем право calendar.view_others
+            $hasViewOthersPermission = false;
+            if ($USER->IsAdmin()) {
+                $hasViewOthersPermission = true;
+            } else {
+                try {
+                    $permissionsObj = new \Artmax\Calendar\Permissions();
+                    $hasViewOthersPermission = $permissionsObj->hasPermission($USER->GetID(), 'calendar.view_others');
+                } catch (\Exception $e) {
+                    $hasViewOthersPermission = false;
+                }
+            }
+            
+            if (!$hasViewOthersPermission && 
                 $event['USER_ID'] != $USER->GetID() && 
                 $event['EMPLOYEE_ID'] != $USER->GetID()) {
                 return ['success' => false, 'error' => 'Нет прав на просмотр'];
@@ -1709,9 +1886,21 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                 return ['success' => false, 'error' => 'Событие не найдено'];
             }
 
-            // Проверяем права на редактирование (только автор события)
-            if ($existingEvent['USER_ID'] != $userId) {
-                return ['success' => false, 'error' => 'Нет прав на редактирование'];
+            // Проверяем права на редактирование названия (для всех записей, включая свои)
+            $hasEditTitlePermission = false;
+            if ($USER->IsAdmin()) {
+                $hasEditTitlePermission = true;
+            } else {
+                try {
+                    $permissionsObj = new \Artmax\Calendar\Permissions();
+                    $hasEditTitlePermission = $permissionsObj->hasPermission($userId, 'calendar.edit_title');
+                } catch (\Exception $e) {
+                    $hasEditTitlePermission = false;
+                }
+            }
+            
+            if (!$hasEditTitlePermission) {
+                return ['success' => false, 'error' => 'Нет прав на редактирование названия записи'];
             }
 
             // Получаем employeeId из существующего события
@@ -1945,7 +2134,9 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
             }
             
         } catch (\Exception $e) {
-            error_log('Ошибка прямого поиска сделок: ' . $e->getMessage());
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
+                'Ошибка прямого поиска сделок: ' . $e->getMessage() . "\n", 
+                FILE_APPEND | LOCK_EX);
         }
         
         return $deals;
@@ -2010,7 +2201,9 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
             }
             
         } catch (\Exception $e) {
-            error_log('Ошибка fallback поиска контактов: ' . $e->getMessage());
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
+                'Ошибка fallback поиска контактов: ' . $e->getMessage() . "\n", 
+                FILE_APPEND | LOCK_EX);
         }
         
         return $contacts;
@@ -3041,6 +3234,33 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
 
             $calendar = new \Artmax\Calendar\Calendar();
             
+            // Проверяем, является ли пользователь автором записи
+            $event = $calendar->getEvent($eventId);
+            if (!$event) {
+                return ['success' => false, 'error' => 'Событие не найдено'];
+            }
+            
+            $isOwner = $event['USER_ID'] == $USER->GetID();
+            
+            // Если это чужая запись, проверяем право на редактирование заметок чужих записей
+            if (!$isOwner) {
+                $hasEditOthersNotesPermission = false;
+                if ($USER->IsAdmin()) {
+                    $hasEditOthersNotesPermission = true;
+                } else {
+                    try {
+                        $permissionsObj = new \Artmax\Calendar\Permissions();
+                        $hasEditOthersNotesPermission = $permissionsObj->hasPermission($USER->GetID(), 'calendar.edit_others_notes');
+                    } catch (\Exception $e) {
+                        $hasEditOthersNotesPermission = false;
+                    }
+                }
+                
+                if (!$hasEditOthersNotesPermission) {
+                    return ['success' => false, 'error' => 'Нет прав на редактирование заметок чужих записей'];
+                }
+            }
+            
             // Обновляем событие с заметкой
             $result = $calendar->updateEventNote($eventId, $noteText);
             
@@ -3286,7 +3506,9 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                         // Дополнительно обновляем конкретную страницу филиала в настраиваемом разделе
                         \Artmax\Calendar\EventHandlers::updateBranchPageTitle($branchId, $updateData['name']);
                     } catch (\Exception $e) {
-                        error_log('Ошибка обновления страниц раздела: ' . $e->getMessage());
+                        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
+                            'Ошибка обновления страниц раздела: ' . $e->getMessage() . "\n", 
+                            FILE_APPEND | LOCK_EX);
                     }
                 }
             }
@@ -3454,7 +3676,9 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                     \Artmax\Calendar\EventHandlers::updateSectionPages();
                 } catch (\Exception $e) {
                     // Логируем ошибку, но не прерываем создание филиала
-                    error_log('Ошибка обновления страниц раздела: ' . $e->getMessage());
+                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
+                        'Ошибка обновления страниц раздела: ' . $e->getMessage() . "\n", 
+                        FILE_APPEND | LOCK_EX);
                 }
 
                 return [
@@ -3556,8 +3780,21 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                 return ['success' => false, 'error' => 'Событие не найдено'];
             }
 
-            // Проверяем права на перенос (только автор события)
-            if ($event['USER_ID'] != $USER->GetID()) {
+            // Проверяем права на перенос (право calendar.move или автор события)
+            $hasMovePermission = false;
+            if ($USER->IsAdmin()) {
+                $hasMovePermission = true;
+            } else {
+                try {
+                    $permissionsObj = new \Artmax\Calendar\Permissions();
+                    $hasMovePermission = $permissionsObj->hasPermission($USER->GetID(), 'calendar.move');
+                } catch (\Exception $e) {
+                    $hasMovePermission = false;
+                }
+            }
+            
+            // Если нет права calendar.move, проверяем, является ли пользователь автором записи
+            if (!$hasMovePermission && $event['USER_ID'] != $USER->GetID()) {
                 return ['success' => false, 'error' => 'Нет прав на перенос события'];
             }
 
@@ -3702,7 +3939,9 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
             file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
                 "Exception in getContactFromCRM: " . $e->getMessage() . "\n", 
                 FILE_APPEND | LOCK_EX);
-            error_log('Ошибка получения контакта из CRM: ' . $e->getMessage());
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
+                'Ошибка получения контакта из CRM: ' . $e->getMessage() . "\n", 
+                FILE_APPEND | LOCK_EX);
         }
 
         file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
@@ -3754,7 +3993,9 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
             file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
                 "Exception in getDealFromCRM: " . $e->getMessage() . "\n", 
                 FILE_APPEND | LOCK_EX);
-            error_log('Ошибка получения сделки из CRM: ' . $e->getMessage());
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
+                'Ошибка получения сделки из CRM: ' . $e->getMessage() . "\n", 
+                FILE_APPEND | LOCK_EX);
         }
 
         file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
@@ -3773,7 +4014,9 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
         try {
             // Подключаем модуль REST API
             if (!CModule::IncludeModule('rest')) {
-                error_log('Модуль REST API не установлен');
+                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
+                    'Модуль REST API не установлен' . "\n", 
+                    FILE_APPEND | LOCK_EX);
                 return $contacts;
             }
             
@@ -3884,7 +4127,9 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
             }
             
         } catch (\Exception $e) {
-            error_log('Ошибка поиска контактов через REST API: ' . $e->getMessage());
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
+                'Ошибка поиска контактов через REST API: ' . $e->getMessage() . "\n", 
+                FILE_APPEND | LOCK_EX);
         }
         
         return $contacts;
@@ -3911,7 +4156,9 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                 }
             }
         } catch (\Exception $e) {
-            error_log('Ошибка получения UF полей: ' . $e->getMessage());
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
+                'Ошибка получения UF полей: ' . $e->getMessage() . "\n", 
+                FILE_APPEND | LOCK_EX);
         }
         
         return $ufFields;
