@@ -4096,6 +4096,10 @@
 
     // Функция открытия деталей контакта
     function openContactDetails() {
+        if (!(window.HAS_MANAGE_CONTACT_PERMISSION || window.IS_ADMIN)) {
+            showNotification('Нет прав на просмотр контактов', 'error');
+            return;
+        }
         const eventId = getCurrentEventId();
         console.log('openContactDetails: EventId =', eventId);
         
@@ -4184,9 +4188,9 @@
         }
         
         const eventData = window.currentEventData;
-        const isOwner = eventData.USER_ID && window.CURRENT_USER_ID && parseInt(eventData.USER_ID) === parseInt(window.CURRENT_USER_ID);
-        const canEditNotes = isOwner || (window.HAS_EDIT_OTHERS_NOTES_PERMISSION || false);
-        
+        const isOwner = eventData && window.CURRENT_USER_ID && (parseInt(eventData.USER_ID) === parseInt(window.CURRENT_USER_ID) || parseInt(eventData.EMPLOYEE_ID) === parseInt(window.CURRENT_USER_ID));
+        const canEditNotes = isOwner ? (window.HAS_EDIT_OWN_NOTES_PERMISSION || window.IS_ADMIN) : (window.HAS_EDIT_OTHERS_NOTES_PERMISSION || window.IS_ADMIN);
+
         if (!canEditNotes) {
             console.log('openNoteModal: Нет прав на редактирование заметок');
             showNotification('Нет прав на редактирование заметок этой записи', 'error');
@@ -4233,9 +4237,9 @@
         }
         
         const eventData = window.currentEventData;
-        const isOwner = eventData.USER_ID && window.CURRENT_USER_ID && parseInt(eventData.USER_ID) === parseInt(window.CURRENT_USER_ID);
-        const canEditNotes = isOwner || (window.HAS_EDIT_OTHERS_NOTES_PERMISSION || false);
-        
+        const isOwner = eventData && window.CURRENT_USER_ID && (parseInt(eventData.USER_ID) === parseInt(window.CURRENT_USER_ID) || parseInt(eventData.EMPLOYEE_ID) === parseInt(window.CURRENT_USER_ID));
+        const canEditNotes = isOwner ? (window.HAS_EDIT_OWN_NOTES_PERMISSION || window.IS_ADMIN) : (window.HAS_EDIT_OTHERS_NOTES_PERMISSION || window.IS_ADMIN);
+
         if (!canEditNotes) {
             console.log('saveNote: Нет прав на редактирование заметок');
             showNotification('Нет прав на редактирование заметок этой записи', 'error');
@@ -4298,9 +4302,9 @@
         }
         
         const eventData = window.currentEventData;
-        const isOwner = eventData.USER_ID && window.CURRENT_USER_ID && parseInt(eventData.USER_ID) === parseInt(window.CURRENT_USER_ID);
-        const canEditNotes = isOwner || (window.HAS_EDIT_OTHERS_NOTES_PERMISSION || false);
-        
+        const isOwner = eventData && window.CURRENT_USER_ID && (parseInt(eventData.USER_ID) === parseInt(window.CURRENT_USER_ID) || parseInt(eventData.EMPLOYEE_ID) === parseInt(window.CURRENT_USER_ID));
+        const canEditNotes = isOwner ? (window.HAS_EDIT_OWN_NOTES_PERMISSION || window.IS_ADMIN) : (window.HAS_EDIT_OTHERS_NOTES_PERMISSION || window.IS_ADMIN);
+
         if (!canEditNotes) {
             console.log('editNote: Нет прав на редактирование заметок');
             showNotification('Нет прав на редактирование заметок этой записи', 'error');
@@ -4330,8 +4334,8 @@
         let canEditNotes = false;
         if (window.currentEventData) {
             const eventData = window.currentEventData;
-            const isOwner = eventData.USER_ID && window.CURRENT_USER_ID && parseInt(eventData.USER_ID) === parseInt(window.CURRENT_USER_ID);
-            canEditNotes = isOwner || (window.HAS_EDIT_OTHERS_NOTES_PERMISSION || false);
+            const isOwner = eventData && window.CURRENT_USER_ID && (parseInt(eventData.USER_ID) === parseInt(window.CURRENT_USER_ID) || parseInt(eventData.EMPLOYEE_ID) === parseInt(window.CURRENT_USER_ID));
+            canEditNotes = isOwner ? (window.HAS_EDIT_OWN_NOTES_PERMISSION || window.IS_ADMIN) : (window.HAS_EDIT_OTHERS_NOTES_PERMISSION || window.IS_ADMIN);
         }
         
         if (addNoteBtn && noteDisplay && noteTextDisplay) {

@@ -1120,6 +1120,18 @@ switch ($action) {
         if (empty($eventId) || empty($contactId)) {
             die(json_encode(['success' => false, 'error' => 'ID события или контакта не указан']));
         }
+        if (!$GLOBALS['USER'] || !$GLOBALS['USER']->IsAuthorized()) {
+            die(json_encode(['success' => false, 'error' => 'Необходима авторизация']));
+        }
+        if (!$GLOBALS['USER']->IsAdmin()) {
+            if (!CModule::IncludeModule('artmax.calendar')) {
+                die(json_encode(['success' => false, 'error' => 'Модуль календаря не установлен']));
+            }
+            $permissionsObj = new \Artmax\Calendar\Permissions();
+            if (!$permissionsObj->hasPermission($GLOBALS['USER']->GetID(), 'calendar.manage_deal')) {
+                die(json_encode(['success' => false, 'error' => 'Недостаточно прав для создания и привязки сделки']));
+            }
+        }
 
         try {
             $component = new ArtmaxCalendarComponent();
@@ -1351,6 +1363,19 @@ switch ($action) {
         $eventId = $_POST['eventId'] ?? 0;
         $dealData = $_POST['dealData'] ?? array();
 
+        if (!$GLOBALS['USER'] || !$GLOBALS['USER']->IsAuthorized()) {
+            die(json_encode(['success' => false, 'error' => 'Необходима авторизация']));
+        }
+        if (!$GLOBALS['USER']->IsAdmin()) {
+            if (!CModule::IncludeModule('artmax.calendar')) {
+                die(json_encode(['success' => false, 'error' => 'Модуль календаря не установлен']));
+            }
+            $permissionsObj = new \Artmax\Calendar\Permissions();
+            if (!$permissionsObj->hasPermission($GLOBALS['USER']->GetID(), 'calendar.manage_deal')) {
+                die(json_encode(['success' => false, 'error' => 'Недостаточно прав для привязки сделки']));
+            }
+        }
+
         // Логируем запрос
         file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
             "=== AJAX SAVE_EVENT_DEAL ===\n",
@@ -1389,6 +1414,18 @@ switch ($action) {
 
         if ($dealId <= 0) {
             die(json_encode(['success' => false, 'error' => 'ID сделки не указан']));
+        }
+        if (!$GLOBALS['USER'] || !$GLOBALS['USER']->IsAuthorized()) {
+            die(json_encode(['success' => false, 'error' => 'Необходима авторизация']));
+        }
+        if (!$GLOBALS['USER']->IsAdmin()) {
+            if (!CModule::IncludeModule('artmax.calendar')) {
+                die(json_encode(['success' => false, 'error' => 'Модуль календаря не установлен']));
+            }
+            $permissionsObj = new \Artmax\Calendar\Permissions();
+            if (!$permissionsObj->hasPermission($GLOBALS['USER']->GetID(), 'calendar.manage_deal')) {
+                die(json_encode(['success' => false, 'error' => 'Недостаточно прав для редактирования сделки']));
+            }
         }
 
         if (is_string($fieldsRaw)) {

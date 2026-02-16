@@ -1804,7 +1804,11 @@ class artmax_calendar extends CModule
             ['CODE' => 'calendar.manage_groups', 'NAME' => 'Управление группами и правами', 'DESCRIPTION' => 'Право на создание групп пользователей и управление правами доступа'],
             ['CODE' => 'calendar.manage_schedule', 'NAME' => 'Управление расписанием', 'DESCRIPTION' => 'Право на управление расписанием врачей'],
             ['CODE' => 'calendar.manage_branches', 'NAME' => 'Управление филиалами', 'DESCRIPTION' => 'Право на управление филиалами клиники'],
+            // Заметки к записям
+            ['CODE' => 'calendar.edit_own_notes', 'NAME' => 'Редактирование заметок своих записей', 'DESCRIPTION' => 'Право на редактирование заметок в своих записях календаря'],
+            ['CODE' => 'calendar.edit_others_notes', 'NAME' => 'Редактирование заметок чужих записей', 'DESCRIPTION' => 'Право на редактирование заметок в чужих записях календаря'],
             ['CODE' => 'calendar.manage_contact', 'NAME' => 'Создание и привязка контакта к записи', 'DESCRIPTION' => 'Право на создание нового контакта в CRM и привязку/изменение контакта в событии календаря'],
+            ['CODE' => 'calendar.manage_deal', 'NAME' => 'Создание и привязка сделки к записи', 'DESCRIPTION' => 'Право на создание сделки в CRM, привязку сделки к событию календаря и просмотр деталей сделки'],
             ['CODE' => 'calendar.set_visit_status', 'NAME' => 'Установка статуса визита', 'DESCRIPTION' => 'Право на установку статуса визита в записи (Клиент пришел / Клиент не пришел / Не указано)']
         ];
         
@@ -1866,9 +1870,10 @@ class artmax_calendar extends CModule
         $adminPermissions = [
             'calendar.view', 'calendar.view_all', 'calendar.create',
             'calendar.edit_own', 'calendar.edit_all',
+            'calendar.edit_own_notes', 'calendar.edit_others_notes',
             'calendar.move', 'calendar.confirm', 'calendar.change_employee',
             'calendar.delete_own', 'calendar.delete_all',
-            'calendar.manage_groups', 'calendar.manage_schedule', 'calendar.manage_branches', 'calendar.manage_contact', 'calendar.set_visit_status'
+            'calendar.manage_groups', 'calendar.manage_schedule', 'calendar.manage_branches', 'calendar.manage_contact', 'calendar.manage_deal', 'calendar.set_visit_status'
         ];
         
         // Назначаем права администраторам

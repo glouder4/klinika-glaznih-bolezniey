@@ -26,6 +26,7 @@ echo '<!-- DEBUG: HAS_MANAGE_GROUPS_PERMISSION = ' . ($hasManageGroups ? 'true' 
     window.HAS_CHANGE_EMPLOYEE_PERMISSION = <?= (isset($arResult['HAS_CHANGE_EMPLOYEE_PERMISSION']) && $arResult['HAS_CHANGE_EMPLOYEE_PERMISSION']) ? 'true' : 'false' ?>;
     window.HAS_EDIT_TITLE_OWN_PERMISSION = <?= (isset($arResult['HAS_EDIT_TITLE_OWN_PERMISSION']) && $arResult['HAS_EDIT_TITLE_OWN_PERMISSION']) ? 'true' : 'false' ?>;
     window.HAS_EDIT_TITLE_ALL_PERMISSION = <?= (isset($arResult['HAS_EDIT_TITLE_ALL_PERMISSION']) && $arResult['HAS_EDIT_TITLE_ALL_PERMISSION']) ? 'true' : 'false' ?>;
+    window.HAS_EDIT_OWN_NOTES_PERMISSION = <?= (isset($arResult['HAS_EDIT_OWN_NOTES_PERMISSION']) && $arResult['HAS_EDIT_OWN_NOTES_PERMISSION']) ? 'true' : 'false' ?>;
     window.HAS_EDIT_OTHERS_NOTES_PERMISSION = <?= (isset($arResult['HAS_EDIT_OTHERS_NOTES_PERMISSION']) && $arResult['HAS_EDIT_OTHERS_NOTES_PERMISSION']) ? 'true' : 'false' ?>;
     window.HAS_EDIT_PERMISSION = <?= (isset($arResult['HAS_EDIT_PERMISSION']) && $arResult['HAS_EDIT_PERMISSION']) ? 'true' : 'false' ?>;
     window.HAS_MOVE_PERMISSION = <?= (isset($arResult['HAS_MOVE_PERMISSION']) && $arResult['HAS_MOVE_PERMISSION']) ? 'true' : 'false' ?>;
@@ -33,6 +34,7 @@ echo '<!-- DEBUG: HAS_MANAGE_GROUPS_PERMISSION = ' . ($hasManageGroups ? 'true' 
     window.HAS_CANCEL_PERMISSION = <?= (isset($arResult['HAS_CANCEL_PERMISSION']) && $arResult['HAS_CANCEL_PERMISSION']) ? 'true' : 'false' ?>;
     window.HAS_DELETE_PERMISSION = <?= (isset($arResult['HAS_DELETE_PERMISSION']) && $arResult['HAS_DELETE_PERMISSION']) ? 'true' : 'false' ?>;
     window.HAS_MANAGE_CONTACT_PERMISSION = <?= (isset($arResult['HAS_MANAGE_CONTACT_PERMISSION']) && $arResult['HAS_MANAGE_CONTACT_PERMISSION']) ? 'true' : 'false' ?>;
+    window.HAS_MANAGE_DEAL_PERMISSION = <?= (isset($arResult['HAS_MANAGE_DEAL_PERMISSION']) && $arResult['HAS_MANAGE_DEAL_PERMISSION']) ? 'true' : 'false' ?>;
     window.HAS_SET_VISIT_STATUS_PERMISSION = <?= (isset($arResult['HAS_SET_VISIT_STATUS_PERMISSION']) && $arResult['HAS_SET_VISIT_STATUS_PERMISSION']) ? 'true' : 'false' ?>;
     console.log('HAS_VIEW_OTHERS_PERMISSION:', <?= $hasViewOthers ? 'true' : 'false' ?>);
     console.log('HAS_CREATE_PERMISSION:', <?= $hasCreate ? 'true' : 'false' ?>);
@@ -522,6 +524,7 @@ $totalDays = 42; // 6 недель * 7 дней
                 <!-- Карточки действий -->
                 <div class="action-cards">
 
+                    <?php if (isset($arResult['HAS_MANAGE_DEAL_PERMISSION']) && $arResult['HAS_MANAGE_DEAL_PERMISSION']): ?>
                     <div class="action-card" id="deal-card" onclick="openDealDetails()">
                         <div class="card-icon">
                             <div class="booking-actions-popup-item-icon">
@@ -538,9 +541,10 @@ $totalDays = 42; // 6 недель * 7 дней
                                     <div class="ui-icon-set --plus-30" style=""></div>
                                 </button>
                             </span>
-                            <button class="card-action-btn select-btn admin-only" onclick="openDealModal()">Выбрать</button>
+                            <button class="card-action-btn select-btn" onclick="openDealModal()">Выбрать</button>
                         </div>
                     </div>
+                    <?php endif; ?>
 
                     <?php 
                     $hasChangeEmployee = isset($arResult['HAS_CHANGE_EMPLOYEE_PERMISSION']) ? $arResult['HAS_CHANGE_EMPLOYEE_PERMISSION'] : false;
