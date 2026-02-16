@@ -90,27 +90,27 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
             $dateTo = $endDate->format('Y-m-d');
             
             // Определяем employeeId для фильтрации
-            // Пользователи с правом calendar.view_others видят все записи, остальные - только свои
+            // Пользователи с правом calendar.view_all видят все записи, остальные - только свои
             $employeeId = null;
             global $USER;
-            $hasViewOthersPermission = false;
+            $hasViewAllPermission = false;
             
             if ($USER && $USER->IsAuthorized()) {
-                // Проверяем право на просмотр чужих записей
+                // Проверяем право на просмотр всех записей
                 if ($USER->IsAdmin()) {
-                    $hasViewOthersPermission = true;
+                    $hasViewAllPermission = true;
                 } else {
                     try {
                         $permissionsObj = new \Artmax\Calendar\Permissions();
-                        $hasViewOthersPermission = $permissionsObj->hasPermission($USER->GetID(), 'calendar.view_others');
+                        $hasViewAllPermission = $permissionsObj->hasPermission($USER->GetID(), 'calendar.view_all');
                     } catch (\Exception $e) {
                         // Если ошибка проверки прав, используем безопасный вариант - только свои записи
-                        $hasViewOthersPermission = false;
+                        $hasViewAllPermission = false;
                     }
                 }
                 
-                // Если есть право на просмотр чужих, проверяем параметр employee_id из GET (для переключателя)
-                if ($hasViewOthersPermission) {
+                // Если есть право на просмотр всех записей, проверяем параметр employee_id из GET (для переключателя)
+                if ($hasViewAllPermission) {
                     if (isset($_GET['employee_id'])) {
                         $employeeIdParam = $_GET['employee_id'];
                         // Если параметр равен '0' или 'all', показываем все записи
@@ -120,15 +120,15 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                             $employeeId = (int)$employeeIdParam;
                         }
                     } else {
-                        // Если параметра нет: для админов "Все записи", для врачей с правом view_others "Мои записи"
+                        // Если параметра нет: для админов "Все записи", для пользователей с правом view_all "Мои записи"
                         if ($USER->IsAdmin()) {
                             $employeeId = null; // Админы видят все записи по умолчанию
                         } else {
-                            $employeeId = $USER->GetID(); // Врачи с правом view_others видят свои записи по умолчанию
+                            $employeeId = $USER->GetID(); // Пользователи с правом view_all видят свои записи по умолчанию
                         }
                     }
                 } else {
-                    // Без права на просмотр чужих - показываем только свои записи
+                    // Без права на просмотр всех - показываем только свои записи
                     $employeeId = $USER->GetID();
                 }
             }
@@ -212,35 +212,48 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
         // Формируем данные для шаблона
         global $USER;
         
-        // Проверяем право на просмотр чужих записей для шаблона
-        $hasViewOthersPermission = false;
+        // Проверяем права доступа для шаблона
+        $hasViewAllPermission = false;
         $hasCreatePermission = false;
         $hasManageGroupsPermission = false;
         $hasManageBranchesPermission = false;
         $hasManageSchedulePermission = false;
-        $hasDeletePermission = false;
+        $hasDeleteOwnPermission = false;
+        $hasDeleteAllPermission = false;
         $hasChangeEmployeePermission = false;
-        $hasEditTitlePermission = false;
-        $hasEditOthersNotesPermission = false;
-        $hasEditPermission = false;
+        $hasEditOwnPermission = false;
+        $hasEditAllPermission = false;
         $hasMovePermission = false;
         $hasConfirmPermission = false;
+        $hasCancelPermission = false;
+        $hasEditTitleOwnPermission = false;
+        $hasEditTitleAllPermission = false;
+        $hasEditOthersNotesPermission = false;
+        $hasManageContactPermission = false;
+        $hasSetVisitStatusPermission = false;
         if ($USER && $USER->IsAuthorized()) {
             if ($USER->IsAdmin()) {
-                $hasViewOthersPermission = true;
+                // Администраторы получают полный доступ без проверки прав
+                $hasViewAllPermission = true;
                 $hasCreatePermission = true;
                 $hasManageGroupsPermission = true;
                 $hasManageBranchesPermission = true;
                 $hasManageSchedulePermission = true;
-                $hasDeletePermission = true;
+                $hasDeleteOwnPermission = true;
+                $hasDeleteAllPermission = true;
                 $hasChangeEmployeePermission = true;
-                $hasEditTitlePermission = true;
-                $hasEditOthersNotesPermission = true;
-                $hasEditPermission = true;
+                $hasEditOwnPermission = true;
+                $hasEditAllPermission = true;
                 $hasMovePermission = true;
                 $hasConfirmPermission = true;
+                $hasCancelPermission = true;
+                $hasEditTitleOwnPermission = true;
+                $hasEditTitleAllPermission = true;
+                $hasEditOthersNotesPermission = true;
+                $hasManageContactPermission = true;
+                $hasSetVisitStatusPermission = true;
                 file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
-                    "HAS_VIEW_OTHERS_PERMISSION: User is admin, setting to true\n", 
+                    "HAS_VIEW_ALL_PERMISSION: User is admin, setting to true\n", 
                     FILE_APPEND | LOCK_EX);
                 file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
                     "HAS_CREATE_PERMISSION: User is admin, setting to true\n", 
@@ -255,19 +268,19 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                     "HAS_MANAGE_SCHEDULE_PERMISSION: User is admin, setting to true\n", 
                     FILE_APPEND | LOCK_EX);
                 file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
-                    "HAS_DELETE_PERMISSION: User is admin, setting to true\n", 
+                    "HAS_DELETE_OWN_PERMISSION: User is admin, setting to true\n", 
+                    FILE_APPEND | LOCK_EX);
+                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
+                    "HAS_DELETE_ALL_PERMISSION: User is admin, setting to true\n", 
                     FILE_APPEND | LOCK_EX);
                 file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
                     "HAS_CHANGE_EMPLOYEE_PERMISSION: User is admin, setting to true\n", 
                     FILE_APPEND | LOCK_EX);
                 file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
-                    "HAS_EDIT_TITLE_PERMISSION: User is admin, setting to true\n", 
+                    "HAS_EDIT_OWN_PERMISSION: User is admin, setting to true\n", 
                     FILE_APPEND | LOCK_EX);
                 file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
-                    "HAS_EDIT_OTHERS_NOTES_PERMISSION: User is admin, setting to true\n", 
-                    FILE_APPEND | LOCK_EX);
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
-                    "HAS_EDIT_PERMISSION: User is admin, setting to true\n", 
+                    "HAS_EDIT_ALL_PERMISSION: User is admin, setting to true\n", 
                     FILE_APPEND | LOCK_EX);
                 file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
                     "HAS_MOVE_PERMISSION: User is admin, setting to true\n", 
@@ -279,22 +292,28 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                 try {
                     $permissionsObj = new \Artmax\Calendar\Permissions();
                     $userId = $USER->GetID();
-                    $hasViewOthersPermission = $permissionsObj->hasPermission($userId, 'calendar.view_others');
+                    $hasViewAllPermission = $permissionsObj->hasPermission($userId, 'calendar.view_all');
                     $hasCreatePermission = $permissionsObj->hasPermission($userId, 'calendar.create');
                     $hasManageGroupsPermission = $permissionsObj->hasPermission($userId, 'calendar.manage_groups');
                     $hasManageBranchesPermission = $permissionsObj->hasPermission($userId, 'calendar.manage_branches');
                     $hasManageSchedulePermission = $permissionsObj->hasPermission($userId, 'calendar.manage_schedule');
-                    $hasDeletePermission = $permissionsObj->hasPermission($userId, 'calendar.delete');
+                    $hasDeleteOwnPermission = $permissionsObj->hasPermission($userId, 'calendar.delete_own');
+                    $hasDeleteAllPermission = $permissionsObj->hasPermission($userId, 'calendar.delete_all');
                     $hasChangeEmployeePermission = $permissionsObj->hasPermission($userId, 'calendar.change_employee');
-                    $hasEditTitlePermission = $permissionsObj->hasPermission($userId, 'calendar.edit_title');
-                    $hasEditOthersNotesPermission = $permissionsObj->hasPermission($userId, 'calendar.edit_others_notes');
-                    $hasEditPermission = $permissionsObj->hasPermission($userId, 'calendar.edit');
+                    $hasEditOwnPermission = $permissionsObj->hasPermission($userId, 'calendar.edit_own');
+                    $hasEditAllPermission = $permissionsObj->hasPermission($userId, 'calendar.edit_all');
                     $hasMovePermission = $permissionsObj->hasPermission($userId, 'calendar.move');
                     $hasConfirmPermission = $permissionsObj->hasPermission($userId, 'calendar.confirm');
+                    $hasCancelPermission = $permissionsObj->hasPermission($userId, 'calendar.cancel');
+                    $hasEditTitleOwnPermission = $permissionsObj->hasPermission($userId, 'calendar.edit_title_own');
+                    $hasEditTitleAllPermission = $permissionsObj->hasPermission($userId, 'calendar.edit_title_all');
+                    $hasEditOthersNotesPermission = $permissionsObj->hasPermission($userId, 'calendar.edit_others_notes');
+                    $hasManageContactPermission = $permissionsObj->hasPermission($userId, 'calendar.manage_contact');
+                    $hasSetVisitStatusPermission = $permissionsObj->hasPermission($userId, 'calendar.set_visit_status');
                     
                     // Отладочная информация
                     file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
-                        "HAS_VIEW_OTHERS_PERMISSION: User ID = " . $userId . ", hasPermission result = " . ($hasViewOthersPermission ? 'true' : 'false') . "\n", 
+                        "HAS_VIEW_ALL_PERMISSION: User ID = " . $userId . ", hasPermission result = " . ($hasViewAllPermission ? 'true' : 'false') . "\n", 
                         FILE_APPEND | LOCK_EX);
                     file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
                         "HAS_CREATE_PERMISSION: User ID = " . $userId . ", hasPermission result = " . ($hasCreatePermission ? 'true' : 'false') . "\n", 
@@ -309,38 +328,47 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                         "HAS_MANAGE_SCHEDULE_PERMISSION: User ID = " . $userId . ", hasPermission result = " . ($hasManageSchedulePermission ? 'true' : 'false') . "\n", 
                         FILE_APPEND | LOCK_EX);
                     file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
-                        "HAS_DELETE_PERMISSION: User ID = " . $userId . ", hasPermission result = " . ($hasDeletePermission ? 'true' : 'false') . "\n", 
+                        "HAS_DELETE_OWN_PERMISSION: User ID = " . $userId . ", hasPermission result = " . ($hasDeleteOwnPermission ? 'true' : 'false') . "\n", 
+                        FILE_APPEND | LOCK_EX);
+                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
+                        "HAS_DELETE_ALL_PERMISSION: User ID = " . $userId . ", hasPermission result = " . ($hasDeleteAllPermission ? 'true' : 'false') . "\n", 
                         FILE_APPEND | LOCK_EX);
                     file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
                         "HAS_CHANGE_EMPLOYEE_PERMISSION: User ID = " . $userId . ", hasPermission result = " . ($hasChangeEmployeePermission ? 'true' : 'false') . "\n", 
                         FILE_APPEND | LOCK_EX);
                     file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
-                        "HAS_EDIT_TITLE_PERMISSION: User ID = " . $userId . ", hasPermission result = " . ($hasEditTitlePermission ? 'true' : 'false') . "\n", 
+                        "HAS_EDIT_OWN_PERMISSION: User ID = " . $userId . ", hasPermission result = " . ($hasEditOwnPermission ? 'true' : 'false') . "\n", 
                         FILE_APPEND | LOCK_EX);
                     file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
-                        "HAS_EDIT_OTHERS_NOTES_PERMISSION: User ID = " . $userId . ", hasPermission result = " . ($hasEditOthersNotesPermission ? 'true' : 'false') . "\n", 
+                        "HAS_EDIT_ALL_PERMISSION: User ID = " . $userId . ", hasPermission result = " . ($hasEditAllPermission ? 'true' : 'false') . "\n", 
                         FILE_APPEND | LOCK_EX);
                     
                     // Дополнительная отладка: проверяем группы пользователя
                     $userGroups = \CUser::GetUserGroup($userId);
                     file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
-                        "HAS_VIEW_OTHERS_PERMISSION: User groups = " . implode(', ', $userGroups) . "\n", 
+                        "HAS_VIEW_ALL_PERMISSION: User groups = " . implode(', ', $userGroups) . "\n", 
                         FILE_APPEND | LOCK_EX);
                 } catch (\Exception $e) {
-                    $hasViewOthersPermission = false;
+                    $hasViewAllPermission = false;
                     $hasCreatePermission = false;
                     $hasManageGroupsPermission = false;
                     $hasManageBranchesPermission = false;
                     $hasManageSchedulePermission = false;
-                    $hasDeletePermission = false;
+                    $hasDeleteOwnPermission = false;
+                    $hasDeleteAllPermission = false;
                     $hasChangeEmployeePermission = false;
-                    $hasEditTitlePermission = false;
-                    $hasEditOthersNotesPermission = false;
-                    $hasEditPermission = false;
+                    $hasEditOwnPermission = false;
+                    $hasEditAllPermission = false;
                     $hasMovePermission = false;
                     $hasConfirmPermission = false;
+                    $hasCancelPermission = false;
+                    $hasEditTitleOwnPermission = false;
+                    $hasEditTitleAllPermission = false;
+                    $hasEditOthersNotesPermission = false;
+                    $hasManageContactPermission = false;
+                    $hasSetVisitStatusPermission = false;
                     file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
-                        "HAS_VIEW_OTHERS_PERMISSION: Exception = " . $e->getMessage() . "\n", 
+                        "HAS_VIEW_ALL_PERMISSION: Exception = " . $e->getMessage() . "\n", 
                         FILE_APPEND | LOCK_EX);
                     file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
                         "HAS_CREATE_PERMISSION: Exception = " . $e->getMessage() . "\n", 
@@ -355,13 +383,19 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                         "HAS_MANAGE_SCHEDULE_PERMISSION: Exception = " . $e->getMessage() . "\n", 
                         FILE_APPEND | LOCK_EX);
                     file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
-                        "HAS_DELETE_PERMISSION: Exception = " . $e->getMessage() . "\n", 
+                        "HAS_DELETE_OWN_PERMISSION: Exception = " . $e->getMessage() . "\n", 
+                        FILE_APPEND | LOCK_EX);
+                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
+                        "HAS_DELETE_ALL_PERMISSION: Exception = " . $e->getMessage() . "\n", 
                         FILE_APPEND | LOCK_EX);
                     file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
                         "HAS_CHANGE_EMPLOYEE_PERMISSION: Exception = " . $e->getMessage() . "\n", 
                         FILE_APPEND | LOCK_EX);
                     file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
-                        "HAS_EDIT_PERMISSION: Exception = " . $e->getMessage() . "\n", 
+                        "HAS_EDIT_OWN_PERMISSION: Exception = " . $e->getMessage() . "\n", 
+                        FILE_APPEND | LOCK_EX);
+                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
+                        "HAS_EDIT_ALL_PERMISSION: Exception = " . $e->getMessage() . "\n", 
                         FILE_APPEND | LOCK_EX);
                     file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
                         "HAS_MOVE_PERMISSION: Exception = " . $e->getMessage() . "\n", 
@@ -369,17 +403,11 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                     file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
                         "HAS_CONFIRM_PERMISSION: Exception = " . $e->getMessage() . "\n", 
                         FILE_APPEND | LOCK_EX);
-                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
-                        "HAS_EDIT_TITLE_PERMISSION: Exception = " . $e->getMessage() . "\n", 
-                        FILE_APPEND | LOCK_EX);
-                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
-                        "HAS_EDIT_OTHERS_NOTES_PERMISSION: Exception = " . $e->getMessage() . "\n", 
-                        FILE_APPEND | LOCK_EX);
                 }
             }
         } else {
             file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
-                "HAS_VIEW_OTHERS_PERMISSION: User not authorized or not set\n", 
+                "HAS_VIEW_ALL_PERMISSION: User not authorized or not set\n", 
                 FILE_APPEND | LOCK_EX);
             file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
                 "HAS_CREATE_PERMISSION: User not authorized or not set\n", 
@@ -394,19 +422,19 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                 "HAS_MANAGE_SCHEDULE_PERMISSION: User not authorized or not set\n", 
                 FILE_APPEND | LOCK_EX);
             file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
-                "HAS_DELETE_PERMISSION: User not authorized or not set\n", 
+                "HAS_DELETE_OWN_PERMISSION: User not authorized or not set\n", 
+                FILE_APPEND | LOCK_EX);
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
+                "HAS_DELETE_ALL_PERMISSION: User not authorized or not set\n", 
                 FILE_APPEND | LOCK_EX);
             file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
                 "HAS_CHANGE_EMPLOYEE_PERMISSION: User not authorized or not set\n", 
                 FILE_APPEND | LOCK_EX);
             file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
-                "HAS_EDIT_TITLE_PERMISSION: User not authorized or not set\n", 
+                "HAS_EDIT_OWN_PERMISSION: User not authorized or not set\n", 
                 FILE_APPEND | LOCK_EX);
             file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
-                "HAS_EDIT_OTHERS_NOTES_PERMISSION: User not authorized or not set\n", 
-                FILE_APPEND | LOCK_EX);
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
-                "HAS_EDIT_PERMISSION: User not authorized or not set\n", 
+                "HAS_EDIT_ALL_PERMISSION: User not authorized or not set\n", 
                 FILE_APPEND | LOCK_EX);
             file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
                 "HAS_MOVE_PERMISSION: User not authorized or not set\n", 
@@ -425,20 +453,30 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
             'CURRENT_USER_ID' => $USER ? $USER->GetID() : 0,
             'IS_ADMIN' => $USER && $USER->IsAdmin(),
             'CAN_ADD_EVENTS' => $USER ? $USER->IsAuthorized() : false,
-            'HAS_VIEW_OTHERS_PERMISSION' => $hasViewOthersPermission,
+            'HAS_VIEW_ALL_PERMISSION' => $hasViewAllPermission,
+            'HAS_VIEW_OTHERS_PERMISSION' => $hasViewAllPermission,
             'HAS_CREATE_PERMISSION' => $hasCreatePermission,
             'HAS_MANAGE_GROUPS_PERMISSION' => $hasManageGroupsPermission,
             'HAS_MANAGE_BRANCHES_PERMISSION' => $hasManageBranchesPermission,
             'HAS_MANAGE_SCHEDULE_PERMISSION' => $hasManageSchedulePermission,
-            'HAS_DELETE_PERMISSION' => $hasDeletePermission,
+            'HAS_DELETE_OWN_PERMISSION' => $hasDeleteOwnPermission,
+            'HAS_DELETE_ALL_PERMISSION' => $hasDeleteAllPermission,
+            'HAS_DELETE_PERMISSION' => $hasDeleteOwnPermission || $hasDeleteAllPermission,
+            'HAS_CLEAR_ALL_PERMISSION' => $hasDeleteAllPermission,
+            'HAS_EDIT_PERMISSION' => $hasEditOwnPermission || $hasEditAllPermission,
             'HAS_CHANGE_EMPLOYEE_PERMISSION' => $hasChangeEmployeePermission,
-            'HAS_EDIT_TITLE_PERMISSION' => $hasEditTitlePermission,
-            'HAS_EDIT_OTHERS_NOTES_PERMISSION' => $hasEditOthersNotesPermission,
-            'HAS_EDIT_PERMISSION' => $hasEditPermission,
+            'HAS_EDIT_OWN_PERMISSION' => $hasEditOwnPermission,
+            'HAS_EDIT_ALL_PERMISSION' => $hasEditAllPermission,
             'HAS_MOVE_PERMISSION' => $hasMovePermission,
             'HAS_CONFIRM_PERMISSION' => $hasConfirmPermission,
+            'HAS_CANCEL_PERMISSION' => $hasCancelPermission,
+            'HAS_EDIT_TITLE_OWN_PERMISSION' => $hasEditTitleOwnPermission,
+            'HAS_EDIT_TITLE_ALL_PERMISSION' => $hasEditTitleAllPermission,
+            'HAS_EDIT_OTHERS_NOTES_PERMISSION' => $hasEditOthersNotesPermission,
+            'HAS_MANAGE_CONTACT_PERMISSION' => $hasManageContactPermission,
+            'HAS_SET_VISIT_STATUS_PERMISSION' => $hasSetVisitStatusPermission,
         ];
-
+        
         // Добавляем панельные кнопки (кнопка "Настройки" показывается всем с правами, "Создать" - только админам)
         if ($USER && $USER->IsAuthorized()) {
             $this->addPanelButtons();
@@ -502,7 +540,7 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
             $this->addLegacyPanelButtons();
         }
     }
-    
+
     /**
      * Добавляет кнопки через современный API тулбара Bitrix24
      */
@@ -697,7 +735,7 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                 </div>
                 
                 <div class="nav-right" style="display: flex; align-items: center;">' . 
-                (($this->arResult['HAS_DELETE_PERMISSION'] ?? false) ? '
+                (($this->arResult['HAS_CLEAR_ALL_PERMISSION'] ?? false) ? '
                     <button class="ui-btn ui-btn-empty nav-btn clear-all-btn" 
                             onclick="clearAllEvents()"
                             title="Удалить все события"
@@ -1791,20 +1829,20 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
 
             // Проверяем права на просмотр
             // Админы видят всё, создатель события видит, врач события видит
-            // Также проверяем право calendar.view_others
-            $hasViewOthersPermission = false;
+            // Также проверяем право calendar.view_all
+            $hasViewAllPermission = false;
             if ($USER->IsAdmin()) {
-                $hasViewOthersPermission = true;
+                $hasViewAllPermission = true;
             } else {
                 try {
                     $permissionsObj = new \Artmax\Calendar\Permissions();
-                    $hasViewOthersPermission = $permissionsObj->hasPermission($USER->GetID(), 'calendar.view_others');
+                    $hasViewAllPermission = $permissionsObj->hasPermission($USER->GetID(), 'calendar.view_all');
                 } catch (\Exception $e) {
-                    $hasViewOthersPermission = false;
+                    $hasViewAllPermission = false;
                 }
             }
             
-            if (!$hasViewOthersPermission && 
+            if (!$hasViewAllPermission && 
                 $event['USER_ID'] != $USER->GetID() && 
                 $event['EMPLOYEE_ID'] != $USER->GetID()) {
                 return ['success' => false, 'error' => 'Нет прав на просмотр'];
@@ -1886,21 +1924,27 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                 return ['success' => false, 'error' => 'Событие не найдено'];
             }
 
-            // Проверяем права на редактирование названия (для всех записей, включая свои)
-            $hasEditTitlePermission = false;
+            // Проверяем права на редактирование (own - свои записи, all - все записи)
+            $hasEditAllPermission = false;
+            $hasEditOwnPermission = false;
             if ($USER->IsAdmin()) {
-                $hasEditTitlePermission = true;
+                $hasEditAllPermission = true;
+                $hasEditOwnPermission = true;
             } else {
                 try {
                     $permissionsObj = new \Artmax\Calendar\Permissions();
-                    $hasEditTitlePermission = $permissionsObj->hasPermission($userId, 'calendar.edit_title');
+                    $hasEditAllPermission = $permissionsObj->hasPermission($userId, 'calendar.edit_all');
+                    $hasEditOwnPermission = $permissionsObj->hasPermission($userId, 'calendar.edit_own');
                 } catch (\Exception $e) {
-                    $hasEditTitlePermission = false;
+                    $hasEditAllPermission = false;
+                    $hasEditOwnPermission = false;
                 }
             }
             
-            if (!$hasEditTitlePermission) {
-                return ['success' => false, 'error' => 'Нет прав на редактирование названия записи'];
+            // Проверяем права: либо edit_all, либо (edit_own И своя запись)
+            $isOwnEvent = ($existingEvent['USER_ID'] == $userId) || ($existingEvent['EMPLOYEE_ID'] == $userId);
+            if (!$hasEditAllPermission && (!$hasEditOwnPermission || !$isOwnEvent)) {
+                return ['success' => false, 'error' => 'Нет прав на редактирование записи'];
             }
 
             // Получаем employeeId из существующего события
@@ -2684,7 +2728,49 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
 
         $enum->SetEnumValues($field['ID'], $existingValues);
     }
-    
+
+    /**
+     * Обновляет название филиала в enum поля сделки (при переименовании)
+     */
+    private function updateBranchInDealFieldEnum(int $branchId, string $branchName): void
+    {
+        if ($branchId <= 0 || $branchName === '') {
+            return;
+        }
+        if (!\CModule::IncludeModule('crm')) {
+            return;
+        }
+        $fieldCode = \Bitrix\Main\Config\Option::get('artmax.calendar', 'deal_branch_field', 'UF_CRM_CALENDAR_BRANCH');
+        if (!$fieldCode) {
+            return;
+        }
+        $field = \CUserTypeEntity::GetList(
+            [],
+            ['ENTITY_ID' => 'CRM_DEAL', 'FIELD_NAME' => $fieldCode]
+        )->Fetch();
+        if (!$field) {
+            return;
+        }
+        $enum = new \CUserFieldEnum();
+        $existingValues = [];
+        $xmlId = 'branch_' . $branchId;
+        $rsEnum = $enum->GetList(['SORT' => 'ASC'], ['USER_FIELD_ID' => $field['ID']]);
+        while ($item = $rsEnum->Fetch()) {
+            $existingValues[$item['ID']] = [
+                'VALUE' => $item['VALUE'],
+                'DEF' => $item['DEF'],
+                'SORT' => $item['SORT'],
+                'XML_ID' => $item['XML_ID'],
+            ];
+            if ($item['XML_ID'] === $xmlId || (string)$item['XML_ID'] === (string)$branchId) {
+                $existingValues[$item['ID']]['VALUE'] = $branchName;
+            }
+        }
+        if (!empty($existingValues)) {
+            $enum->SetEnumValues($field['ID'], $existingValues);
+        }
+    }
+
     /**
      * Получение контакта для события
      */
@@ -3498,7 +3584,7 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                     return ['success' => false, 'error' => 'Ошибка обновления данных филиала'];
                 }
 
-                // Обновляем страницы раздела только если изменилось название
+                // Обновляем страницы раздела и enum сделки только если изменилось название
                 if (isset($updateData['name'])) {
                     try {
                         \Artmax\Calendar\EventHandlers::updateSectionPages();
@@ -3510,6 +3596,8 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                             'Ошибка обновления страниц раздела: ' . $e->getMessage() . "\n", 
                             FILE_APPEND | LOCK_EX);
                     }
+                    // Синхронизируем название в CRM enum (для селекта deal-branch)
+                    $this->updateBranchInDealFieldEnum($branchId, $updateData['name']);
                 }
             }
             

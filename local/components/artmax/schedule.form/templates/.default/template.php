@@ -41,9 +41,12 @@ CJSCore::Init(['ui.buttons']);
                     <div class="artmax-field-content">
                         <select id="schedule-employee" name="employee_id" class="artmax-select" required>
                             <option value="">Выберите сотрудника</option>
-                            <?php foreach ($arResult['EMPLOYEES'] as $employee): ?>
+                            <?php foreach ($arResult['EMPLOYEES'] as $employee): 
+                                    $fullName = trim(($employee['LAST_NAME'] ?? '') . ' ' . ($employee['NAME'] ?? '') . ' ' . ($employee['SECOND_NAME'] ?? ''));
+                                    $displayName = $fullName ?: ($employee['LOGIN'] ?? '');
+                                ?>
                                 <option value="<?= $employee['ID'] ?>" <?= ($arParams['EMPLOYEE_ID'] == $employee['ID']) ? 'selected' : '' ?>>
-                                    <?= htmlspecialchars($employee['NAME']) ?>
+                                    <?= htmlspecialchars($displayName) ?>
                                 </option>
                             <?php endforeach; ?>
                         </select>

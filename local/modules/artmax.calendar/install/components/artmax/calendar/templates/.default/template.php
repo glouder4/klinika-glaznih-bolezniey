@@ -23,36 +23,23 @@ echo '<!-- DEBUG: HAS_MANAGE_GROUPS_PERMISSION = ' . ($hasManageGroups ? 'true' 
     window.HAS_VIEW_OTHERS_PERMISSION = <?= $hasViewOthers ? 'true' : 'false' ?>;
     window.HAS_CREATE_PERMISSION = <?= $hasCreate ? 'true' : 'false' ?>;
     window.HAS_MANAGE_GROUPS_PERMISSION = <?= $hasManageGroups ? 'true' : 'false' ?>;
+    window.HAS_CHANGE_EMPLOYEE_PERMISSION = <?= (isset($arResult['HAS_CHANGE_EMPLOYEE_PERMISSION']) && $arResult['HAS_CHANGE_EMPLOYEE_PERMISSION']) ? 'true' : 'false' ?>;
+    window.HAS_EDIT_TITLE_OWN_PERMISSION = <?= (isset($arResult['HAS_EDIT_TITLE_OWN_PERMISSION']) && $arResult['HAS_EDIT_TITLE_OWN_PERMISSION']) ? 'true' : 'false' ?>;
+    window.HAS_EDIT_TITLE_ALL_PERMISSION = <?= (isset($arResult['HAS_EDIT_TITLE_ALL_PERMISSION']) && $arResult['HAS_EDIT_TITLE_ALL_PERMISSION']) ? 'true' : 'false' ?>;
+    window.HAS_EDIT_OTHERS_NOTES_PERMISSION = <?= (isset($arResult['HAS_EDIT_OTHERS_NOTES_PERMISSION']) && $arResult['HAS_EDIT_OTHERS_NOTES_PERMISSION']) ? 'true' : 'false' ?>;
+    window.HAS_EDIT_PERMISSION = <?= (isset($arResult['HAS_EDIT_PERMISSION']) && $arResult['HAS_EDIT_PERMISSION']) ? 'true' : 'false' ?>;
+    window.HAS_MOVE_PERMISSION = <?= (isset($arResult['HAS_MOVE_PERMISSION']) && $arResult['HAS_MOVE_PERMISSION']) ? 'true' : 'false' ?>;
+    window.HAS_CONFIRM_PERMISSION = <?= (isset($arResult['HAS_CONFIRM_PERMISSION']) && $arResult['HAS_CONFIRM_PERMISSION']) ? 'true' : 'false' ?>;
+    window.HAS_CANCEL_PERMISSION = <?= (isset($arResult['HAS_CANCEL_PERMISSION']) && $arResult['HAS_CANCEL_PERMISSION']) ? 'true' : 'false' ?>;
+    window.HAS_DELETE_PERMISSION = <?= (isset($arResult['HAS_DELETE_PERMISSION']) && $arResult['HAS_DELETE_PERMISSION']) ? 'true' : 'false' ?>;
     console.log('HAS_VIEW_OTHERS_PERMISSION:', <?= $hasViewOthers ? 'true' : 'false' ?>);
     console.log('HAS_CREATE_PERMISSION:', <?= $hasCreate ? 'true' : 'false' ?>);
     console.log('HAS_MANAGE_GROUPS_PERMISSION:', <?= $hasManageGroups ? 'true' : 'false' ?>);
+    console.log('HAS_CHANGE_EMPLOYEE_PERMISSION:', <?= (isset($arResult['HAS_CHANGE_EMPLOYEE_PERMISSION']) && $arResult['HAS_CHANGE_EMPLOYEE_PERMISSION']) ? 'true' : 'false' ?>);
+    console.log('HAS_EDIT_TITLE_OWN_PERMISSION:', <?= (isset($arResult['HAS_EDIT_TITLE_OWN_PERMISSION']) && $arResult['HAS_EDIT_TITLE_OWN_PERMISSION']) ? 'true' : 'false' ?>, 'HAS_EDIT_TITLE_ALL_PERMISSION:', <?= (isset($arResult['HAS_EDIT_TITLE_ALL_PERMISSION']) && $arResult['HAS_EDIT_TITLE_ALL_PERMISSION']) ? 'true' : 'false' ?>);
+    console.log('HAS_EDIT_OTHERS_NOTES_PERMISSION:', <?= (isset($arResult['HAS_EDIT_OTHERS_NOTES_PERMISSION']) && $arResult['HAS_EDIT_OTHERS_NOTES_PERMISSION']) ? 'true' : 'false' ?>);
 </script>
 
-<!-- ИСПРАВЛЕНИЕ: CSS стили для отображения заметок врачам (только просмотр) -->
-<style>
-<?php if (!$arResult['IS_ADMIN'] && $USER->IsAuthorized()): ?>
-/* Врачи видят секцию заметок, но БЕЗ кнопок редактирования */
-.add-note-section {
-    display: block !important;
-    visibility: visible !important;
-}
-
-.note-display {
-    display: block !important;
-}
-
-/* ВАЖНО: Врачи НЕ видят кнопки добавления/редактирования заметок */
-.add-note-btn,
-.edit-note-btn {
-    display: none !important;
-    visibility: hidden !important;
-}
-
-.note-content {
-    display: block !important;
-}
-<?php endif; ?>
-</style>
 <?php
 
 /**
@@ -494,7 +481,6 @@ $totalDays = 42; // 6 недель * 7 дней
             <div class="side-panel-header">
                 <h3 id="sidePanelTitle">
                     <span class="title-text">Детали записи</span>
-                    <span class="edit-icon" title="Кликните для редактирования названия">✏️</span>
                 </h3>
                 <button class="close-side-panel" onclick="closeEventSidePanel()">×</button>
             </div>
@@ -520,7 +506,7 @@ $totalDays = 42; // 6 недель * 7 дней
                             </span>
                         </div>
                     </div>
-                    <div class="add-note-section admin-only">
+                    <div class="add-note-section">
                         <button class="add-note-btn" id="add-note-btn" onclick="event.stopPropagation(); openNoteModal();">+ Добавить заметку к записи</button>
                         <div class="note-display" id="note-display" style="display: none;">
                             <div class="note-content">
@@ -554,6 +540,10 @@ $totalDays = 42; // 6 недель * 7 дней
                         </div>
                     </div>
 
+                    <?php 
+                    $hasChangeEmployee = isset($arResult['HAS_CHANGE_EMPLOYEE_PERMISSION']) ? $arResult['HAS_CHANGE_EMPLOYEE_PERMISSION'] : false;
+                    if ($hasChangeEmployee): 
+                    ?>
                     <div class="action-card" id="employee-card" onclick="openEmployeeDetails()">
                         <div class="card-icon">
                             <div class="booking-actions-popup__item-client-icon">
@@ -566,12 +556,13 @@ $totalDays = 42; // 6 недель * 7 дней
                         </div>
                         <div class="card-actions" onclick="event.stopPropagation()">
                             <span data-element="booking-menu-deal-create-button" class="booking-actions-popup-plus-button">
-                                <button class="ui-btn ui-btn-shadow ui-btn-xs ui-btn-light ui-btn-round deal-card-add-btn admin-only" title="Назначить врача" onclick="event.stopPropagation(); openEmployeeModal();">
+                                <button class="ui-btn ui-btn-shadow ui-btn-xs ui-btn-light ui-btn-round deal-card-add-btn" title="Назначить врача" onclick="event.stopPropagation(); openEmployeeModal();">
                                     <div class="ui-icon-set --plus-30" style=""></div>
                                 </button>
                             </span>
                         </div>
                     </div>
+                    <?php endif; ?>
 
                     <div class="action-card">
                         <div class="card-icon">
@@ -583,13 +574,15 @@ $totalDays = 42; // 6 недель * 7 дней
                             <div class="card-title">Подтверждение</div>
                             <div class="card-status" id="confirmation-status">Ожидается подтверждение</div>
                         </div>
-                        <button class="card-action-btn admin-only" id="confirmation-select-btn" onclick="toggleConfirmationDropdown()">Выбрать ▼</button>
+                        <?php if (isset($arResult['HAS_CONFIRM_PERMISSION']) && $arResult['HAS_CONFIRM_PERMISSION']): ?>
+                        <button class="card-action-btn" id="confirmation-select-btn" onclick="toggleConfirmationDropdown()">Выбрать ▼</button>
                         
                         <!-- Выпадающее меню подтверждения -->
-                        <div class="confirmation-dropdown admin-only" id="confirmation-dropdown">
+                        <div class="confirmation-dropdown" id="confirmation-dropdown">
                             <div class="confirmation-dropdown-item" onclick="setConfirmationStatus('confirmed')">Подтверждено</div>
                             <div class="confirmation-dropdown-item" onclick="setConfirmationStatus('not_confirmed')">Не подтверждено</div>
                         </div>
+                        <?php endif; ?>
                     </div>
 
                     <div class="action-card">
@@ -615,11 +608,19 @@ $totalDays = 42; // 6 недель * 7 дней
 
                 <!-- Кнопки действий -->
                 <div class="side-panel-actions">
-                    <button class="edit-event-btn" onclick="openEditEventModalFromSidePanel()">✏️ Редактировать</button>
-                    <button class="move-event-btn" onclick="moveEventFromSidePanel()">📅 Перенести запись</button>
-                    <button id="cancel-event-btn" class="cancel-event-btn" onclick="toggleEventStatusFromSidePanel()">❌ Отменить запись</button>
+                    <?php if (isset($arResult['HAS_EDIT_PERMISSION']) && $arResult['HAS_EDIT_PERMISSION']): ?>
+                        <button class="edit-event-btn" onclick="openEditEventModalFromSidePanel()">✏️ Редактировать</button>
+                    <?php endif; ?>
+                    <?php if (isset($arResult['HAS_MOVE_PERMISSION']) && $arResult['HAS_MOVE_PERMISSION']): ?>
+                        <button class="move-event-btn" onclick="moveEventFromSidePanel()">📅 Перенести запись</button>
+                    <?php endif; ?>
+                    <?php if (isset($arResult['HAS_CANCEL_PERMISSION']) && $arResult['HAS_CANCEL_PERMISSION']): ?>
+                        <button id="cancel-event-btn" class="cancel-event-btn" onclick="toggleEventStatusFromSidePanel()">❌ Отменить запись</button>
+                    <?php endif; ?>
                     <button class="journal-btn" onclick="openJournalSidePanel()">📋 Журнал</button>
-                    <button class="delete-event-btn" style="display: block;" onclick="deleteEventFromSidePanel()">🗑️ Удалить</button>
+                    <?php if (isset($arResult['HAS_DELETE_PERMISSION']) && $arResult['HAS_DELETE_PERMISSION']): ?>
+                        <button class="delete-event-btn" style="display: block;" onclick="deleteEventFromSidePanel()">🗑️ Удалить</button>
+                    <?php endif; ?>
                 </div>
             </div>
         </div>

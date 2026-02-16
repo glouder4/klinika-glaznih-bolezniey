@@ -36,7 +36,7 @@ try {
     // ============================================
     echo "1. Удаление устаревших прав...\n";
     
-    $obsoletePermissions = ['calendar.admin', 'calendar.view'];
+    $obsoletePermissions = ['calendar.admin', 'calendar.view', 'calendar.edit', 'calendar.delete', 'calendar.edit_title', 'calendar.manage_employees'];
     
     foreach ($obsoletePermissions as $permissionCode) {
         // Получаем ID права
@@ -57,7 +57,15 @@ try {
             $connection->query($sqlDeletePermission);
             echo "   - Удалено право $permissionCode\n";
         } else {
-            $reason = ($permissionCode === 'calendar.admin') ? 'устаревшее' : 'не используется (заменено на calendar.view_others)';
+            $reasons = [
+                'calendar.admin' => 'устаревшее',
+                'calendar.view' => 'заменено на calendar.view_all',
+                'calendar.edit' => 'заменено на calendar.edit_own / calendar.edit_all',
+                'calendar.delete' => 'заменено на calendar.delete_own / calendar.delete_all',
+                'calendar.edit_title' => 'заменено на calendar.edit_title_own / calendar.edit_title_all',
+                'calendar.manage_employees' => 'не используется в модуле (управление сотрудниками через manage_schedule и change_employee)'
+            ];
+            $reason = $reasons[$permissionCode] ?? 'устаревшее';
             echo "   - Право $permissionCode не найдено (возможно, уже удалено или $reason)\n";
         }
     }
@@ -71,16 +79,6 @@ try {
     
     $newPermissions = [
         [
-            'CODE' => 'calendar.edit',
-            'NAME' => 'Редактирование записи',
-            'DESCRIPTION' => 'Право на редактирование существующих записей'
-        ],
-        [
-            'CODE' => 'calendar.delete',
-            'NAME' => 'Удаление записи',
-            'DESCRIPTION' => 'Право на удаление записей из календаря'
-        ],
-        [
             'CODE' => 'calendar.move',
             'NAME' => 'Перемещение записи',
             'DESCRIPTION' => 'Право на перемещение записей в календаре'
@@ -88,7 +86,12 @@ try {
         [
             'CODE' => 'calendar.confirm',
             'NAME' => 'Подтверждение записи',
-            'DESCRIPTION' => 'Право на подтверждение записей'
+            'DESCRIPTION' => 'Право на установку статуса подтверждения (Подтверждено/Не подтверждено). Не даёт право на отмену записи.'
+        ],
+        [
+            'CODE' => 'calendar.cancel',
+            'NAME' => 'Отмена записи',
+            'DESCRIPTION' => 'Право на отмену записи и возврат в расписание (кнопка «Отменить запись» / «Вернуть в расписание»). Владелец может отменять свои записи без этого права.'
         ],
         [
             'CODE' => 'calendar.change_employee',
@@ -96,9 +99,14 @@ try {
             'DESCRIPTION' => 'Право на смену ответственного врача в записи'
         ],
         [
-            'CODE' => 'calendar.edit_title',
-            'NAME' => 'Редактирование названия записи',
-            'DESCRIPTION' => 'Право на редактирование названия записей'
+            'CODE' => 'calendar.edit_title_own',
+            'NAME' => 'Редактирование названия записи (своих)',
+            'DESCRIPTION' => 'Право на редактирование названия только своих записей (формат «Своим»).'
+        ],
+        [
+            'CODE' => 'calendar.edit_title_all',
+            'NAME' => 'Редактирование названия записи (всех)',
+            'DESCRIPTION' => 'Право на редактирование названия у любых записей (формат «Всем»: свои и чужие).'
         ],
         [
             'CODE' => 'calendar.edit_others_notes',
@@ -109,6 +117,16 @@ try {
             'CODE' => 'calendar.manage_schedule',
             'NAME' => 'Управление расписанием',
             'DESCRIPTION' => 'Право на управление расписанием врачей'
+        ],
+        [
+            'CODE' => 'calendar.manage_contact',
+            'NAME' => 'Создание и привязка контакта к записи',
+            'DESCRIPTION' => 'Право на создание нового контакта в CRM и привязку/изменение контакта в событии календаря'
+        ],
+        [
+            'CODE' => 'calendar.set_visit_status',
+            'NAME' => 'Установка статуса визита',
+            'DESCRIPTION' => 'Право на установку статуса визита в записи (Клиент пришел / Клиент не пришел / Не указано)'
         ]
     ];
     
@@ -137,6 +155,23 @@ try {
             echo "   - Право уже существует: {$permission['CODE']}\n";
             $skippedCount++;
         }
+    }
+    
+    // Обновляем формулировки для прав, где важно явно указать формат «Всем»
+    $wordingUpdates = [
+        'calendar.confirm' => [
+            'NAME' => 'Подтверждение записи',
+            'DESCRIPTION' => 'Право на установку статуса подтверждения (Подтверждено/Не подтверждено). Не даёт право на отмену записи.'
+        ],
+    ];
+    foreach ($wordingUpdates as $code => $data) {
+        $connection->query("
+            UPDATE artmax_calendar_permissions 
+            SET NAME = '" . $sqlHelper->forSql($data['NAME']) . "',
+                DESCRIPTION = '" . $sqlHelper->forSql($data['DESCRIPTION']) . "'
+            WHERE CODE = '" . $sqlHelper->forSql($code) . "'
+        ");
+        echo "   ~ Обновлена формулировка: $code\n";
     }
     
     echo "\n";

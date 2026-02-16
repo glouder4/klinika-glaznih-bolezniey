@@ -4,45 +4,49 @@
 
 ## Доступные миграции
 
-### add_new_permissions.sql / migrate_add_new_permissions.php
+### refactor_permissions_20260118.sql / migrate_refactor_permissions.php
 
-**Описание:** Добавляет новые права доступа и удаляет устаревшее право `calendar.admin`.
+**Дата:** 2026-01-18
+
+**Описание:** Рефакторинг системы прав доступа - упрощена структура прав с понятной логикой "Свои / Все".
 
 **Что делает:**
 - Удаляет устаревшие права:
-  - `calendar.admin` (устаревшее)
-  - `calendar.view` (не используется, заменено на `calendar.view_others`)
-- Добавляет следующие новые права:
-  - `calendar.edit` - Редактирование записи
-  - `calendar.delete` - Удаление записи
-  - `calendar.move` - Перемещение записи
-  - `calendar.confirm` - Подтверждение записи
-  - `calendar.change_employee` - Смена ответственного врача
-  - `calendar.edit_title` - Редактирование названия записи
-  - `calendar.edit_others_notes` - Редактирование заметок чужих записей
-  - `calendar.manage_schedule` - Управление расписанием
+  - `calendar.view_others` (заменено на `calendar.view_all`)
+  - `calendar.edit` (заменено на `calendar.edit_own` / `calendar.edit_all`)
+  - `calendar.edit_title` (входит в `calendar.edit_own` / `calendar.edit_all`)
+  - `calendar.edit_others_notes` (входит в `calendar.edit_own` / `calendar.edit_all`)
+  - `calendar.delete` (заменено на `calendar.delete_own` / `calendar.delete_all`)
+
+- Добавляет новые права:
+  - `calendar.view` - Просмотр записей (своих)
+  - `calendar.view_all` - Просмотр всех записей
+  - `calendar.edit_own` - Редактирование своих записей
+  - `calendar.edit_all` - Редактирование всех записей
+  - `calendar.delete_own` - Удаление своих записей
+  - `calendar.delete_all` - Удаление всех записей
 
 **Как выполнить:**
 
 1. **Через SQL файл:**
    ```sql
-   -- Выполните SQL команды из файла add_new_permissions.sql
+   -- Выполните SQL команды из файла refactor_permissions_20260118.sql
    -- в вашей базе данных через phpMyAdmin или другой SQL клиент
    ```
 
 2. **Через PHP скрипт (рекомендуется):**
    ```bash
    # Через командную строку
-   php migrate_add_new_permissions.php
+   php migrate_refactor_permissions.php
    
    # Или через браузер (требуется авторизация)
-   http://your-site.local/local/modules/artmax.calendar/install/migrations/migrate_add_new_permissions.php
+   http://your-site.local/local/modules/artmax.calendar/install/migrations/migrate_refactor_permissions.php
    ```
 
 **Важно:**
 - Перед выполнением миграции сделайте резервную копию базы данных
-- После выполнения миграции проверьте назначение прав группам пользователей
-- Убедитесь, что все права корректно отображаются в админ-панели
+- После выполнения миграции переназначьте права группам пользователей
+- Проверьте, что все права корректно отображаются в админ-панели
 
 ## Структура миграций
 
@@ -57,3 +61,30 @@
 ## Откат миграций
 
 Для отката миграций используйте соответствующие SQL скрипты отката (если они предусмотрены) или восстановите базу данных из резервной копии.
+
+## Новая структура прав
+
+После выполнения миграции `refactor_permissions_20260118` структура прав будет следующей:
+
+### Базовые права
+
+| Код | Название |
+|-----|----------|
+| `calendar.view` | Просмотр записей |
+| `calendar.view_all` | Просмотр всех записей |
+| `calendar.create` | Создание записи |
+| `calendar.edit_own` | Редактирование своих записей |
+| `calendar.edit_all` | Редактирование всех записей |
+| `calendar.move` | Перемещение записи |
+| `calendar.confirm` | Подтверждение записи |
+| `calendar.delete_own` | Удаление своих записей |
+| `calendar.delete_all` | Удаление всех записей |
+
+### Административные права
+
+| Код | Название |
+|-----|----------|
+| `calendar.manage_groups` | Управление группами и правами |
+| `calendar.manage_schedule` | Управление расписанием |
+| `calendar.manage_branches` | Управление филиалами |
+| `calendar.change_employee` | Смена ответственного врача |

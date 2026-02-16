@@ -181,6 +181,38 @@ function saveDealDetails() {
     });
 }
 
+// Слушаем переименование филиала и перенос события для обновления селекта deal-branch
+(function() {
+    try {
+        const bc = new BroadcastChannel('artmax_calendar');
+        bc.onmessage = function(event) {
+            const data = event.data;
+            if (data?.type === 'calendar:branchSettingsSaved' && data?.branchId && data?.newBranchName) {
+                const branchSelect = document.getElementById('deal-branch');
+                if (!branchSelect) return;
+                const branchId = String(data.branchId);
+                const newName = String(data.newBranchName);
+                const option = Array.from(branchSelect.options).find(opt => opt.getAttribute('data-branch-id') === branchId);
+                if (option) {
+                    option.textContent = newName;
+                }
+            }
+            if (data?.type === 'calendar:eventMoved' && data?.eventId && data?.newBranchId) {
+                const myEventId = window.dealDetailsData?.eventId;
+                if (!myEventId || String(myEventId) !== String(data.eventId)) return;
+                const branchSelect = document.getElementById('deal-branch');
+                if (!branchSelect) return;
+                const newBranchId = String(data.newBranchId);
+                const option = Array.from(branchSelect.options).find(opt => opt.getAttribute('data-branch-id') === newBranchId);
+                if (option) {
+                    branchSelect.value = option.value;
+                    branchSelect.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+            }
+        };
+    } catch (e) {}
+})();
+
 if (typeof BX !== 'undefined' && BX.ready) {
     BX.ready(initializeDealDetailsForm);
 } else if (document.readyState === 'loading') {

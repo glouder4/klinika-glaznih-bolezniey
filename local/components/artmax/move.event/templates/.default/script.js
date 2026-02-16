@@ -383,13 +383,24 @@ function initializeMoveEventForm() {
         .then(data => {
             if (data.success) {
                 showNotification('Запись успешно перенесена', 'success');
+
+                // Обновляем форму: привязка к новому филиалу (чтобы форма не показывала старые данные)
+                const branchSelect = document.getElementById('move-event-branch');
+                const employeeSelect = document.getElementById('move-event-employee');
+                if (branchSelect) branchSelect.value = branchId;
+                if (employeeSelect) employeeSelect.value = employeeId;
+                window.moveEventData = window.moveEventData || {};
+                window.moveEventData.currentBranchId = branchId;
+                window.moveEventData.currentEmployeeId = employeeId;
                 
                 // Отправляем сообщение родительскому окну
                 if (window.parent) {
                     window.parent.postMessage({
                         type: 'calendar:eventMoved',
                         eventId: eventId,
-                        affectedEvents: data.affectedEvents || [eventId]
+                        affectedEvents: data.affectedEvents || [eventId],
+                        newBranchId: branchId,
+                        newEmployeeId: employeeId
                     }, '*');
                 }
                 

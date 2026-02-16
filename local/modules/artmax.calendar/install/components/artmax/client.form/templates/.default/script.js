@@ -534,6 +534,47 @@ function initializeClientForm() {
         });
     }
 
+    // Привязка контакта к событию, уведомление родителя и закрытие панели
+    function bindContactToEventAndClose(eventId, contactId, contactData) {
+        const csrfToken = getCSRFToken();
+        fetch('/local/components/artmax/calendar/ajax.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-Bitrix-Csrf-Token': csrfToken
+            },
+            body: new URLSearchParams({
+                action: 'saveEventContact',
+                eventId: eventId,
+                contactData: JSON.stringify(contactData),
+                sessid: csrfToken
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                if (window.parent && window.parent.postMessage) {
+                    window.parent.postMessage({
+                        type: 'calendar:contactSaved',
+                        contactId: contactId,
+                        eventId: eventId
+                    }, '*');
+                }
+                hideCreateContactForm();
+                setTimeout(closeSidePanel, 300);
+            } else {
+                showNotification('Контакт создан, но не удалось привязать к записи: ' + (data.error || ''), 'error');
+                selectContactById(contactId);
+            }
+        })
+        .catch(error => {
+            console.error('Ошибка привязки контакта к событию:', error);
+            showNotification('Контакт создан, но не удалось привязать к записи', 'error');
+            selectContactById(contactId);
+        });
+    }
+
     // Функция создания контакта
     window.createContact = function() {
         const name = document.getElementById('new-contact-name').value.trim();
@@ -573,9 +614,15 @@ function initializeClientForm() {
             if (data.success) {
                 showNotification('Контакт успешно создан', 'success');
                 
-                // Автоматически выбираем созданный контакт
                 if (data.contactId) {
-                    selectContactById(data.contactId);
+                    const currentEventId = window.clientFormData ? window.clientFormData.eventId : null;
+                    // Если открыто в контексте события — привязываем контакт и закрываем панель
+                    if (currentEventId) {
+                        const contactForSave = data.contact ? { ...data.contact, id: String(data.contact.id || data.contactId) } : { id: String(data.contactId), name: (contactData.name + ' ' + (contactData.lastname || '').trim()).trim(), phone: contactData.phone || '', email: contactData.email || '', company: '' };
+                        bindContactToEventAndClose(currentEventId, data.contactId, contactForSave);
+                    } else {
+                        selectContactById(data.contactId);
+                    }
                 } else {
                     hideCreateContactForm();
                 }

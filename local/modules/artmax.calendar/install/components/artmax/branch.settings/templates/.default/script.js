@@ -464,15 +464,13 @@ function initializeBranchSettingsForm() {
                     });
                 }
                 
-                // Отправляем сообщение родительскому окну
+                // Отправляем сообщение родительскому окну (новое название — для обновления deal-branch)
+                const newBranchName = document.getElementById('branch-name')?.value?.trim() || '';
                 if (window.parent && window.parent !== window) {
-                    console.log('Sending postMessage to parent:', {
-                        type: 'calendar:branchSettingsSaved',
-                        branchId: branchId
-                    });
                     window.parent.postMessage({
                         type: 'calendar:branchSettingsSaved',
-                        branchId: branchId
+                        branchId: branchId,
+                        newBranchName: newBranchName
                     }, window.location.origin);
                 } else {
                     console.log('Parent window not available for postMessage');

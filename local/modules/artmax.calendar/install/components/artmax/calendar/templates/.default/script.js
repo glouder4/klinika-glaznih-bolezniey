@@ -201,11 +201,18 @@
                         break;
                     
                     case 'calendar:branchSettingsSaved':
-                        console.log('Branch settings saved via postMessage:', event.data);
-                        // Обновляем календарь после сохранения настроек филиала
                         setTimeout(() => {
                             if (typeof refreshCalendarEvents === 'function') {
                                 refreshCalendarEvents();
+                            }
+                            const branchId = event.data?.branchId;
+                            const newBranchName = event.data?.newBranchName;
+                            if (branchId && newBranchName) {
+                                try {
+                                    const bc = new BroadcastChannel('artmax_calendar');
+                                    bc.postMessage({ type: 'calendar:branchSettingsSaved', branchId, newBranchName });
+                                    bc.close();
+                                } catch (e) {}
                             }
                         }, 100);
                         break;
@@ -305,6 +312,15 @@
                                         closeEventSidePanel();
                                     }
                                 }
+                                // Рассылаем deal.details для обновления селекта deal-branch
+                                const newBranchId = event.data?.newBranchId;
+                                if (newBranchId) {
+                                    try {
+                                        const bc = new BroadcastChannel('artmax_calendar');
+                                        bc.postMessage({ type: 'calendar:eventMoved', eventId: event.data.eventId, newBranchId: newBranchId });
+                                        bc.close();
+                                    } catch (e) {}
+                                }
                             }
                         }, 100);
                         break;
@@ -368,6 +384,11 @@
             day.addEventListener('click', function(e) {
                 // Не открываем форму при клике на событие
                 if (e.target.closest('.calendar-event')) {
+                    return;
+                }
+
+                // Проверяем право на создание событий
+                if (!window.HAS_CREATE_PERMISSION) {
                     return;
                 }
 
@@ -594,6 +615,12 @@
 
     // Функции для работы с календарем
     function openEventForm(date) {
+        // Проверяем право на создание событий
+        if (!window.HAS_CREATE_PERMISSION) {
+            console.log('openEventForm: User does not have permission to create events');
+            return;
+        }
+
         // Получаем ID текущего филиала
         const branchId = document.querySelector('.artmax-calendar').getAttribute('data-branch-id') || '1';
         
@@ -1185,56 +1212,8 @@
             return;
         }
         
-        // Получаем позицию события
-        const eventRect = eventElement.getBoundingClientRect();
-        const sidePanel = document.getElementById('eventSidePanel');
-        
-        if (!sidePanel) {
-            console.error('Боковое окно не найдено');
-            return;
-        }
-        
-        // Показываем боковое окно сначала невидимым для вычисления размеров
-        sidePanel.style.display = 'block';
-        sidePanel.style.visibility = 'hidden';
-        sidePanel.classList.add('open');
-        
-        // Вычисляем позицию бокового окна
-        const panelWidth = 400;
-        const panelHeight = window.innerHeight * 0.8; // 80% высоты экрана
-        const viewportWidth = window.innerWidth;
-        const viewportHeight = window.innerHeight;
-        
-        let left = eventRect.right + 10; // Справа от события
-        let top = Math.max(20, eventRect.top - 50); // Поднимаем выше события
-        
-        // Если не помещается справа, показываем слева
-        if (left + panelWidth > viewportWidth) {
-            left = eventRect.left - panelWidth - 10;
-        }
-        
-        // Если не помещается снизу, корректируем по вертикали
-        if (top + panelHeight > viewportHeight) {
-            top = viewportHeight - panelHeight - 20;
-        }
-        
-        // Если не помещается сверху, показываем от верха экрана
-        if (top < 20) {
-            top = 20;
-        }
-        
-        // Устанавливаем позицию
-        sidePanel.style.left = left + 'px';
-        sidePanel.style.top = top + 'px';
-        sidePanel.style.height = panelHeight + 'px';
-        
-        // Делаем видимым
-        sidePanel.style.visibility = 'visible';
-        
-        // Показываем прелоадер
-        showSidePanelPreloader();
-        
         // Получаем данные события и заполняем боковое окно
+        // НЕ открываем панель до получения успешного ответа
         const csrfToken = getCSRFToken();
         fetch('/local/components/artmax/calendar/ajax.php', {
             method: 'POST',
@@ -1254,6 +1233,56 @@
             if (data.success && data.event) {
                 const event = data.event;
                 
+                // Только после успешного получения данных открываем боковую панель
+                const sidePanel = document.getElementById('eventSidePanel');
+                if (!sidePanel) {
+                    console.error('Боковое окно не найдено');
+                    return;
+                }
+                
+                // Находим элемент события для позиционирования
+                const eventElement = document.querySelector(`[data-event-id="${eventId}"]`);
+                if (eventElement) {
+                    const eventRect = eventElement.getBoundingClientRect();
+                    
+                    // Вычисляем позицию бокового окна
+                    const panelWidth = 400;
+                    const panelHeight = window.innerHeight * 0.8; // 80% высоты экрана
+                    const viewportWidth = window.innerWidth;
+                    const viewportHeight = window.innerHeight;
+                    
+                    let left = eventRect.right + 10; // Справа от события
+                    let top = Math.max(20, eventRect.top - 50); // Поднимаем выше события
+                    
+                    // Если не помещается справа, показываем слева
+                    if (left + panelWidth > viewportWidth) {
+                        left = eventRect.left - panelWidth - 10;
+                    }
+                    
+                    // Если не помещается снизу, корректируем по вертикали
+                    if (top + panelHeight > viewportHeight) {
+                        top = viewportHeight - panelHeight - 20;
+                    }
+                    
+                    // Если не помещается сверху, показываем от верха экрана
+                    if (top < 20) {
+                        top = 20;
+                    }
+                    
+                    // Устанавливаем позицию
+                    sidePanel.style.left = left + 'px';
+                    sidePanel.style.top = top + 'px';
+                    sidePanel.style.height = panelHeight + 'px';
+                }
+                
+                // Показываем боковое окно
+                sidePanel.style.display = 'block';
+                sidePanel.style.visibility = 'visible';
+                sidePanel.classList.add('open');
+                
+                // Показываем прелоадер
+                showSidePanelPreloader();
+                
                 // Сохраняем данные события для использования в других функциях
                 window.currentEventData = event;
                 
@@ -1261,17 +1290,26 @@
                 const titleElement = document.getElementById('sidePanelTitle');
                 if (titleElement) {
                     const titleText = event.TITLE || 'Детали записи';
-                    // Обновляем структуру с иконкой карандаша
-                    titleElement.innerHTML = `
-                        <span class="title-text">${titleText}</span>
-                        <span class="edit-icon" title="Кликните для редактирования названия">✏️</span>
-                    `;
-                    // Добавляем обработчик клика для редактирования названия
-                    titleElement.style.cursor = 'pointer';
-                    titleElement.onclick = function(e) {
-                        e.stopPropagation();
-                        editEventTitle();
-                    };
+                    const isOwner = event && window.CURRENT_USER_ID && (parseInt(event.USER_ID) === parseInt(window.CURRENT_USER_ID) || parseInt(event.EMPLOYEE_ID) === parseInt(window.CURRENT_USER_ID));
+                    const canEditTitle = (isOwner && (window.HAS_EDIT_TITLE_OWN_PERMISSION || false)) || (window.HAS_EDIT_TITLE_ALL_PERMISSION || false);
+                    
+                    // Обновляем структуру с иконкой карандаша только если есть право
+                    if (canEditTitle) {
+                        titleElement.innerHTML = `
+                            <span class="title-text">${titleText}</span>
+                            <span class="edit-icon" title="Кликните для редактирования названия">✏️</span>
+                        `;
+                        // Добавляем обработчик клика для редактирования названия
+                        titleElement.style.cursor = 'pointer';
+                        titleElement.onclick = function(e) {
+                            e.stopPropagation();
+                            editEventTitle();
+                        };
+                    } else {
+                        titleElement.innerHTML = `<span class="title-text">${titleText}</span>`;
+                        titleElement.style.cursor = 'default';
+                        titleElement.onclick = null;
+                    }
                 }
                 
                 // Применяем цвет события к шапке
@@ -1279,12 +1317,6 @@
                 const sidePanelHeader = document.querySelector('.side-panel-header');
                 if (sidePanelHeader) {
                     sidePanelHeader.style.background = `linear-gradient(135deg, ${eventColor}, ${eventColor}dd)`;
-                }
-                
-                // Скрываем/показываем кнопки управления в зависимости от прав пользователя
-                const actionsPanel = document.querySelector('.side-panel-actions');
-                if (actionsPanel && window.IS_ADMIN !== undefined) {
-                    actionsPanel.style.display = window.IS_ADMIN ? 'flex' : 'none';
                 }
                 
                 // Подсчитываем количество запросов, которые будут выполнены
@@ -1347,7 +1379,11 @@
                 console.log('showEventSidePanel: Статус события:', event.STATUS);
                 updateCancelButtonByStatus(event.STATUS);
             } else {
-                showNotification('Ошибка при загрузке события', 'error');
+                // Показываем конкретное сообщение об ошибке из ответа сервера
+                const errorMessage = data.error || 'Ошибка при загрузке события';
+                showNotification(errorMessage, 'error');
+                // Закрываем боковую панель, если она была открыта
+                closeEventSidePanel();
                 // Сбрасываем счетчик загрузки при ошибке основного запроса
                 window.sidePanelLoadingCount = 0;
                 window.sidePanelLoadingComplete = 0;
@@ -1356,7 +1392,9 @@
         })
         .catch(error => {
             console.error('Ошибка при загрузке события:', error);
-            showNotification('Ошибка при загрузке события', 'error');
+            showNotification('Ошибка соединения с сервером', 'error');
+            // Закрываем боковую панель, если она была открыта
+            closeEventSidePanel();
             // Сбрасываем счетчик загрузки при ошибке основного запроса
             window.sidePanelLoadingCount = 0;
             window.sidePanelLoadingComplete = 0;
@@ -1410,6 +1448,16 @@
             return;
         }
         
+        const eventData = window.currentEventData;
+        const isOwner = eventData && window.CURRENT_USER_ID && (parseInt(eventData.USER_ID) === parseInt(window.CURRENT_USER_ID) || parseInt(eventData.EMPLOYEE_ID) === parseInt(window.CURRENT_USER_ID));
+        const canEditTitle = (isOwner && (window.HAS_EDIT_TITLE_OWN_PERMISSION || false)) || (window.HAS_EDIT_TITLE_ALL_PERMISSION || false);
+        
+        if (!canEditTitle) {
+            console.log('editEventTitle: Нет прав на редактирование названия записи');
+            showNotification('Нет прав на редактирование названия записи', 'error');
+            return;
+        }
+        
         // Получаем текст из span.title-text, если он есть, иначе из textContent
         const titleTextSpan = titleElement.querySelector('.title-text');
         const currentTitle = titleTextSpan ? titleTextSpan.textContent.trim() : titleElement.textContent.trim();
@@ -1432,18 +1480,27 @@
             const newTitle = input.value.trim();
             
             if (newTitle === currentTitle) {
-                // Если название не изменилось, просто возвращаем h3 с иконкой
+                // Если название не изменилось, просто возвращаем h3 с иконкой (если есть право)
                 const h3 = document.createElement('h3');
                 h3.id = 'sidePanelTitle';
-                h3.innerHTML = `
-                    <span class="title-text">${currentTitle}</span>
-                    <span class="edit-icon" title="Кликните для редактирования названия">✏️</span>
-                `;
-                h3.style.cursor = 'pointer';
-                h3.onclick = function(e) {
-                    e.stopPropagation();
-                    editEventTitle();
-                };
+                const evData = window.currentEventData;
+                const isOwn = evData && window.CURRENT_USER_ID && (parseInt(evData.USER_ID) === parseInt(window.CURRENT_USER_ID) || parseInt(evData.EMPLOYEE_ID) === parseInt(window.CURRENT_USER_ID));
+                const canEdit = (isOwn && (window.HAS_EDIT_TITLE_OWN_PERMISSION || false)) || (window.HAS_EDIT_TITLE_ALL_PERMISSION || false);
+                
+                if (canEdit) {
+                    h3.innerHTML = `
+                        <span class="title-text">${currentTitle}</span>
+                        <span class="edit-icon" title="Кликните для редактирования названия">✏️</span>
+                    `;
+                    h3.style.cursor = 'pointer';
+                    h3.onclick = function(e) {
+                        e.stopPropagation();
+                        editEventTitle();
+                    };
+                } else {
+                    h3.innerHTML = `<span class="title-text">${currentTitle}</span>`;
+                    h3.style.cursor = 'default';
+                }
                 parent.replaceChild(h3, input);
                 return;
             }
@@ -1501,18 +1558,27 @@
                     // Обновляем данные события
                     window.currentEventData.TITLE = newTitle;
                     
-                    // Возвращаем h3 с новым названием и иконкой карандаша
+                    // Возвращаем h3 с новым названием и иконкой карандаша (если есть право)
                     const h3 = document.createElement('h3');
                     h3.id = 'sidePanelTitle';
-                    h3.innerHTML = `
-                        <span class="title-text">${newTitle}</span>
-                        <span class="edit-icon" title="Кликните для редактирования названия">✏️</span>
-                    `;
-                    h3.style.cursor = 'pointer';
-                    h3.onclick = function(e) {
-                        e.stopPropagation();
-                        editEventTitle();
-                    };
+                    const eventData = window.currentEventData;
+                    const isOwner = eventData && window.CURRENT_USER_ID && (parseInt(eventData.USER_ID) === parseInt(window.CURRENT_USER_ID) || parseInt(eventData.EMPLOYEE_ID) === parseInt(window.CURRENT_USER_ID));
+                    const canEditTitle = (isOwner && (window.HAS_EDIT_TITLE_OWN_PERMISSION || false)) || (window.HAS_EDIT_TITLE_ALL_PERMISSION || false);
+                    
+                    if (canEditTitle) {
+                        h3.innerHTML = `
+                            <span class="title-text">${newTitle}</span>
+                            <span class="edit-icon" title="Кликните для редактирования названия">✏️</span>
+                        `;
+                        h3.style.cursor = 'pointer';
+                        h3.onclick = function(e) {
+                            e.stopPropagation();
+                            editEventTitle();
+                        };
+                    } else {
+                        h3.innerHTML = `<span class="title-text">${newTitle}</span>`;
+                        h3.style.cursor = 'default';
+                    }
                     parent.replaceChild(h3, input);
                     
                     // Обновляем название в календаре
@@ -1555,15 +1621,24 @@
                 // Отменяем редактирование
                 const h3 = document.createElement('h3');
                 h3.id = 'sidePanelTitle';
-                h3.innerHTML = `
-                    <span class="title-text">${currentTitle}</span>
-                    <span class="edit-icon" title="Кликните для редактирования названия">✏️</span>
-                `;
-                h3.style.cursor = 'pointer';
-                h3.onclick = function(e) {
-                    e.stopPropagation();
-                    editEventTitle();
-                };
+                const evData = window.currentEventData;
+                const isOwn = evData && window.CURRENT_USER_ID && (parseInt(evData.USER_ID) === parseInt(window.CURRENT_USER_ID) || parseInt(evData.EMPLOYEE_ID) === parseInt(window.CURRENT_USER_ID));
+                const canEdit = (isOwn && (window.HAS_EDIT_TITLE_OWN_PERMISSION || false)) || (window.HAS_EDIT_TITLE_ALL_PERMISSION || false);
+                
+                if (canEdit) {
+                    h3.innerHTML = `
+                        <span class="title-text">${currentTitle}</span>
+                        <span class="edit-icon" title="Кликните для редактирования названия">✏️</span>
+                    `;
+                    h3.style.cursor = 'pointer';
+                    h3.onclick = function(e) {
+                        e.stopPropagation();
+                        editEventTitle();
+                    };
+                } else {
+                    h3.innerHTML = `<span class="title-text">${currentTitle}</span>`;
+                    h3.style.cursor = 'default';
+                }
                 parent.replaceChild(h3, input);
             }
         });
@@ -1605,6 +1680,22 @@
     }
 
     function openEditEventModalFromSidePanel() {
+        // Проверяем права на редактирование (своя запись или есть право)
+        if (!window.currentEventData || !window.currentEventId) {
+            showNotification('Ошибка: не удалось определить событие', 'error');
+            return;
+        }
+        
+        const eventData = window.currentEventData;
+        const isOwner = eventData.USER_ID && window.CURRENT_USER_ID && parseInt(eventData.USER_ID) === parseInt(window.CURRENT_USER_ID);
+        const canEdit = isOwner || (window.HAS_EDIT_PERMISSION || false);
+        
+        if (!canEdit) {
+            console.log('openEditEventModalFromSidePanel: Нет прав на редактирование');
+            showNotification('Нет прав на редактирование этой записи', 'error');
+            return;
+        }
+        
         if (window.currentEventId) {
             closeEventSidePanel();
             openEditEventModal(window.currentEventId);
@@ -1634,6 +1725,13 @@
     }
 
     function deleteEventFromSidePanel() {
+        // Проверяем права на удаление записи
+        if (!window.HAS_DELETE_PERMISSION) {
+            console.log('deleteEventFromSidePanel: Нет прав на удаление записи');
+            showNotification('Нет прав на удаление записи', 'error');
+            return;
+        }
+        
         if (window.currentEventId) {
             if (confirm('Вы уверены, что хотите удалить это событие?')) {
                 deleteEventAjax(window.currentEventId);
@@ -4079,6 +4177,22 @@
 
     // Функции для работы с модальным окном заметок
     function openNoteModal() {
+        // Проверяем права на редактирование заметок (своя запись или есть право)
+        if (!window.currentEventData || !window.currentEventId) {
+            showNotification('Ошибка: не удалось определить событие', 'error');
+            return;
+        }
+        
+        const eventData = window.currentEventData;
+        const isOwner = eventData.USER_ID && window.CURRENT_USER_ID && parseInt(eventData.USER_ID) === parseInt(window.CURRENT_USER_ID);
+        const canEditNotes = isOwner || (window.HAS_EDIT_OTHERS_NOTES_PERMISSION || false);
+        
+        if (!canEditNotes) {
+            console.log('openNoteModal: Нет прав на редактирование заметок');
+            showNotification('Нет прав на редактирование заметок этой записи', 'error');
+            return;
+        }
+        
         const modal = document.getElementById('noteModal');
         if (modal) {
             modal.style.display = 'flex';
@@ -4112,6 +4226,23 @@
     }
 
     function saveNote() {
+        // Проверяем права на редактирование заметок (своя запись или есть право)
+        if (!window.currentEventData || !window.currentEventId) {
+            showNotification('Ошибка: не удалось определить событие', 'error');
+            return;
+        }
+        
+        const eventData = window.currentEventData;
+        const isOwner = eventData.USER_ID && window.CURRENT_USER_ID && parseInt(eventData.USER_ID) === parseInt(window.CURRENT_USER_ID);
+        const canEditNotes = isOwner || (window.HAS_EDIT_OTHERS_NOTES_PERMISSION || false);
+        
+        if (!canEditNotes) {
+            console.log('saveNote: Нет прав на редактирование заметок');
+            showNotification('Нет прав на редактирование заметок этой записи', 'error');
+            closeNoteModal();
+            return;
+        }
+        
         const textarea = document.getElementById('note-text');
         const noteText = textarea ? textarea.value.trim() : '';
         
@@ -4160,6 +4291,22 @@
     }
 
     function editNote() {
+        // Проверяем права на редактирование заметок (своя запись или есть право)
+        if (!window.currentEventData || !window.currentEventId) {
+            showNotification('Ошибка: не удалось определить событие', 'error');
+            return;
+        }
+        
+        const eventData = window.currentEventData;
+        const isOwner = eventData.USER_ID && window.CURRENT_USER_ID && parseInt(eventData.USER_ID) === parseInt(window.CURRENT_USER_ID);
+        const canEditNotes = isOwner || (window.HAS_EDIT_OTHERS_NOTES_PERMISSION || false);
+        
+        if (!canEditNotes) {
+            console.log('editNote: Нет прав на редактирование заметок');
+            showNotification('Нет прав на редактирование заметок этой записи', 'error');
+            return;
+        }
+        
         const noteTextElement = document.getElementById('note-text-display');
         const currentNote = noteTextElement ? noteTextElement.textContent : '';
         
@@ -4177,16 +4324,34 @@
         const addNoteBtn = document.getElementById('add-note-btn');
         const noteDisplay = document.getElementById('note-display');
         const noteTextDisplay = document.getElementById('note-text-display');
+        const editNoteBtn = document.querySelector('.edit-note-btn');
+        
+        // Проверяем права на редактирование заметок (своя запись или есть право)
+        let canEditNotes = false;
+        if (window.currentEventData) {
+            const eventData = window.currentEventData;
+            const isOwner = eventData.USER_ID && window.CURRENT_USER_ID && parseInt(eventData.USER_ID) === parseInt(window.CURRENT_USER_ID);
+            canEditNotes = isOwner || (window.HAS_EDIT_OTHERS_NOTES_PERMISSION || false);
+        }
         
         if (addNoteBtn && noteDisplay && noteTextDisplay) {
             if (noteText && noteText.trim()) {
-                // Показываем заметку, скрываем кнопку
+                // Показываем заметку, скрываем кнопку добавления
                 addNoteBtn.style.display = 'none';
                 noteDisplay.style.display = 'flex';
                 noteTextDisplay.textContent = noteText;
+                
+                // Показываем/скрываем кнопку редактирования в зависимости от прав
+                if (editNoteBtn) {
+                    editNoteBtn.style.display = canEditNotes ? 'inline-block' : 'none';
+                }
             } else {
-                // Скрываем заметку, показываем кнопку
-                addNoteBtn.style.display = 'block';
+                // Скрываем заметку, показываем кнопку добавления только если есть право
+                if (canEditNotes) {
+                    addNoteBtn.style.display = 'block';
+                } else {
+                    addNoteBtn.style.display = 'none';
+                }
                 noteDisplay.style.display = 'none';
             }
         }
@@ -4345,15 +4510,19 @@
     function populateEmployeeSelector(selectorId, employees) {
         const selector = document.getElementById(selectorId);
         if (!selector) return;
+        const useFullName = (selectorId === 'schedule-employee');
 
         // Очищаем селектор, оставляя только первую опцию
         selector.innerHTML = '<option value="">Выберите сотрудника</option>';
         
-        // Добавляем сотрудников
+        // Добавляем сотрудников (для schedule-employee — полное ФИО: Фамилия Имя Отчество)
         employees.forEach(employee => {
             const option = document.createElement('option');
             option.value = employee.ID;
-            option.textContent = `${employee.NAME} ${employee.LAST_NAME}`.trim() || employee.LOGIN;
+            const displayName = useFullName
+                ? `${employee.LAST_NAME || ''} ${employee.NAME || ''} ${employee.SECOND_NAME || ''}`.trim()
+                : `${employee.NAME || ''} ${employee.LAST_NAME || ''}`.trim();
+            option.textContent = displayName || employee.LOGIN;
             selector.appendChild(option);
         });
     }
@@ -4445,8 +4614,10 @@
             const selectedEmployeeId = this.value;
             const urlParams = new URLSearchParams(window.location.search);
             
-            // Обновляем или удаляем параметр employee_id
-            if (selectedEmployeeId && selectedEmployeeId !== '0') {
+            // Обновляем параметр employee_id (включая 0 для "Все записи")
+            if (selectedEmployeeId === '0') {
+                urlParams.set('employee_id', '0');
+            } else if (selectedEmployeeId) {
                 urlParams.set('employee_id', selectedEmployeeId);
             } else {
                 urlParams.delete('employee_id');
@@ -5509,6 +5680,10 @@
     }
 
     function setConfirmationStatus(status) {
+        if (!window.HAS_CONFIRM_PERMISSION) {
+            showNotification('Нет прав на подтверждение записи', 'error');
+            return;
+        }
         const statusElement = document.getElementById('confirmation-status');
         const dropdown = document.getElementById('confirmation-dropdown');
         
@@ -6263,7 +6438,28 @@
             return;
         }
         
-        console.log('refreshCalendarEvents: Отправка запроса на обновление событий, branchId =', branchId);
+        // Получаем employee_id из URL параметров для фильтрации
+        const urlParams = new URLSearchParams(window.location.search);
+        const employeeIdParam = urlParams.get('employee_id');
+        
+        const requestParams = {
+            action: 'getEvents',
+            branchId: branchId,
+            dateFrom: dateFrom,
+            dateTo: dateTo,
+            sessid: csrfToken
+        };
+        
+        // Добавляем employee_id в запрос, если он есть в URL (включая '0' для "Все записи")
+        if (employeeIdParam !== null) {
+            requestParams.employee_id = employeeIdParam;
+        }
+        
+        console.log('refreshCalendarEvents: Отправка запроса на обновление событий');
+        console.log('  - branchId:', branchId);
+        console.log('  - employee_id из URL:', employeeIdParam);
+        console.log('  - employee_id в запросе:', requestParams.employee_id);
+        console.log('  - Все параметры запроса:', requestParams);
         
         fetch('/local/components/artmax/calendar/ajax.php', {
             method: 'POST',
@@ -6272,13 +6468,7 @@
                 'X-Requested-With': 'XMLHttpRequest',
                 'X-Bitrix-Csrf-Token': csrfToken
             },
-            body: new URLSearchParams({
-                action: 'getEvents',
-                branchId: branchId,
-                dateFrom: dateFrom,
-                dateTo: dateTo,
-                sessid: csrfToken
-            })
+            body: new URLSearchParams(requestParams)
         })
         .then(response => {
             if (!response.ok) {
@@ -7240,6 +7430,13 @@
 
     // Функция для переноса записи
     function moveEventFromSidePanel() {
+        // Проверяем права на перемещение записи
+        if (!window.HAS_MOVE_PERMISSION) {
+            console.log('moveEventFromSidePanel: Нет прав на перемещение записи');
+            showNotification('Нет прав на перемещение записи', 'error');
+            return;
+        }
+        
         if (!window.currentEventId) {
             showNotification('Ошибка: не найдено событие', 'error');
             return;
@@ -7276,6 +7473,13 @@
 
     // Функция для переключения статуса записи (отменить/вернуть)
     function toggleEventStatusFromSidePanel() {
+        // Проверяем права на отмену/возврат записи
+        if (!window.HAS_CANCEL_PERMISSION) {
+            console.log('toggleEventStatusFromSidePanel: Нет прав на отмену записи');
+            showNotification('Нет прав на отмену записи', 'error');
+            return;
+        }
+        
         if (!window.currentEventId) {
             showNotification('Ошибка: не найдено событие', 'error');
             return;

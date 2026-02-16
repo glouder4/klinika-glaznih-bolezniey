@@ -206,6 +206,7 @@ function getUserFieldEnumValues(string $fieldName): array
         $values[] = [
             'ID' => $item['ID'],
             'VALUE' => $item['VALUE'],
+            'XML_ID' => $item['XML_ID'] ?? '',
         ];
     }
 

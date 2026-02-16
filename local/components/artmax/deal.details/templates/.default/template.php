@@ -59,8 +59,16 @@ $deal = $arResult['DEAL'];
                 <label for="deal-branch" class="artmax-field-label">Филиал</label>
                 <div class="artmax-field-content">
                     <select id="deal-branch" class="artmax-select">
-                        <?php foreach ($arResult['ENUMS']['BRANCH'] as $enum): ?>
-                            <option value="<?= (int)$enum['ID'] ?>" <?= ($fieldCodes['BRANCH'] && (int)$deal[$fieldCodes['BRANCH']] === (int)$enum['ID']) ? 'selected' : '' ?> <?= ($arResult['CURRENT_BRANCH_ENUM_ID'] && (int)$arResult['CURRENT_BRANCH_ENUM_ID'] === (int)$enum['ID'] && (!$fieldCodes['BRANCH'] || !$deal[$fieldCodes['BRANCH']])) ? 'selected' : '' ?>>
+                        <?php foreach ($arResult['ENUMS']['BRANCH'] as $enum): 
+                            $xmlId = $enum['XML_ID'] ?? '';
+                            $dataBranchId = '';
+                            if (preg_match('/^branch_(\d+)$/', $xmlId, $m)) {
+                                $dataBranchId = $m[1];
+                            } elseif (is_numeric($xmlId)) {
+                                $dataBranchId = $xmlId;
+                            }
+                        ?>
+                            <option value="<?= (int)$enum['ID'] ?>" <?= $dataBranchId ? ' data-branch-id="' . (int)$dataBranchId . '"' : '' ?> <?= ($fieldCodes['BRANCH'] && (int)$deal[$fieldCodes['BRANCH']] === (int)$enum['ID']) ? 'selected' : '' ?> <?= ($arResult['CURRENT_BRANCH_ENUM_ID'] && (int)$arResult['CURRENT_BRANCH_ENUM_ID'] === (int)$enum['ID'] && (!$fieldCodes['BRANCH'] || !$deal[$fieldCodes['BRANCH']])) ? 'selected' : '' ?>>
                                 <?= htmlspecialcharsbx($enum['VALUE']) ?>
                             </option>
                         <?php endforeach; ?>

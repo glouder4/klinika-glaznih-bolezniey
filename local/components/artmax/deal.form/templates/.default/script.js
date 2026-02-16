@@ -295,36 +295,89 @@ function initializeDealForm() {
         hideDealDropdown();
     }
 
-    // Функция создания новой сделки
+    // Функция создания новой сделки — «маленькая форма» (подтверждение + createDealForEvent)
     window.createNewDeal = function() {
-        const dealInput = document.getElementById('deal-input');
-        const query = dealInput ? dealInput.value.trim() : '';
-        
-        // Показываем форму создания сделки в Bitrix CRM
-        if (typeof BX !== 'undefined' && BX.SidePanel) {
-            const dealUrl = `/crm/deal/edit/0/?IFRAME=Y&IFRAME_TYPE=SIDE_SLIDER${query ? '&TITLE=' + encodeURIComponent(query) : ''}`;
-            BX.SidePanel.Instance.open(dealUrl, {
-                title: 'Создать сделку',
-                width: 800,
-                cacheable: false,
-                events: {
-                    onClose: function(event) {
-                        // После создания сделки можно обновить поиск
-                        if (event && event.getSlider) {
-                            // Сделка создана, можно обновить результаты
-                            if (dealInput && dealInput.value.trim()) {
-                                searchDealsInBitrix24(dealInput.value.trim());
-                            }
-                        }
-                    }
-                }
-            });
-        } else {
-            showNotification('Откройте форму создания сделки в новой вкладке', 'info');
+        const currentEventId = window.dealFormData ? window.dealFormData.eventId : null;
+        if (!currentEventId) {
+            showNotification('Ошибка: не удалось определить событие', 'error');
+            hideDealDropdown();
+            return;
         }
-        
-        hideDealDropdown();
+
+        const csrfToken = getCSRFToken();
+        fetch('/local/components/artmax/calendar/ajax.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-Bitrix-Csrf-Token': csrfToken
+            },
+            body: new URLSearchParams({
+                action: 'getEvent',
+                eventId: currentEventId,
+                sessid: csrfToken
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.event) {
+                const event = data.event;
+                if (!event.CONTACT_ENTITY_ID) {
+                    showNotification('Сначала нужно привязать контакт к событию, а затем можно будет создать сделку', 'warning');
+                    hideDealDropdown();
+                    return;
+                }
+                if (confirm('Вы действительно хотите создать новую сделку для события?')) {
+                    createDealForEventFromForm(currentEventId, event.CONTACT_ENTITY_ID, csrfToken);
+                }
+            } else {
+                showNotification('Ошибка при получении данных события', 'error');
+            }
+            hideDealDropdown();
+        })
+        .catch(error => {
+            console.error('Ошибка при проверке контакта:', error);
+            showNotification('Ошибка соединения с сервером', 'error');
+            hideDealDropdown();
+        });
     };
+
+    function createDealForEventFromForm(eventId, contactId, csrfToken) {
+        fetch('/local/components/artmax/calendar/ajax.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-Bitrix-Csrf-Token': csrfToken
+            },
+            body: new URLSearchParams({
+                action: 'createDealForEvent',
+                eventId: eventId,
+                contactId: contactId,
+                sessid: csrfToken
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showNotification('Сделка успешно создана и привязана к событию', 'success');
+                if (window.parent && window.parent.postMessage) {
+                    window.parent.postMessage({
+                        type: 'calendar:dealSaved',
+                        dealId: data.dealId,
+                        eventId: eventId
+                    }, '*');
+                }
+                setTimeout(closeSidePanel, 300);
+            } else {
+                showNotification('Ошибка создания сделки: ' + (data.error || ''), 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Ошибка при создании сделки:', error);
+            showNotification('Ошибка соединения с сервером', 'error');
+        });
+    }
 
     // Функция сохранения данных сделки
     window.saveDealData = function() {

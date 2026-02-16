@@ -17,8 +17,6 @@ if (!function_exists('artmax_log')) {
         $timestamp = date('Y-m-d H:i:s');
         $logMessage = "[{$timestamp}] {$message}\n";
         @file_put_contents($logFile, $logMessage, FILE_APPEND | LOCK_EX);
-        // Также пишем в error_log как fallback
-        error_log('ArtMax Calendar: ' . $message);
     }
 }
 
@@ -209,8 +207,27 @@ switch ($action) {
             die(json_encode(['success' => false, 'error' => 'Событие не найдено']));
         }
 
-        // Проверяем права на удаление (только автор события)
-        if ($event['USER_ID'] != $GLOBALS['USER']->GetID()) {
+        // Проверяем права на удаление (delete_own — свои, delete_all — любые)
+        $hasDeleteOwnPermission = false;
+        $hasDeleteAllPermission = false;
+        if ($GLOBALS['USER'] && $GLOBALS['USER']->IsAuthorized()) {
+            if ($GLOBALS['USER']->IsAdmin()) {
+                $hasDeleteOwnPermission = true;
+                $hasDeleteAllPermission = true;
+            } else {
+                try {
+                    $permissionsObj = new \Artmax\Calendar\Permissions();
+                    $userId = $GLOBALS['USER']->GetID();
+                    $hasDeleteOwnPermission = $permissionsObj->hasPermission($userId, 'calendar.delete_own');
+                    $hasDeleteAllPermission = $permissionsObj->hasPermission($userId, 'calendar.delete_all');
+                } catch (\Exception $e) {
+                    $hasDeleteOwnPermission = false;
+                    $hasDeleteAllPermission = false;
+                }
+            }
+        }
+        $isOwner = ($event['USER_ID'] == $GLOBALS['USER']->GetID()) || ($event['EMPLOYEE_ID'] == $GLOBALS['USER']->GetID());
+        if (!$hasDeleteAllPermission && (!$hasDeleteOwnPermission || !$isOwner)) {
             http_response_code(403);
             die(json_encode(['success' => false, 'error' => 'Нет прав на удаление']));
         }
@@ -225,6 +242,27 @@ switch ($action) {
         break;
 
     case 'clearAllEvents':
+        // Проверяем право на удаление всех записей (calendar.delete_all)
+        $hasDeleteAllPermission = false;
+        if ($GLOBALS['USER'] && $GLOBALS['USER']->IsAuthorized()) {
+            if ($GLOBALS['USER']->IsAdmin()) {
+                $hasDeleteAllPermission = true;
+            } else {
+                try {
+                    $permissionsObj = new \Artmax\Calendar\Permissions();
+                    $userId = $GLOBALS['USER']->GetID();
+                    $hasDeleteAllPermission = $permissionsObj->hasPermission($userId, 'calendar.delete_all');
+                } catch (\Exception $e) {
+                    $hasDeleteAllPermission = false;
+                }
+            }
+        }
+        
+        if (!$hasDeleteAllPermission) {
+            http_response_code(403);
+            die(json_encode(['success' => false, 'error' => 'Нет прав на удаление событий']));
+        }
+        
         // Получаем все события текущего пользователя
         $events = $calendarObj->getEventsByUser($GLOBALS['USER']->GetID());
         $deletedCount = 0;
@@ -264,10 +302,28 @@ switch ($action) {
             die(json_encode(['success' => false, 'error' => 'Событие не найдено']));
         }
 
-        // Проверяем права на редактирование (только автор события)
-        if ($event['USER_ID'] != $GLOBALS['USER']->GetID()) {
+        // Проверяем права на редактирование названия (edit_title_own — свои, edit_title_all — любые)
+        $hasEditTitleOwnPermission = false;
+        $hasEditTitleAllPermission = false;
+        if ($GLOBALS['USER']->IsAdmin()) {
+            $hasEditTitleOwnPermission = true;
+            $hasEditTitleAllPermission = true;
+        } else {
+            try {
+                $permissionsObj = new \Artmax\Calendar\Permissions();
+                $userId = $GLOBALS['USER']->GetID();
+                $hasEditTitleOwnPermission = $permissionsObj->hasPermission($userId, 'calendar.edit_title_own');
+                $hasEditTitleAllPermission = $permissionsObj->hasPermission($userId, 'calendar.edit_title_all');
+            } catch (\Exception $e) {
+                $hasEditTitleOwnPermission = false;
+                $hasEditTitleAllPermission = false;
+            }
+        }
+        $isOwner = ($event['USER_ID'] == $GLOBALS['USER']->GetID()) || ($event['EMPLOYEE_ID'] == $GLOBALS['USER']->GetID());
+        $canEditTitle = $hasEditTitleAllPermission || ($isOwner && $hasEditTitleOwnPermission);
+        if (!$canEditTitle) {
             http_response_code(403);
-            die(json_encode(['success' => false, 'error' => 'Нет прав на редактирование']));
+            die(json_encode(['success' => false, 'error' => 'Нет прав на редактирование названия записи']));
         }
 
         // Нормализуем даты для корректного сравнения
@@ -520,10 +576,24 @@ switch ($action) {
             die(json_encode(['success' => false, 'error' => 'Событие не найдено']));
         }
 
-        // Проверяем права на редактирование (только автор события)
-        if ($event['USER_ID'] != $GLOBALS['USER']->GetID()) {
+        // Проверяем право на смену ответственного врача
+        $hasChangeEmployeePermission = false;
+        if ($GLOBALS['USER'] && $GLOBALS['USER']->IsAuthorized()) {
+            if ($GLOBALS['USER']->IsAdmin()) {
+                $hasChangeEmployeePermission = true;
+            } else {
+                try {
+                    $permissionsObj = new \Artmax\Calendar\Permissions();
+                    $hasChangeEmployeePermission = $permissionsObj->hasPermission($GLOBALS['USER']->GetID(), 'calendar.change_employee');
+                } catch (\Exception $e) {
+                    $hasChangeEmployeePermission = false;
+                }
+            }
+        }
+        
+        if (!$hasChangeEmployeePermission) {
             http_response_code(403);
-            die(json_encode(['success' => false, 'error' => 'Нет прав на редактирование']));
+            die(json_encode(['success' => false, 'error' => 'Нет прав на смену ответственного врача']));
         }
 
         try {
@@ -661,6 +731,26 @@ switch ($action) {
             die(json_encode(['success' => false, 'error' => 'Не все параметры переданы']));
         }
 
+        // Проверяем права на перемещение записи
+        $hasMovePermission = false;
+        if ($GLOBALS['USER'] && $GLOBALS['USER']->IsAuthorized()) {
+            if ($GLOBALS['USER']->IsAdmin()) {
+                $hasMovePermission = true;
+            } else {
+                try {
+                    $permissionsObj = new \Artmax\Calendar\Permissions();
+                    $hasMovePermission = $permissionsObj->hasPermission($GLOBALS['USER']->GetID(), 'calendar.move');
+                } catch (\Exception $e) {
+                    $hasMovePermission = false;
+                }
+            }
+        }
+        
+        if (!$hasMovePermission) {
+            http_response_code(403);
+            die(json_encode(['success' => false, 'error' => 'Нет прав на перемещение записи']));
+        }
+
         try {
             $component = new ArtmaxCalendarComponent();
             $params = [
@@ -698,10 +788,25 @@ switch ($action) {
             die(json_encode(['success' => false, 'error' => 'Событие не найдено']));
         }
 
-        // Проверяем права на редактирование (только автор события)
-        if ($event['USER_ID'] != $GLOBALS['USER']->GetID()) {
+        // Проверяем права на отмену/возврат записи (calendar.cancel)
+        $hasCancelPermission = false;
+        if ($GLOBALS['USER'] && $GLOBALS['USER']->IsAuthorized()) {
+            if ($GLOBALS['USER']->IsAdmin()) {
+                $hasCancelPermission = true;
+            } else {
+                try {
+                    $permissionsObj = new \Artmax\Calendar\Permissions();
+                    $hasCancelPermission = $permissionsObj->hasPermission($GLOBALS['USER']->GetID(), 'calendar.cancel');
+                } catch (\Exception $e) {
+                    $hasCancelPermission = false;
+                }
+            }
+        }
+
+        $isOwner = ($event['USER_ID'] == $GLOBALS['USER']->GetID()) || ($event['EMPLOYEE_ID'] == $GLOBALS['USER']->GetID());
+        if (!$hasCancelPermission && !$isOwner) {
             http_response_code(403);
-            die(json_encode(['success' => false, 'error' => 'Нет прав на редактирование']));
+            die(json_encode(['success' => false, 'error' => 'Нет прав на отмену записи']));
         }
 
         try {
@@ -742,13 +847,58 @@ switch ($action) {
         $branchId = (int)($_POST['branchId'] ?? 1);
         $dateFrom = $_POST['dateFrom'] ?? null;
         $dateTo = $_POST['dateTo'] ?? null;
+        
+        // Определяем employeeId для фильтрации
+        $employeeId = null;
+        $hasViewOthersPermission = false;
+        
+        if ($GLOBALS['USER'] && $GLOBALS['USER']->IsAuthorized()) {
+            // Проверяем право на просмотр чужих записей
+            if ($GLOBALS['USER']->IsAdmin()) {
+                $hasViewOthersPermission = true;
+            } else {
+                try {
+                    $permissionsObj = new \Artmax\Calendar\Permissions();
+                    $hasViewOthersPermission = $permissionsObj->hasPermission($GLOBALS['USER']->GetID(), 'calendar.view_others');
+                } catch (\Exception $e) {
+                    $hasViewOthersPermission = false;
+                }
+            }
+            
+            // Если есть право на просмотр чужих, проверяем параметр employee_id из POST (для переключателя)
+            if ($hasViewOthersPermission) {
+                if (isset($_POST['employee_id'])) {
+                    $employeeIdParam = $_POST['employee_id'];
+                    // Если параметр равен '0' или 'all', показываем все записи
+                    if ($employeeIdParam === '0' || $employeeIdParam === 'all' || $employeeIdParam === '') {
+                        $employeeId = null;
+                    } else {
+                        $employeeId = (int)$employeeIdParam;
+                    }
+                } else {
+                    // Если параметра нет: для админов "Все записи", для врачей с правом view_others "Мои записи"
+                    if ($GLOBALS['USER']->IsAdmin()) {
+                        $employeeId = null; // Админы видят все записи по умолчанию
+                    } else {
+                        $employeeId = $GLOBALS['USER']->GetID(); // Врачи с правом view_others видят свои записи по умолчанию
+                    }
+                }
+            } else {
+                // Без права на просмотр чужих - показываем только свои записи
+                $employeeId = $GLOBALS['USER']->GetID();
+            }
+        }
 
         // Отладочная информация
-        error_log("DYNAMIC LOAD: dateFrom=$dateFrom, dateTo=$dateTo, branchId=$branchId");
+        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+            "DYNAMIC LOAD: dateFrom=$dateFrom, dateTo=$dateTo, branchId=$branchId, employeeId=" . ($employeeId ?? 'null') . "\n", 
+            FILE_APPEND | LOCK_EX);
 
         try {
-            $events = $calendarObj->getEventsByBranch($branchId, $dateFrom, $dateTo);
-            error_log("DYNAMIC LOAD: actual events count=" . count($events));
+            $events = $calendarObj->getEventsByBranch($branchId, $dateFrom, $dateTo, null, null, $employeeId);
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "DYNAMIC LOAD: actual events count=" . count($events) . "\n", 
+                FILE_APPEND | LOCK_EX);
             
             // Создаем экземпляр компонента для загрузки данных контактов
             $component = new ArtmaxCalendarComponent();
@@ -767,12 +917,16 @@ switch ($action) {
             
             // Логируем первые несколько событий для отладки
             if (count($events) > 0) {
-                error_log("DYNAMIC LOAD: first event sample: " . json_encode($events[0]));
+                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                    "DYNAMIC LOAD: first event sample: " . json_encode($events[0]) . "\n", 
+                    FILE_APPEND | LOCK_EX);
             }
             
             die(json_encode(['success' => true, 'events' => $events]));
         } catch (Exception $e) {
-            error_log("DYNAMIC LOAD ERROR: " . $e->getMessage());
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "DYNAMIC LOAD ERROR: " . $e->getMessage() . "\n", 
+                FILE_APPEND | LOCK_EX);
             die(json_encode(['success' => false, 'error' => $e->getMessage()]));
         }
         break;
@@ -1125,8 +1279,12 @@ switch ($action) {
         // Отладочная информация
         artmax_log("AJAX getAvailableEmployeesForBranch: branchId = " . $branchId);
         artmax_log("AJAX getAvailableEmployeesForBranch: POST data = " . json_encode($_POST));
-        error_log("AJAX getAvailableEmployeesForBranch: branchId = " . $branchId);
-        error_log("AJAX getAvailableEmployeesForBranch: POST data = " . json_encode($_POST));
+        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+            "AJAX getAvailableEmployeesForBranch: branchId = " . $branchId . "\n", 
+            FILE_APPEND | LOCK_EX);
+        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+            "AJAX getAvailableEmployeesForBranch: POST data = " . json_encode($_POST) . "\n", 
+            FILE_APPEND | LOCK_EX);
 
         try {
             $component = new ArtmaxCalendarComponent();
@@ -1141,16 +1299,24 @@ switch ($action) {
         $branchId = $_POST['branchId'] ?? $_POST['branch_id'] ?? 0;
 
         // Отладочная информация
-        error_log("AJAX getBranchEmployees: branchId = " . $branchId);
-        error_log("AJAX getBranchEmployees: POST data = " . json_encode($_POST));
+        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+            "AJAX getBranchEmployees: branchId = " . $branchId . "\n", 
+            FILE_APPEND | LOCK_EX);
+        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+            "AJAX getBranchEmployees: POST data = " . json_encode($_POST) . "\n", 
+            FILE_APPEND | LOCK_EX);
 
         try {
             $component = new ArtmaxCalendarComponent();
             $result = $component->getBranchEmployeesAction($branchId);
-            error_log("AJAX getBranchEmployees: result = " . json_encode($result));
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "AJAX getBranchEmployees: result = " . json_encode($result) . "\n", 
+                FILE_APPEND | LOCK_EX);
             die(json_encode($result));
         } catch (Exception $e) {
-            error_log("AJAX getBranchEmployees: error = " . $e->getMessage());
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
+                "AJAX getBranchEmployees: error = " . $e->getMessage() . "\n", 
+                FILE_APPEND | LOCK_EX);
             die(json_encode(['success' => false, 'error' => 'Ошибка получения сотрудников: ' . $e->getMessage()]));
         }
         break;
@@ -1273,10 +1439,22 @@ switch ($action) {
                 die(json_encode(['success' => false, 'error' => 'Событие не найдено']));
             }
 
-            // Проверяем права на редактирование (только автор события)
-            if ($event['USER_ID'] != $GLOBALS['USER']->GetID()) {
+            // Проверяем права на подтверждение (calendar.confirm OR владелец записи)
+            $hasConfirmPermission = false;
+            if ($GLOBALS['USER']->IsAdmin()) {
+                $hasConfirmPermission = true;
+            } else {
+                try {
+                    $permissionsObj = new \Artmax\Calendar\Permissions();
+                    $hasConfirmPermission = $permissionsObj->hasPermission($GLOBALS['USER']->GetID(), 'calendar.confirm');
+                } catch (\Exception $e) {
+                    $hasConfirmPermission = false;
+                }
+            }
+            $isOwner = ($event['USER_ID'] == $GLOBALS['USER']->GetID()) || ($event['EMPLOYEE_ID'] == $GLOBALS['USER']->GetID());
+            if (!$hasConfirmPermission && !$isOwner) {
                 http_response_code(403);
-                die(json_encode(['success' => false, 'error' => 'Нет прав на редактирование']));
+                die(json_encode(['success' => false, 'error' => 'Нет прав на подтверждение записи']));
             }
 
             // Получаем старое значение статуса подтверждения

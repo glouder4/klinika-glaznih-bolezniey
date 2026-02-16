@@ -797,7 +797,7 @@ class Calendar
                             'ACTIVE' => 'Y'
                         ],
                         [
-                            'FIELDS' => ['ID', 'NAME', 'LAST_NAME', 'LOGIN', 'EMAIL']
+                            'FIELDS' => ['ID', 'NAME', 'LAST_NAME', 'SECOND_NAME', 'LOGIN', 'EMAIL']
                         ]
                     );
 
@@ -808,6 +808,7 @@ class Calendar
                             'ID' => $user['ID'],
                             'NAME' => $user['NAME'] ?: '',
                             'LAST_NAME' => $user['LAST_NAME'] ?: '',
+                            'SECOND_NAME' => $user['SECOND_NAME'] ?: '',
                             'LOGIN' => $user['LOGIN'] ?: '',
                             'EMAIL' => $user['EMAIL'] ?: ''
                         ];
@@ -834,7 +835,7 @@ class Calendar
                             'ACTIVE' => 'Y'
                         ],
                         [
-                            'FIELDS' => ['ID', 'NAME', 'LAST_NAME', 'LOGIN', 'EMAIL']
+                            'FIELDS' => ['ID', 'NAME', 'LAST_NAME', 'SECOND_NAME', 'LOGIN', 'EMAIL']
                         ]
                     );
 
@@ -843,6 +844,7 @@ class Calendar
                             'ID' => $user['ID'],
                             'NAME' => $user['NAME'] ?: '',
                             'LAST_NAME' => $user['LAST_NAME'] ?: '',
+                            'SECOND_NAME' => $user['SECOND_NAME'] ?: '',
                             'LOGIN' => $user['LOGIN'] ?: '',
                             'EMAIL' => $user['EMAIL'] ?: '',
                             '_from_old_group' => true // Метка для интерфейса
@@ -865,7 +867,7 @@ class Calendar
                     'ACTIVE' => 'Y'
                 ],
                 [
-                    'FIELDS' => ['ID', 'NAME', 'LAST_NAME', 'LOGIN', 'EMAIL']
+                    'FIELDS' => ['ID', 'NAME', 'LAST_NAME', 'SECOND_NAME', 'LOGIN', 'EMAIL']
                 ]
             );
 
@@ -874,6 +876,7 @@ class Calendar
                     'ID' => $user['ID'],
                     'NAME' => $user['NAME'] ?: '',
                     'LAST_NAME' => $user['LAST_NAME'] ?: '',
+                    'SECOND_NAME' => $user['SECOND_NAME'] ?: '',
                     'LOGIN' => $user['LOGIN'] ?: '',
                     'EMAIL' => $user['EMAIL'] ?: ''
                 ];
@@ -923,22 +926,23 @@ class Calendar
                     'ACTIVE' => 'Y'
                 ],
                 [
-                    'FIELDS' => ['ID', 'NAME', 'LAST_NAME', 'LOGIN', 'EMAIL']
+                    'FIELDS' => ['ID', 'NAME', 'LAST_NAME', 'SECOND_NAME', 'LOGIN', 'EMAIL']
                 ]
             );
 
             $employees = [];
             while ($user = $users->Fetch()) {
-                $employees[] = [
-                    'ID' => $user['ID'],
-                    'NAME' => $user['NAME'] ?: '',
-                    'LAST_NAME' => $user['LAST_NAME'] ?: '',
-                    'LOGIN' => $user['LOGIN'] ?: '',
-                    'EMAIL' => $user['EMAIL'] ?: ''
-                ];
-            }
+$employees[] = [
+                'ID' => $user['ID'],
+                'NAME' => $user['NAME'] ?: '',
+                'LAST_NAME' => $user['LAST_NAME'] ?: '',
+                'SECOND_NAME' => $user['SECOND_NAME'] ?: '',
+                'LOGIN' => $user['LOGIN'] ?: '',
+                'EMAIL' => $user['EMAIL'] ?: ''
+            ];
+        }
 
-            error_log("getBranchEmployees: Found " . count($employees) . " employees for branch " . $branchId);
+        error_log("getBranchEmployees: Found " . count($employees) . " employees for branch " . $branchId);
             return $employees;
             
             // Иначе используем таблицу artmax_calendar_branch_employees (старый способ)
@@ -975,7 +979,7 @@ class Calendar
                     'ACTIVE' => 'Y'
                 ],
                 [
-                    'FIELDS' => ['ID', 'NAME', 'LAST_NAME', 'LOGIN', 'EMAIL']
+                    'FIELDS' => ['ID', 'NAME', 'LAST_NAME', 'SECOND_NAME', 'LOGIN', 'EMAIL']
                 ]
             );
             
@@ -984,6 +988,7 @@ class Calendar
                     'ID' => $user['ID'],
                     'NAME' => $user['NAME'] ?: '',
                     'LAST_NAME' => $user['LAST_NAME'] ?: '',
+                    'SECOND_NAME' => $user['SECOND_NAME'] ?: '',
                     'LOGIN' => $user['LOGIN'] ?: '',
                     'EMAIL' => $user['EMAIL'] ?: ''
                 ];
@@ -1870,6 +1875,26 @@ class Calendar
                     $updateFields = [
                         $bookingFieldCode => [$bookingValue]
                     ];
+                    // Синхронизируем филиал сделки с событием при переносе
+                    if ($finalBranchId) {
+                        $branchFieldCode = \Bitrix\Main\Config\Option::get('artmax.calendar', 'deal_branch_field', 'UF_CRM_CALENDAR_BRANCH');
+                        $field = \CUserTypeEntity::GetList([], ['ENTITY_ID' => 'CRM_DEAL', 'FIELD_NAME' => $branchFieldCode])->Fetch();
+                        if ($field) {
+                            $enum = new \CUserFieldEnum();
+                            $xmlId = 'branch_' . $finalBranchId;
+                            $rsEnum = $enum->GetList([], ['USER_FIELD_ID' => $field['ID']]);
+                            $enumItem = null;
+                            while ($item = $rsEnum->Fetch()) {
+                                if ($item['XML_ID'] === $xmlId || (string)$item['XML_ID'] === (string)$finalBranchId) {
+                                    $enumItem = $item;
+                                    break;
+                                }
+                            }
+                            if ($enumItem) {
+                                $updateFields[$branchFieldCode] = $enumItem['ID'];
+                            }
+                        }
+                    }
                     $deal->Update($event['DEAL_ENTITY_ID'], $updateFields);
                 }
             }

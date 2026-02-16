@@ -1783,19 +1783,29 @@ class artmax_calendar extends CModule
     private function createDefaultPermissions()
     {
         $permissions = [
-            ['CODE' => 'calendar.view_others', 'NAME' => 'Просмотр чужих записей', 'DESCRIPTION' => 'Право на просмотр записей других врачей'],
+            // Просмотр
+            ['CODE' => 'calendar.view', 'NAME' => 'Просмотр записей', 'DESCRIPTION' => 'Право на просмотр своих записей в календаре'],
+            ['CODE' => 'calendar.view_all', 'NAME' => 'Просмотр всех записей', 'DESCRIPTION' => 'Право на просмотр записей всех врачей'],
+            // Создание
             ['CODE' => 'calendar.create', 'NAME' => 'Создание записи', 'DESCRIPTION' => 'Право на создание новых записей в календаре'],
-            ['CODE' => 'calendar.edit', 'NAME' => 'Редактирование записи', 'DESCRIPTION' => 'Право на редактирование существующих записей'],
-            ['CODE' => 'calendar.delete', 'NAME' => 'Удаление записи', 'DESCRIPTION' => 'Право на удаление записей из календаря'],
+            // Редактирование
+            ['CODE' => 'calendar.edit_own', 'NAME' => 'Редактирование своих записей', 'DESCRIPTION' => 'Право на редактирование только своих записей'],
+            ['CODE' => 'calendar.edit_all', 'NAME' => 'Редактирование всех записей', 'DESCRIPTION' => 'Право на редактирование записей всех врачей'],
+            // Перемещение
             ['CODE' => 'calendar.move', 'NAME' => 'Перемещение записи', 'DESCRIPTION' => 'Право на перемещение записей в календаре'],
+            // Подтверждение
             ['CODE' => 'calendar.confirm', 'NAME' => 'Подтверждение записи', 'DESCRIPTION' => 'Право на подтверждение записей'],
+            // Смена врача
             ['CODE' => 'calendar.change_employee', 'NAME' => 'Смена ответственного врача', 'DESCRIPTION' => 'Право на смену ответственного врача в записи'],
-            ['CODE' => 'calendar.edit_title', 'NAME' => 'Редактирование названия записи', 'DESCRIPTION' => 'Право на редактирование названия записей'],
-            ['CODE' => 'calendar.edit_others_notes', 'NAME' => 'Редактирование заметок чужих записей', 'DESCRIPTION' => 'Право на редактирование заметок в чужих записях'],
+            // Удаление
+            ['CODE' => 'calendar.delete_own', 'NAME' => 'Удаление своих записей', 'DESCRIPTION' => 'Право на удаление только своих записей'],
+            ['CODE' => 'calendar.delete_all', 'NAME' => 'Удаление всех записей', 'DESCRIPTION' => 'Право на удаление записей всех врачей'],
+            // Управление
+            ['CODE' => 'calendar.manage_groups', 'NAME' => 'Управление группами и правами', 'DESCRIPTION' => 'Право на создание групп пользователей и управление правами доступа'],
             ['CODE' => 'calendar.manage_schedule', 'NAME' => 'Управление расписанием', 'DESCRIPTION' => 'Право на управление расписанием врачей'],
             ['CODE' => 'calendar.manage_branches', 'NAME' => 'Управление филиалами', 'DESCRIPTION' => 'Право на управление филиалами клиники'],
-            ['CODE' => 'calendar.manage_employees', 'NAME' => 'Управление сотрудниками', 'DESCRIPTION' => 'Право на управление сотрудниками'],
-            ['CODE' => 'calendar.manage_groups', 'NAME' => 'Управление группами и правами', 'DESCRIPTION' => 'Право на создание групп пользователей и управление правами доступа']
+            ['CODE' => 'calendar.manage_contact', 'NAME' => 'Создание и привязка контакта к записи', 'DESCRIPTION' => 'Право на создание нового контакта в CRM и привязку/изменение контакта в событии календаря'],
+            ['CODE' => 'calendar.set_visit_status', 'NAME' => 'Установка статуса визита', 'DESCRIPTION' => 'Право на установку статуса визита в записи (Клиент пришел / Клиент не пришел / Не указано)']
         ];
         
         $connection = \Bitrix\Main\Application::getConnection();
@@ -1852,12 +1862,13 @@ class artmax_calendar extends CModule
             return;
         }
         
-        // Администраторы - все права
+        // Администраторы - все права календаря
         $adminPermissions = [
-            'calendar.view_others', 'calendar.create', 'calendar.edit', 'calendar.delete',
-            'calendar.move', 'calendar.confirm', 'calendar.change_employee', 'calendar.edit_title',
-            'calendar.edit_others_notes', 'calendar.manage_schedule',
-            'calendar.manage_branches', 'calendar.manage_employees', 'calendar.manage_groups'
+            'calendar.view', 'calendar.view_all', 'calendar.create',
+            'calendar.edit_own', 'calendar.edit_all',
+            'calendar.move', 'calendar.confirm', 'calendar.change_employee',
+            'calendar.delete_own', 'calendar.delete_all',
+            'calendar.manage_groups', 'calendar.manage_schedule', 'calendar.manage_branches', 'calendar.manage_contact', 'calendar.set_visit_status'
         ];
         
         // Назначаем права администраторам

@@ -24,16 +24,21 @@ echo '<!-- DEBUG: HAS_MANAGE_GROUPS_PERMISSION = ' . ($hasManageGroups ? 'true' 
     window.HAS_CREATE_PERMISSION = <?= $hasCreate ? 'true' : 'false' ?>;
     window.HAS_MANAGE_GROUPS_PERMISSION = <?= $hasManageGroups ? 'true' : 'false' ?>;
     window.HAS_CHANGE_EMPLOYEE_PERMISSION = <?= (isset($arResult['HAS_CHANGE_EMPLOYEE_PERMISSION']) && $arResult['HAS_CHANGE_EMPLOYEE_PERMISSION']) ? 'true' : 'false' ?>;
-    window.HAS_EDIT_TITLE_PERMISSION = <?= (isset($arResult['HAS_EDIT_TITLE_PERMISSION']) && $arResult['HAS_EDIT_TITLE_PERMISSION']) ? 'true' : 'false' ?>;
+    window.HAS_EDIT_TITLE_OWN_PERMISSION = <?= (isset($arResult['HAS_EDIT_TITLE_OWN_PERMISSION']) && $arResult['HAS_EDIT_TITLE_OWN_PERMISSION']) ? 'true' : 'false' ?>;
+    window.HAS_EDIT_TITLE_ALL_PERMISSION = <?= (isset($arResult['HAS_EDIT_TITLE_ALL_PERMISSION']) && $arResult['HAS_EDIT_TITLE_ALL_PERMISSION']) ? 'true' : 'false' ?>;
     window.HAS_EDIT_OTHERS_NOTES_PERMISSION = <?= (isset($arResult['HAS_EDIT_OTHERS_NOTES_PERMISSION']) && $arResult['HAS_EDIT_OTHERS_NOTES_PERMISSION']) ? 'true' : 'false' ?>;
     window.HAS_EDIT_PERMISSION = <?= (isset($arResult['HAS_EDIT_PERMISSION']) && $arResult['HAS_EDIT_PERMISSION']) ? 'true' : 'false' ?>;
     window.HAS_MOVE_PERMISSION = <?= (isset($arResult['HAS_MOVE_PERMISSION']) && $arResult['HAS_MOVE_PERMISSION']) ? 'true' : 'false' ?>;
     window.HAS_CONFIRM_PERMISSION = <?= (isset($arResult['HAS_CONFIRM_PERMISSION']) && $arResult['HAS_CONFIRM_PERMISSION']) ? 'true' : 'false' ?>;
+    window.HAS_CANCEL_PERMISSION = <?= (isset($arResult['HAS_CANCEL_PERMISSION']) && $arResult['HAS_CANCEL_PERMISSION']) ? 'true' : 'false' ?>;
+    window.HAS_DELETE_PERMISSION = <?= (isset($arResult['HAS_DELETE_PERMISSION']) && $arResult['HAS_DELETE_PERMISSION']) ? 'true' : 'false' ?>;
+    window.HAS_MANAGE_CONTACT_PERMISSION = <?= (isset($arResult['HAS_MANAGE_CONTACT_PERMISSION']) && $arResult['HAS_MANAGE_CONTACT_PERMISSION']) ? 'true' : 'false' ?>;
+    window.HAS_SET_VISIT_STATUS_PERMISSION = <?= (isset($arResult['HAS_SET_VISIT_STATUS_PERMISSION']) && $arResult['HAS_SET_VISIT_STATUS_PERMISSION']) ? 'true' : 'false' ?>;
     console.log('HAS_VIEW_OTHERS_PERMISSION:', <?= $hasViewOthers ? 'true' : 'false' ?>);
     console.log('HAS_CREATE_PERMISSION:', <?= $hasCreate ? 'true' : 'false' ?>);
     console.log('HAS_MANAGE_GROUPS_PERMISSION:', <?= $hasManageGroups ? 'true' : 'false' ?>);
     console.log('HAS_CHANGE_EMPLOYEE_PERMISSION:', <?= (isset($arResult['HAS_CHANGE_EMPLOYEE_PERMISSION']) && $arResult['HAS_CHANGE_EMPLOYEE_PERMISSION']) ? 'true' : 'false' ?>);
-    console.log('HAS_EDIT_TITLE_PERMISSION:', <?= (isset($arResult['HAS_EDIT_TITLE_PERMISSION']) && $arResult['HAS_EDIT_TITLE_PERMISSION']) ? 'true' : 'false' ?>);
+    console.log('HAS_EDIT_TITLE_OWN_PERMISSION:', <?= (isset($arResult['HAS_EDIT_TITLE_OWN_PERMISSION']) && $arResult['HAS_EDIT_TITLE_OWN_PERMISSION']) ? 'true' : 'false' ?>, 'HAS_EDIT_TITLE_ALL_PERMISSION:', <?= (isset($arResult['HAS_EDIT_TITLE_ALL_PERMISSION']) && $arResult['HAS_EDIT_TITLE_ALL_PERMISSION']) ? 'true' : 'false' ?>);
     console.log('HAS_EDIT_OTHERS_NOTES_PERMISSION:', <?= (isset($arResult['HAS_EDIT_OTHERS_NOTES_PERMISSION']) && $arResult['HAS_EDIT_OTHERS_NOTES_PERMISSION']) ? 'true' : 'false' ?>);
 </script>
 
@@ -496,8 +501,8 @@ $totalDays = 42; // 6 недель * 7 дней
                             <div class="client-placeholder">Добавьте информацию о клиенте</div>
                         </div>
                         <div class="client-actions">
-                            <span data-element="booking-menu-deal-create-button" class="booking-actions-popup-plus-button">
-                                <button class="ui-btn ui-btn-shadow ui-btn-xs ui-btn-light ui-btn-round deal-card-add-btn admin-only" title="Добавить" onclick="event.stopPropagation(); openClientModal();">
+                            <span data-element="booking-menu-deal-create-button" class="booking-actions-popup-plus-button show-if-can-manage-contact">
+                                <button class="ui-btn ui-btn-shadow ui-btn-xs ui-btn-light ui-btn-round deal-card-add-btn" title="Добавить" onclick="event.stopPropagation(); openClientModal();">
                                     <div class="ui-icon-set --plus-30" style=""></div>
                                 </button>
                             </span>
@@ -529,7 +534,7 @@ $totalDays = 42; // 6 недель * 7 дней
                         </div>
                         <div class="card-actions" onclick="event.stopPropagation()">
                             <span data-element="booking-menu-deal-create-button" class="booking-actions-popup-plus-button">
-                                <button class="ui-btn ui-btn-shadow ui-btn-xs ui-btn-light ui-btn-round deal-card-add-btn admin-only" onclick="createNewDeal()" title="Создать новую сделку">
+                                <button class="ui-btn ui-btn-shadow ui-btn-xs ui-btn-light ui-btn-round deal-card-add-btn" onclick="event.stopPropagation(); createNewDeal();" title="Создать новую сделку">
                                     <div class="ui-icon-set --plus-30" style=""></div>
                                 </button>
                             </span>
@@ -571,13 +576,15 @@ $totalDays = 42; // 6 недель * 7 дней
                             <div class="card-title">Подтверждение</div>
                             <div class="card-status" id="confirmation-status">Ожидается подтверждение</div>
                         </div>
-                        <button class="card-action-btn admin-only" id="confirmation-select-btn" onclick="toggleConfirmationDropdown()">Выбрать ▼</button>
+                        <?php if (isset($arResult['HAS_CONFIRM_PERMISSION']) && $arResult['HAS_CONFIRM_PERMISSION']): ?>
+                        <button class="card-action-btn" id="confirmation-select-btn" onclick="toggleConfirmationDropdown()">Выбрать ▼</button>
                         
                         <!-- Выпадающее меню подтверждения -->
-                        <div class="confirmation-dropdown admin-only" id="confirmation-dropdown">
+                        <div class="confirmation-dropdown" id="confirmation-dropdown">
                             <div class="confirmation-dropdown-item" onclick="setConfirmationStatus('confirmed')">Подтверждено</div>
                             <div class="confirmation-dropdown-item" onclick="setConfirmationStatus('not_confirmed')">Не подтверждено</div>
                         </div>
+                        <?php endif; ?>
                     </div>
 
                     <div class="action-card">
@@ -590,10 +597,10 @@ $totalDays = 42; // 6 недель * 7 дней
                             <div class="card-title">Визит</div>
                             <div class="card-status" id="visit-status">Не указано</div>
                         </div>
-                        <button class="card-action-btn admin-only" id="visit-select-btn" onclick="toggleVisitDropdown()">Выбрать ▼</button>
+                        <button class="card-action-btn show-if-can-set-visit" id="visit-select-btn" onclick="toggleVisitDropdown()">Выбрать ▼</button>
                         
                         <!-- Выпадающее меню визита -->
-                        <div class="visit-dropdown admin-only" id="visit-dropdown">
+                        <div class="visit-dropdown show-if-can-set-visit" id="visit-dropdown">
                             <div class="visit-dropdown-item" onclick="setVisitStatus('not_specified')">Не указано</div>
                             <div class="visit-dropdown-item" onclick="setVisitStatus('client_came')">Клиент пришел</div>
                             <div class="visit-dropdown-item" onclick="setVisitStatus('client_did_not_come')">Клиент не пришел</div>
@@ -609,7 +616,7 @@ $totalDays = 42; // 6 недель * 7 дней
                     <?php if (isset($arResult['HAS_MOVE_PERMISSION']) && $arResult['HAS_MOVE_PERMISSION']): ?>
                         <button class="move-event-btn" onclick="moveEventFromSidePanel()">📅 Перенести запись</button>
                     <?php endif; ?>
-                    <?php if (isset($arResult['HAS_CONFIRM_PERMISSION']) && $arResult['HAS_CONFIRM_PERMISSION']): ?>
+                    <?php if (isset($arResult['HAS_CANCEL_PERMISSION']) && $arResult['HAS_CANCEL_PERMISSION']): ?>
                         <button id="cancel-event-btn" class="cancel-event-btn" onclick="toggleEventStatusFromSidePanel()">❌ Отменить запись</button>
                     <?php endif; ?>
                     <button class="journal-btn" onclick="openJournalSidePanel()">📋 Журнал</button>
