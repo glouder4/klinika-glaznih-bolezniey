@@ -503,8 +503,8 @@ $totalDays = 42; // 6 недель * 7 дней
                             <div class="client-placeholder">Добавьте информацию о клиенте</div>
                         </div>
                         <div class="client-actions">
-                            <span data-element="booking-menu-deal-create-button" class="booking-actions-popup-plus-button">
-                                <button class="ui-btn ui-btn-shadow ui-btn-xs ui-btn-light ui-btn-round deal-card-add-btn admin-only" title="Добавить" onclick="event.stopPropagation(); openClientModal();">
+                            <span data-element="booking-menu-deal-create-button" class="booking-actions-popup-plus-button show-if-can-manage-contact">
+                                <button class="ui-btn ui-btn-shadow ui-btn-xs ui-btn-light ui-btn-round deal-card-add-btn" title="Добавить" onclick="event.stopPropagation(); openClientModal();">
                                     <div class="ui-icon-set --plus-30" style=""></div>
                                 </button>
                             </span>
@@ -601,10 +601,10 @@ $totalDays = 42; // 6 недель * 7 дней
                             <div class="card-title">Визит</div>
                             <div class="card-status" id="visit-status">Не указано</div>
                         </div>
-                        <button class="card-action-btn admin-only" id="visit-select-btn" onclick="toggleVisitDropdown()">Выбрать ▼</button>
+                        <button class="card-action-btn show-if-can-set-visit" id="visit-select-btn" onclick="toggleVisitDropdown()">Выбрать ▼</button>
                         
                         <!-- Выпадающее меню визита -->
-                        <div class="visit-dropdown admin-only" id="visit-dropdown">
+                        <div class="visit-dropdown show-if-can-set-visit" id="visit-dropdown">
                             <div class="visit-dropdown-item" onclick="setVisitStatus('not_specified')">Не указано</div>
                             <div class="visit-dropdown-item" onclick="setVisitStatus('client_came')">Клиент пришел</div>
                             <div class="visit-dropdown-item" onclick="setVisitStatus('client_did_not_come')">Клиент не пришел</div>

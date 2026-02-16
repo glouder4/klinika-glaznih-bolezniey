@@ -100,8 +100,15 @@ function initializeEventEditForm() {
         console.log('updateOccupiedTimeSlots called:', employeeId, currentEventId);
     }
 
+    // Флаг для предотвращения двойной отправки при Enter
+    let isSaveEditEventSubmitting = false;
+
     // Функция сохранения редактированного события
     window.saveEditEvent = function() {
+        if (isSaveEditEventSubmitting) {
+            return;
+        }
+
         const form = document.getElementById('edit-event-form');
         
         if (!form || !eventId) {
@@ -153,6 +160,9 @@ function initializeEventEditForm() {
             return;
         }
         
+        // Предотвращаем повторную отправку
+        isSaveEditEventSubmitting = true;
+
         // Показываем индикатор загрузки
         const saveBtn = document.getElementById('save-event-btn');
         if (saveBtn) {
@@ -242,6 +252,7 @@ function initializeEventEditForm() {
             showNotification('Произошла ошибка при отправке данных', 'error');
         })
         .finally(() => {
+            isSaveEditEventSubmitting = false;
             // Восстанавливаем кнопку
             if (saveBtn) {
                 saveBtn.disabled = false;

@@ -1169,6 +1169,19 @@ switch ($action) {
         if (empty($contactData)) {
             die(json_encode(['success' => false, 'error' => 'Данные контакта не указаны']));
         }
+        // Проверка права calendar.manage_contact
+        if (!$GLOBALS['USER'] || !$GLOBALS['USER']->IsAuthorized()) {
+            die(json_encode(['success' => false, 'error' => 'Необходима авторизация']));
+        }
+        if (!$GLOBALS['USER']->IsAdmin()) {
+            if (!CModule::IncludeModule('artmax.calendar')) {
+                die(json_encode(['success' => false, 'error' => 'Модуль календаря не установлен']));
+            }
+            $permissionsObj = new \Artmax\Calendar\Permissions();
+            if (!$permissionsObj->hasPermission($GLOBALS['USER']->GetID(), 'calendar.manage_contact')) {
+                die(json_encode(['success' => false, 'error' => 'Недостаточно прав для создания контакта']));
+            }
+        }
         try {
             $contactData = json_decode($contactData, true);
             if (!$contactData) {
@@ -1189,6 +1202,19 @@ switch ($action) {
         
         if (empty($eventId) || empty($contactData)) {
             die(json_encode(['success' => false, 'error' => 'ID события или данные контакта не указаны']));
+        }
+        // Проверка права calendar.manage_contact
+        if (!$GLOBALS['USER'] || !$GLOBALS['USER']->IsAuthorized()) {
+            die(json_encode(['success' => false, 'error' => 'Необходима авторизация']));
+        }
+        if (!$GLOBALS['USER']->IsAdmin()) {
+            if (!CModule::IncludeModule('artmax.calendar')) {
+                die(json_encode(['success' => false, 'error' => 'Модуль календаря не установлен']));
+            }
+            $permissionsObj = new \Artmax\Calendar\Permissions();
+            if (!$permissionsObj->hasPermission($GLOBALS['USER']->GetID(), 'calendar.manage_contact')) {
+                die(json_encode(['success' => false, 'error' => 'Недостаточно прав для привязки контакта к записи']));
+            }
         }
         
         try {
@@ -1568,10 +1594,21 @@ switch ($action) {
                 die(json_encode(['success' => false, 'error' => 'Событие не найдено']));
             }
             
-            // Проверяем права на редактирование (только автор события)
-            if ($event['USER_ID'] != $GLOBALS['USER']->GetID()) {
+            // Проверяем право calendar.set_visit_status или автор события
+            $userId = $GLOBALS['USER']->GetID();
+            $isAuthor = ($event['USER_ID'] == $userId);
+            $hasVisitPermission = false;
+            if ($GLOBALS['USER']->IsAdmin()) {
+                $hasVisitPermission = true;
+            } else {
+                if (CModule::IncludeModule('artmax.calendar')) {
+                    $permissionsObj = new \Artmax\Calendar\Permissions();
+                    $hasVisitPermission = $permissionsObj->hasPermission($userId, 'calendar.set_visit_status');
+                }
+            }
+            if (!$isAuthor && !$hasVisitPermission) {
                 http_response_code(403);
-                die(json_encode(['success' => false, 'error' => 'Нет прав на редактирование']));
+                die(json_encode(['success' => false, 'error' => 'Нет прав на установку статуса визита']));
             }
             
             // Получаем старое значение статуса визита

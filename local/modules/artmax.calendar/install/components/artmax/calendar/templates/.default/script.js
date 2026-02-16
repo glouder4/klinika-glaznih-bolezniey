@@ -38,6 +38,20 @@
             adminOnlyElements.forEach(el => {
                 el.style.display = 'none';
             });
+            // Скрываем кнопку «Добавить контакт» если нет права calendar.manage_contact
+            const manageContactElements = document.querySelectorAll('.show-if-can-manage-contact');
+            if (!(window.HAS_MANAGE_CONTACT_PERMISSION || false)) {
+                manageContactElements.forEach(el => {
+                    el.style.display = 'none';
+                });
+            }
+            // Скрываем выпадашку визита если нет права calendar.set_visit_status
+            const visitElements = document.querySelectorAll('.show-if-can-set-visit');
+            if (!(window.HAS_SET_VISIT_STATUS_PERMISSION || false)) {
+                visitElements.forEach(el => {
+                    el.style.display = 'none';
+                });
+            }
         }
     });
 
@@ -1334,15 +1348,14 @@
                     resetClientInfoInSidePanel();
                 }
                 
-                // Загружаем данные сделки, если есть DEAL_ENTITY_ID
+                // Загружаем данные сделки, если есть DEAL_ENTITY_ID и право на просмотр сделок
                 console.log('showEventSidePanel: DEAL_ENTITY_ID =', event.DEAL_ENTITY_ID);
-                if (event.DEAL_ENTITY_ID) {
-                    loadingCount++; // Увеличиваем счетчик только если будет запрос
+                if (event.DEAL_ENTITY_ID && (window.HAS_MANAGE_DEAL_PERMISSION || window.IS_ADMIN)) {
+                    loadingCount++;
                     console.log('showEventSidePanel: Загружаем сделку с ID:', event.DEAL_ENTITY_ID);
                     loadEventDeal(event.DEAL_ENTITY_ID);
-                } else {
+                } else if (window.HAS_MANAGE_DEAL_PERMISSION || window.IS_ADMIN) {
                     console.log('showEventSidePanel: Нет DEAL_ENTITY_ID, сбрасываем сделку');
-                    // Сбрасываем информацию о сделке, если сделки нет
                     resetDealInfoInSidePanel();
                 }
                 
@@ -1477,6 +1490,7 @@
         
         // Функция сохранения
         const saveTitle = () => {
+            input.removeEventListener('blur', saveTitle);
             const newTitle = input.value.trim();
             
             if (newTitle === currentTitle) {
@@ -3737,6 +3751,10 @@
 
     // Функция открытия деталей сделки
     function openDealDetails() {
+        if (!(window.HAS_MANAGE_DEAL_PERMISSION || window.IS_ADMIN)) {
+            showNotification('Нет прав на просмотр и создание сделок', 'error');
+            return;
+        }
         const eventId = getCurrentEventId();
         if (!eventId) {
             showNotification('Ошибка: не удалось определить событие', 'error');
@@ -3750,16 +3768,14 @@
             return;
         }
 
-        // Проверяем, есть ли сделка
+        // Если сделки нет — «маленькая форма»: подтверждение + createDealForEvent, затем открывается deal-details-form
         if (dealStatusElement.textContent === 'Не добавлена' || dealStatusElement.textContent === 'Нет сделки') {
-            showNotification('Сначала нужно добавить сделку к событию', 'warning');
+            checkEventContactAndCreateDeal(eventId);
             return;
         }
 
-        // Закрываем боковое окно события
+        // Если сделка привязана — сразу открываем полную форму сделки (deal.details)
         closeEventSidePanel();
-
-        // Получаем ID сделки из данных события
         getDealIdFromEvent(eventId);
     }
 
@@ -4118,7 +4134,7 @@
         }
         
         if (clientNameElement.textContent === 'Нет клиента') {
-            showNotification('Сначала нужно добавить контакт к событию', 'warning');
+            openClientModal();
             return;
         }
         
