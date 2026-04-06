@@ -1791,10 +1791,14 @@ class artmax_calendar extends CModule
             // Редактирование
             ['CODE' => 'calendar.edit_own', 'NAME' => 'Редактирование своих записей', 'DESCRIPTION' => 'Право на редактирование только своих записей'],
             ['CODE' => 'calendar.edit_all', 'NAME' => 'Редактирование всех записей', 'DESCRIPTION' => 'Право на редактирование записей всех врачей'],
+            // Редактирование названия
+            ['CODE' => 'calendar.edit_title_own', 'NAME' => 'Редактирование названия записи (своих)', 'DESCRIPTION' => 'Право на редактирование названия только своих записей'],
+            ['CODE' => 'calendar.edit_title_all', 'NAME' => 'Редактирование названия записи (всех)', 'DESCRIPTION' => 'Право на редактирование названия у любых записей'],
             // Перемещение
             ['CODE' => 'calendar.move', 'NAME' => 'Перемещение записи', 'DESCRIPTION' => 'Право на перемещение записей в календаре'],
-            // Подтверждение
+            // Подтверждение и отмена
             ['CODE' => 'calendar.confirm', 'NAME' => 'Подтверждение записи', 'DESCRIPTION' => 'Право на подтверждение записей'],
+            ['CODE' => 'calendar.cancel', 'NAME' => 'Отмена записи', 'DESCRIPTION' => 'Право на отмену записи и возврат в расписание. Владелец может отменять свои записи без этого права'],
             // Смена врача
             ['CODE' => 'calendar.change_employee', 'NAME' => 'Смена ответственного врача', 'DESCRIPTION' => 'Право на смену ответственного врача в записи'],
             // Удаление
@@ -1870,8 +1874,9 @@ class artmax_calendar extends CModule
         $adminPermissions = [
             'calendar.view', 'calendar.view_all', 'calendar.create',
             'calendar.edit_own', 'calendar.edit_all',
+            'calendar.edit_title_own', 'calendar.edit_title_all',
             'calendar.edit_own_notes', 'calendar.edit_others_notes',
-            'calendar.move', 'calendar.confirm', 'calendar.change_employee',
+            'calendar.move', 'calendar.confirm', 'calendar.cancel', 'calendar.change_employee',
             'calendar.delete_own', 'calendar.delete_all',
             'calendar.manage_groups', 'calendar.manage_schedule', 'calendar.manage_branches', 'calendar.manage_contact', 'calendar.manage_deal', 'calendar.set_visit_status'
         ];

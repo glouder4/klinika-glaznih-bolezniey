@@ -415,11 +415,11 @@ class Calendar
         
         $result = $this->connection->query($sql);
         
-        // Если запись отменена, переводим сделку в "Проиграна" (Неуспешная) и создаем пустую запись
+        // Если запись отменена, переводим сделку в "Завершена отмена" и создаем пустую запись
         if ($result && $status === 'cancelled') {
             
-            // Переводим сделку в "Проиграна"
-            $this->updateDealStatusOnCancel($eventId);
+            // Переводим сделку в "Завершена отмена"
+            $this->updateDealStatusOnEventCancel($eventId);
             
             // Создаем пустую запись на место отмененной
             if ($oldEvent) {
@@ -1044,14 +1044,14 @@ $employees[] = [
             // Обновляем поле визита в сделке
             $this->updateDealVisitField($eventId, $visitStatus);
             
-            // Если клиент пришел, обновляем привязанную сделку на "Завершена успешно"
+            // Если клиент пришел (визит подтвержден), обновляем сделку на "Завершена успешно"
             if ($visitStatus === 'client_came') {
                 $this->updateDealStatusOnVisit($eventId);
             }
             
-            // Если клиент не пришел, обновляем привязанную сделку на "Проиграна"
+            // Если клиент не пришел, обновляем сделку на "Завершено нет визита"
             if ($visitStatus === 'client_did_not_come') {
-                $this->updateDealStatusOnCancel($eventId);
+                $this->updateDealStatusOnClientNoShow($eventId);
             }
             
             return true;
@@ -1063,7 +1063,15 @@ $employees[] = [
     }
     
     /**
+     * ID статусов сделки CRM при синхронизации с календарем
+     */
+    private const DEAL_STAGE_VISIT_SUCCESS = 'UC_R7F61Z';   // Завершена успешно (Визит подтвержден)
+    private const DEAL_STAGE_EVENT_CANCELLED = 'UC_KC3ZWF'; // Завершена отмена (Запись отменена)
+    private const DEAL_STAGE_NO_VISIT = 'UC_9GJMJX';       // Завершено нет визита (Клиент не пришел)
+
+    /**
      * Обновить статус сделки при подтверждении визита (клиент пришел)
+     * Статус сделки: Завершена успешно
      * @param int $eventId ID события
      */
     private function updateDealStatusOnVisit($eventId)
@@ -1078,44 +1086,57 @@ $employees[] = [
         $dealId = (int)$event['DEAL_ENTITY_ID'];
         $deal = new \CCrmDeal(false);
         
-        // Обновляем статус сделки на "Завершена успешно"
         $updateFields = [
-            'STAGE_ID' => 'WON',
+            'STAGE_ID' => self::DEAL_STAGE_VISIT_SUCCESS,
         ];
         
-        $dealUpdateResult = $deal->Update($dealId, $updateFields);
+        $deal->Update($dealId, $updateFields);
     }
-    
+
     /**
-     * Обновить статус сделки при отмене записи или когда клиент не пришел
+     * Обновить статус сделки при отмене записи (кнопка "Отменить запись")
+     * Статус сделки: Завершена отмена
      * @param int $eventId ID события
      */
-    private function updateDealStatusOnCancel($eventId)
+    private function updateDealStatusOnEventCancel($eventId)
     {
-        // Получаем данные события
         $event = $this->getEvent($eventId);
         
-        if (!$event) {
-            return;
-        }
-        
-        if (empty($event['DEAL_ENTITY_ID'])) {
-            return;
-        }
-        
-        if (!\CModule::IncludeModule('crm')) {
+        if (!$event || empty($event['DEAL_ENTITY_ID']) || !\CModule::IncludeModule('crm')) {
             return;
         }
         
         $dealId = (int)$event['DEAL_ENTITY_ID'];
         $deal = new \CCrmDeal(false);
         
-        // Обновляем статус сделки на "Проиграна"
         $updateFields = [
-            'STAGE_ID' => 'LOSE',
+            'STAGE_ID' => self::DEAL_STAGE_EVENT_CANCELLED,
         ];
         
-        $dealUpdateResult = $deal->Update($dealId, $updateFields);
+        $deal->Update($dealId, $updateFields);
+    }
+
+    /**
+     * Обновить статус сделки когда клиент не пришел
+     * Статус сделки: Завершено нет визита
+     * @param int $eventId ID события
+     */
+    private function updateDealStatusOnClientNoShow($eventId)
+    {
+        $event = $this->getEvent($eventId);
+        
+        if (!$event || empty($event['DEAL_ENTITY_ID']) || !\CModule::IncludeModule('crm')) {
+            return;
+        }
+        
+        $dealId = (int)$event['DEAL_ENTITY_ID'];
+        $deal = new \CCrmDeal(false);
+        
+        $updateFields = [
+            'STAGE_ID' => self::DEAL_STAGE_NO_VISIT,
+        ];
+        
+        $deal->Update($dealId, $updateFields);
     }
 
     /**

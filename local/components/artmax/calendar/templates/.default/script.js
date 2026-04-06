@@ -5,6 +5,17 @@
 (function() {
     'use strict';
 
+    // Масштаб боковой панели (должен совпадать с --side-panel-scale в CSS)
+    const SIDE_PANEL_SCALE = 1.2;
+
+    function getSidePanelBaseWidth() {
+        const w = window.innerWidth;
+        if (w <= 768) return window.innerWidth;
+        if (w <= 1200) return 350;
+        if (w <= 1440) return 380;
+        return 400;
+    }
+
     // Универсальная функция для получения CSRF токена
     function getCSRFToken() {
         // Пробуем получить токен через BX
@@ -30,6 +41,12 @@
 
     // Инициализация модуля
     document.addEventListener('DOMContentLoaded', function() {
+        // Перемещаем боковую панель в body — position:fixed работает корректно вне контейнеров с transform
+        const sidePanel = document.getElementById('eventSidePanel');
+        if (sidePanel && sidePanel.parentElement !== document.body) {
+            document.body.appendChild(sidePanel);
+        }
+
         initCalendar();
         
         // Скрываем элементы управления для не-админов
@@ -1260,17 +1277,19 @@
                     const eventRect = eventElement.getBoundingClientRect();
                     
                     // Вычисляем позицию бокового окна
-                    const panelWidth = 400;
-                    const panelHeight = window.innerHeight * 0.8; // 80% высоты экрана
+                    const baseHeight = window.innerHeight * 0.8;
+                    const baseWidth = getSidePanelBaseWidth();
+                    const panelWidth = baseWidth <= window.innerWidth ? baseWidth * SIDE_PANEL_SCALE : baseWidth;
+                    const panelHeight = baseHeight * SIDE_PANEL_SCALE;
                     const viewportWidth = window.innerWidth;
                     const viewportHeight = window.innerHeight;
                     
-                    let left = eventRect.right + 10; // Справа от события
+                    let left = eventRect.right + 4; // Справа от события (минимальный зазор)
                     let top = Math.max(20, eventRect.top - 50); // Поднимаем выше события
                     
                     // Если не помещается справа, показываем слева
                     if (left + panelWidth > viewportWidth) {
-                        left = eventRect.left - panelWidth - 10;
+                        left = eventRect.left - panelWidth - 4;
                     }
                     
                     // Если не помещается снизу, корректируем по вертикали
@@ -1283,10 +1302,10 @@
                         top = 20;
                     }
                     
-                    // Устанавливаем позицию
+                    // Устанавливаем позицию (внешняя панель имеет финальные размеры)
                     sidePanel.style.left = left + 'px';
                     sidePanel.style.top = top + 'px';
-                    sidePanel.style.height = panelHeight + 'px';
+                    sidePanel.style.height = baseWidth >= window.innerWidth ? '100vh' : (baseHeight * SIDE_PANEL_SCALE) + 'px';
                 }
                 
                 // Показываем боковое окно
@@ -1425,17 +1444,19 @@
         const eventRect = eventElement.getBoundingClientRect();
         
         // Вычисляем позицию бокового окна
-        const panelWidth = 400;
-        const panelHeight = window.innerHeight * 0.8; // 80% высоты экрана
+        const baseHeight = window.innerHeight * 0.8;
+        const baseWidth = getSidePanelBaseWidth();
+        const panelWidth = baseWidth <= window.innerWidth ? baseWidth * SIDE_PANEL_SCALE : baseWidth;
+        const panelHeight = baseHeight * SIDE_PANEL_SCALE;
         const viewportWidth = window.innerWidth;
         const viewportHeight = window.innerHeight;
         
-        let left = eventRect.right + 10; // Справа от события
+        let left = eventRect.right + 4; // Справа от события (минимальный зазор)
         let top = Math.max(20, eventRect.top - 50); // Поднимаем выше события
         
         // Если не помещается справа, показываем слева
         if (left + panelWidth > viewportWidth) {
-            left = eventRect.left - panelWidth - 10;
+            left = eventRect.left - panelWidth - 4;
         }
         
         // Если не помещается снизу, корректируем по вертикали
@@ -1448,10 +1469,10 @@
             top = 20;
         }
         
-        // Применяем позицию
+        // Применяем позицию (внешняя панель имеет финальные размеры)
         sidePanel.style.left = left + 'px';
         sidePanel.style.top = top + 'px';
-        sidePanel.style.height = panelHeight + 'px';
+        sidePanel.style.height = baseWidth >= window.innerWidth ? '100vh' : (baseHeight * SIDE_PANEL_SCALE) + 'px';
     }
 
     // Функция для редактирования названия записи
@@ -2375,16 +2396,17 @@
                 const eventElement = document.querySelector(`[data-event-id="${window.currentEventId}"]`);
                 if (eventElement) {
                     const eventRect = eventElement.getBoundingClientRect();
-                    const panelWidth = 400;
-                    const panelHeight = window.innerHeight * 0.8;
+                    const baseWidth = getSidePanelBaseWidth();
+                    const panelWidth = baseWidth <= window.innerWidth ? baseWidth * SIDE_PANEL_SCALE : baseWidth;
+                    const panelHeight = window.innerHeight * 0.8 * SIDE_PANEL_SCALE;
                     const viewportWidth = window.innerWidth;
                     const viewportHeight = window.innerHeight;
                     
-                    let left = eventRect.right + 10;
+                    let left = eventRect.right + 4;
                     let top = Math.max(20, eventRect.top - 50); // Поднимаем выше события
                     
                     if (left + panelWidth > viewportWidth) {
-                        left = eventRect.left - panelWidth - 10;
+                        left = eventRect.left - panelWidth - 4;
                     }
                     
                     if (top + panelHeight > viewportHeight) {

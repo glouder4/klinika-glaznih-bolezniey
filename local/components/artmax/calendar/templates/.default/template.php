@@ -475,6 +475,7 @@ $totalDays = 42; // 6 недель * 7 дней
 
     <!-- Боковое окно для просмотра деталей события -->
     <div id="eventSidePanel" class="event-side-panel" style="display: none;">
+        <div class="event-side-panel__scaled">
         <!-- Прелоадер -->
         <div class="side-panel-preloader" id="sidePanelPreloader">
             <div class="preloader-spinner"></div>
@@ -629,6 +630,7 @@ $totalDays = 42; // 6 недель * 7 дней
                     <?php endif; ?>
                 </div>
             </div>
+        </div>
         </div>
     </div>
 

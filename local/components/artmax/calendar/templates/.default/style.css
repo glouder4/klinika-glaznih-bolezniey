@@ -3070,9 +3070,10 @@ input:checked + .toggle-slider:before {
 /* Боковое окно */
 .event-side-panel {
     position: fixed;
-    width: 400px;
-    height: 80vh;
-    max-height: 80vh;
+    --side-panel-scale: 1.2; /* Масштаб панели (1 = 100%, 1.2 = +20%) */
+    width: calc(400px * var(--side-panel-scale));
+    height: calc(80vh * var(--side-panel-scale));
+    max-height: calc(80vh * var(--side-panel-scale));
     background: white;
     box-shadow: 0 8px 32px rgba(0,0,0,0.2);
     border-radius: 16px;
@@ -3088,6 +3089,15 @@ input:checked + .toggle-slider:before {
     opacity: 1;
     transform: scale(1) translateY(0);
     pointer-events: auto;
+}
+
+/* Внутренняя обёртка: scale вместо zoom — позиция left/top остаётся точной */
+.event-side-panel__scaled {
+    width: 400px;
+    height: 80vh;
+    transform: scale(var(--side-panel-scale));
+    transform-origin: top left;
+    position: relative;
 }
 
 .side-panel-content {
@@ -4075,6 +4085,9 @@ input:checked + .toggle-slider:before {
 /* Для ноутбуков (1200px - 1440px) */
 @media (max-width: 1440px) and (min-width: 1201px) {
     .event-side-panel {
+        width: calc(380px * var(--side-panel-scale));
+    }
+    .event-side-panel__scaled {
         width: 380px;
     }
     
@@ -4094,6 +4107,9 @@ input:checked + .toggle-slider:before {
 /* Для планшетов (768px - 1200px) */
 @media (max-width: 1200px) and (min-width: 769px) {
     .event-side-panel {
+        width: calc(350px * var(--side-panel-scale));
+    }
+    .event-side-panel__scaled {
         width: 350px;
     }
     
@@ -4131,9 +4147,15 @@ input:checked + .toggle-slider:before {
     .event-side-panel {
         width: 100%;
         height: 100vh;
+        max-height: 100vh;
         top: 0 !important;
         left: 0 !important;
         border-radius: 0;
+    }
+    .event-side-panel__scaled {
+        width: 100%;
+        height: 100%;
+        transform: none;
     }
     
     .action-card {
