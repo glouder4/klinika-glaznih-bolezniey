@@ -80,9 +80,18 @@ $eventColor = $event['EVENT_COLOR'] ?? '#2fc6f6';
             <div class="artmax-field-content">
                 <select id="edit-event-employee" name="employee_id" class="artmax-select" required>
                     <option value="">Выберите сотрудника</option>
-                    <?php foreach ($arResult['EMPLOYEES'] as $employee): ?>
+                    <?php foreach ($arResult['EMPLOYEES'] as $employee):
+                        $employeeFullName = trim(implode(' ', array_filter([
+                            trim((string)($employee['LAST_NAME'] ?? '')),
+                            trim((string)($employee['NAME'] ?? '')),
+                            trim((string)($employee['SECOND_NAME'] ?? '')),
+                        ])));
+                        if ($employeeFullName === '') {
+                            $employeeFullName = trim((string)($employee['NAME'] ?? '')) ?: (string)($employee['LOGIN'] ?? '');
+                        }
+                    ?>
                         <option value="<?= $employee['ID'] ?>" <?= ($event['EMPLOYEE_ID'] == $employee['ID']) ? 'selected' : '' ?>>
-                            <?= htmlspecialchars($employee['NAME']) ?>
+                            <?= htmlspecialchars($employeeFullName) ?>
                         </option>
                     <?php endforeach; ?>
                 </select>
@@ -109,11 +118,16 @@ $eventColor = $event['EVENT_COLOR'] ?? '#2fc6f6';
                     <select id="edit-event-time" name="time" class="artmax-select" required>
                         <option value="">Выберите время</option>
                         <?php
-                        $times = ['08:00', '08:30', '09:00', '09:30', '10:00', '10:30', '11:00', '11:30', '12:00', '12:30', '13:00', '13:30', '14:00', '14:30', '15:00', '15:30', '16:00', '16:30', '17:00', '17:30', '18:00'];
-                        foreach ($times as $time):
-                        ?>
+                        // Слоты с шагом 1 минута (08:00 … 18:00), как в расписании клиники
+                        for ($t = 8 * 60; $t <= 18 * 60; $t++) {
+                            $h = (int)floor($t / 60);
+                            $m = $t % 60;
+                            $time = sprintf('%02d:%02d', $h, $m);
+                            ?>
                             <option value="<?= $time ?>" <?= ($eventTime === $time) ? 'selected' : '' ?>><?= $time ?></option>
-                        <?php endforeach; ?>
+                            <?php
+                        }
+                        ?>
                     </select>
                     <div class="artmax-field-error" id="time-error" style="display: none;">
                         Заполните это поле

@@ -16,6 +16,132 @@
         return 400;
     }
 
+    /**
+     * Карточка события для позиционирования боковой панели: при открытом попапе дня — элемент внутри него,
+     * иначе первая видимая карточка (в ячейке скрытые --collapsed дают нулевой rect).
+     */
+    function getCalendarEventElementForPositioning(eventId) {
+        const id = String(eventId);
+        const popup = document.getElementById('calendarDayEventsPopup');
+        if (popup) {
+            const dsp = window.getComputedStyle(popup).display;
+            if (dsp && dsp !== 'none') {
+                const inPopup = popup.querySelector('[data-event-id="' + id + '"]');
+                if (inPopup) {
+                    return inPopup;
+                }
+            }
+        }
+        const all = document.querySelectorAll('[data-event-id="' + id + '"]');
+        for (let i = 0; i < all.length; i++) {
+            const el = all[i];
+            const r = el.getBoundingClientRect();
+            if (r.width > 1 && r.height > 1) {
+                const st = window.getComputedStyle(el);
+                if (st.display !== 'none' && st.visibility !== 'hidden' && parseFloat(st.opacity || '1') !== 0) {
+                    return el;
+                }
+            }
+        }
+        return all.length ? all[0] : null;
+    }
+
+    const CALENDAR_DAY_MAX_VISIBLE_EVENTS = 6;
+    const RU_MONTHS_GEN = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
+
+    function formatCalendarDayPopupTitle(dateKey) {
+        const parts = String(dateKey).split('-');
+        if (parts.length !== 3) return 'События';
+        const d = parseInt(parts[2], 10);
+        const m = parseInt(parts[1], 10) - 1;
+        return 'События, ' + d + ' ' + (RU_MONTHS_GEN[m] || '');
+    }
+
+    function applyDayOverflowLimits(dayElement) {
+        if (!dayElement || !dayElement.classList.contains('calendar-day')) return;
+        const events = Array.from(dayElement.children).filter(function(el) {
+            return el.classList && el.classList.contains('calendar-event');
+        });
+        const n = events.length;
+        events.forEach(function(el, i) {
+            if (i >= CALENDAR_DAY_MAX_VISIBLE_EVENTS) {
+                el.classList.add('calendar-event--collapsed');
+            } else {
+                el.classList.remove('calendar-event--collapsed');
+            }
+        });
+        let toggle = dayElement.querySelector('.calendar-day-show-all');
+        if (n > CALENDAR_DAY_MAX_VISIBLE_EVENTS) {
+            if (!toggle) {
+                toggle = document.createElement('button');
+                toggle.type = 'button';
+                toggle.className = 'calendar-day-show-all';
+                toggle.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    openCalendarDayEventsPopup(toggle);
+                });
+                dayElement.appendChild(toggle);
+            }
+            toggle.setAttribute('data-date', dayElement.getAttribute('data-date') || '');
+            toggle.textContent = 'Показать все ' + n + ' записей';
+            toggle.style.display = '';
+        } else if (toggle) {
+            toggle.remove();
+        }
+    }
+
+    function openCalendarDayEventsPopup(anchor) {
+        const dateKey = anchor.getAttribute('data-date');
+        const dayEl = anchor.closest('.calendar-day') || (dateKey ? document.querySelector('.calendar-day[data-date="' + dateKey + '"]') : null);
+        if (!dayEl || !dateKey) return;
+        const popup = document.getElementById('calendarDayEventsPopup');
+        const body = document.getElementById('calendarDayEventsPopupBody');
+        const titleEl = document.getElementById('calendarDayEventsPopupTitle');
+        if (!popup || !body || !titleEl) return;
+        body.innerHTML = '';
+        const events = Array.from(dayEl.children).filter(function(el) {
+            return el.classList && el.classList.contains('calendar-event');
+        });
+        events.forEach(function(ev) {
+            const clone = ev.cloneNode(true);
+            clone.classList.remove('calendar-event--collapsed', 'new-event');
+            body.appendChild(clone);
+        });
+        body.querySelectorAll('.calendar-event').forEach(function(card) {
+            const arrow = card.querySelector('.event-arrow');
+            if (arrow) {
+                arrow.removeAttribute('onclick');
+                arrow.onclick = function(e) {
+                    e.stopPropagation();
+                    const id = card.getAttribute('data-event-id');
+                    if (id) {
+                        showEventSidePanel(parseInt(id, 10));
+                    }
+                };
+            }
+        });
+        titleEl.textContent = formatCalendarDayPopupTitle(dateKey);
+        popup.style.display = 'flex';
+        popup.setAttribute('aria-hidden', 'false');
+        document.body.style.overflow = 'hidden';
+    }
+
+    function closeCalendarDayEventsPopup() {
+        const popup = document.getElementById('calendarDayEventsPopup');
+        const body = document.getElementById('calendarDayEventsPopupBody');
+        if (popup) {
+            popup.style.display = 'none';
+            popup.setAttribute('aria-hidden', 'true');
+        }
+        if (body) {
+            body.innerHTML = '';
+        }
+        document.body.style.overflow = '';
+    }
+
+    window.openCalendarDayEventsPopup = openCalendarDayEventsPopup;
+    window.closeCalendarDayEventsPopup = closeCalendarDayEventsPopup;
+
     // Универсальная функция для получения CSRF токена
     function getCSRFToken() {
         // Пробуем получить токен через BX
@@ -47,7 +173,21 @@
             document.body.appendChild(sidePanel);
         }
 
+        const dayEventsPopup = document.getElementById('calendarDayEventsPopup');
+        if (dayEventsPopup && dayEventsPopup.parentElement !== document.body) {
+            document.body.appendChild(dayEventsPopup);
+        }
+
+        document.addEventListener('keydown', function(e) {
+            if (e.key !== 'Escape') return;
+            const popup = document.getElementById('calendarDayEventsPopup');
+            if (!popup || popup.style.display === 'none') return;
+            closeCalendarDayEventsPopup();
+        });
+
         initCalendar();
+
+        document.querySelectorAll('.calendar-day[data-date]').forEach(applyDayOverflowLimits);
         
         // Скрываем элементы управления для не-админов
         if (window.IS_ADMIN === false) {
@@ -168,8 +308,31 @@
     // Глобальный флаг для предотвращения множественных обновлений календаря
     let isRefreshingCalendar = false;
 
+    function tryWrapBitrixSidePanelOpen() {
+        if (typeof BX === 'undefined' || !BX.SidePanel || !BX.SidePanel.Instance || typeof BX.SidePanel.Instance.open !== 'function') {
+            return false;
+        }
+        if (BX.SidePanel.Instance._artmaxOpenWrapped) {
+            return true;
+        }
+        const spInstance = BX.SidePanel.Instance;
+        const originalOpen = spInstance.open.bind(spInstance);
+        spInstance.open = function(url, options) {
+            hideCalendarEventSidePanelKeepContext();
+            return originalOpen(url, options);
+        };
+        spInstance._artmaxOpenWrapped = true;
+        return true;
+    }
+
     // Инициализация обработчиков SidePanel
     function initSidePanelHandlers() {
+        tryWrapBitrixSidePanelOpen();
+        if (typeof BX !== 'undefined' && BX.ready) {
+            BX.ready(function() {
+                tryWrapBitrixSidePanelOpen();
+            });
+        }
         if (typeof BX !== 'undefined' && BX.SidePanel) {
             // Обработчик события закрытия SidePanel
             // Используем глобальный флаг, чтобы избежать множественных вызовов
@@ -413,8 +576,8 @@
         calendarDays.forEach(day => {
             // Добавляем обработчик клика для открытия формы
             day.addEventListener('click', function(e) {
-                // Не открываем форму при клике на событие
-                if (e.target.closest('.calendar-event')) {
+                // Не открываем форму при клике на событие или «Показать все»
+                if (e.target.closest('.calendar-event') || e.target.closest('.calendar-day-show-all')) {
                     return;
                 }
 
@@ -1236,9 +1399,7 @@
         // Сохраняем ID текущего события
         window.currentEventId = eventId;
         
-        // Находим элемент события
-        const eventElement = document.querySelector(`[data-event-id="${eventId}"]`);
-        if (!eventElement) {
+        if (!document.querySelector('[data-event-id="' + eventId + '"]')) {
             console.error('Элемент события не найден:', eventId);
             return;
         }
@@ -1271,8 +1432,7 @@
                     return;
                 }
                 
-                // Находим элемент события для позиционирования
-                const eventElement = document.querySelector(`[data-event-id="${eventId}"]`);
+                const eventElement = getCalendarEventElementForPositioning(eventId);
                 if (eventElement) {
                     const eventRect = eventElement.getBoundingClientRect();
                     
@@ -1434,13 +1594,15 @@
         });
     }
 
-    function updateSidePanelPosition(eventElement) {
+    function updateSidePanelPosition() {
+        const eventId = window.currentEventId;
+        if (!eventId) return;
+        const eventElement = getCalendarEventElementForPositioning(eventId);
         if (!eventElement) return;
-        
+
         const sidePanel = document.getElementById('eventSidePanel');
         if (!sidePanel || !sidePanel.classList.contains('open')) return;
-        
-        // Получаем позицию события
+
         const eventRect = eventElement.getBoundingClientRect();
         
         // Вычисляем позицию бокового окна
@@ -1616,23 +1778,19 @@
                     }
                     parent.replaceChild(h3, input);
                     
-                    // Обновляем название в календаре
-                    const eventElement = document.querySelector(`[data-event-id="${window.currentEventId}"]`);
-                    if (eventElement) {
+                    // Обновляем название во всех карточках (ячейка + попап «все записи»)
+                    document.querySelectorAll('[data-event-id="' + window.currentEventId + '"]').forEach(function(eventElement) {
                         const eventTitleElement = eventElement.querySelector('.event-title');
                         if (eventTitleElement) {
-                            // Сохраняем имя и телефон, если они есть
                             const currentText = eventTitleElement.textContent;
                             const parts = currentText.split(' - ');
                             if (parts.length > 1) {
-                                // Если есть имя и телефон, сохраняем их
                                 eventTitleElement.textContent = newTitle + ' - ' + parts.slice(1).join(' - ');
                             } else {
-                                // Если только название, просто обновляем его
                                 eventTitleElement.textContent = newTitle;
                             }
                         }
-                    }
+                    });
                     
                     showNotification('Название записи обновлено', 'success');
                 } else {
@@ -1712,6 +1870,35 @@
                 window.currentEventData = null;
             }, 300);
         }
+    }
+
+    /**
+     * Скрывает панель деталей записи (#eventSidePanel), не сбрасывая window.currentEventId / currentEventData —
+     * чтобы формы в Bitrix SidePanel (клиент, сделка и т.д.) продолжали знать EVENT_ID.
+     */
+    function hideCalendarEventSidePanelKeepContext() {
+        const sidePanel = document.getElementById('eventSidePanel');
+        if (!sidePanel || !sidePanel.classList.contains('open')) {
+            return;
+        }
+        hideSidePanelPreloader();
+        window.sidePanelLoadingCount = 0;
+        window.sidePanelLoadingComplete = 0;
+        sidePanel.classList.remove('open');
+        setTimeout(function() {
+            const el = document.getElementById('eventSidePanel');
+            if (!el) return;
+            el.style.display = 'none';
+            el.style.visibility = 'hidden';
+            el.style.left = '';
+            el.style.top = '';
+            el.style.height = '';
+            document.body.style.overflow = 'auto';
+            const sidePanelHeader = document.querySelector('.side-panel-header');
+            if (sidePanelHeader) {
+                sidePanelHeader.style.background = '';
+            }
+        }, 300);
     }
 
     function openEditEventModalFromSidePanel() {
@@ -2392,34 +2579,7 @@
         if (window.currentEventId) {
             const sidePanel = document.getElementById('eventSidePanel');
             if (sidePanel && sidePanel.classList.contains('open')) {
-                // Обновляем позицию при прокрутке
-                const eventElement = document.querySelector(`[data-event-id="${window.currentEventId}"]`);
-                if (eventElement) {
-                    const eventRect = eventElement.getBoundingClientRect();
-                    const baseWidth = getSidePanelBaseWidth();
-                    const panelWidth = baseWidth <= window.innerWidth ? baseWidth * SIDE_PANEL_SCALE : baseWidth;
-                    const panelHeight = window.innerHeight * 0.8 * SIDE_PANEL_SCALE;
-                    const viewportWidth = window.innerWidth;
-                    const viewportHeight = window.innerHeight;
-                    
-                    let left = eventRect.right + 4;
-                    let top = Math.max(20, eventRect.top - 50); // Поднимаем выше события
-                    
-                    if (left + panelWidth > viewportWidth) {
-                        left = eventRect.left - panelWidth - 4;
-                    }
-                    
-                    if (top + panelHeight > viewportHeight) {
-                        top = viewportHeight - panelHeight - 20;
-                    }
-                    
-                    if (top < 20) {
-                        top = 20;
-                    }
-                    
-                    sidePanel.style.left = left + 'px';
-                    sidePanel.style.top = top + 'px';
-                }
+                updateSidePanelPosition();
             }
         }
     });
@@ -2430,10 +2590,7 @@
             if (sidePanel && sidePanel.classList.contains('open')) {
                 // Обновляем позицию бокового окна при изменении размера окна
                 // Боковое окно больше не закрывается автоматически
-                const eventElement = document.querySelector(`[data-event-id="${window.currentEventId}"]`);
-                if (eventElement) {
-                    updateSidePanelPosition(eventElement);
-                }
+                updateSidePanelPosition();
             }
         }
     });
@@ -3336,6 +3493,9 @@
     
     // Функция получения ID текущего события
     window.getCurrentEventId = function() {
+        if (window.currentEventId) {
+            return window.currentEventId;
+        }
         // Пытаемся получить ID события из различных источников
         // 1. Из глобальной переменной (если есть)
         if (typeof currentEventId !== 'undefined' && currentEventId) {
@@ -3630,15 +3790,13 @@
             }
         }
         
-        // Сбрасываем иконку сделки только для текущего события
         if (window.currentEventId) {
-            const eventElement = document.querySelector(`[data-event-id="${window.currentEventId}"]`);
-            if (eventElement) {
+            document.querySelectorAll('[data-event-id="' + window.currentEventId + '"]').forEach(function(eventElement) {
                 const dealIcon = eventElement.querySelector('.deal-icon');
                 if (dealIcon) {
                     dealIcon.classList.remove('active');
                 }
-            }
+            });
         }
     }
 
@@ -4234,6 +4392,10 @@
             showNotification('Нет прав на редактирование заметок этой записи', 'error');
             return;
         }
+
+        // При открытии формы заметки скрываем карточку события,
+        // но сохраняем контекст текущего события для последующего сохранения заметки.
+        hideCalendarEventSidePanelKeepContext();
         
         const modal = document.getElementById('noteModal');
         if (modal) {
@@ -5642,16 +5804,14 @@
             }
         }
         
-        // Обновляем иконку сделки только для текущего события
         if (window.currentEventId) {
-            const eventElement = document.querySelector(`[data-event-id="${window.currentEventId}"]`);
-            if (eventElement) {
+            document.querySelectorAll('[data-event-id="' + window.currentEventId + '"]').forEach(function(eventElement) {
                 const dealIcon = eventElement.querySelector('.deal-icon');
                 if (dealIcon) {
                     dealIcon.classList.add('active');
                     console.log('updateDealInfoInSidePanel: Обновлена иконка сделки в календаре');
                 }
-            }
+            });
         }
     }
 
@@ -6125,30 +6285,27 @@
     // Функция для обновления иконок событий в календаре
     function updateEventIconInCalendar(type, status) {
         if (!window.currentEventId) return;
-        
-        const eventElement = document.querySelector(`[data-event-id="${window.currentEventId}"]`);
-        if (!eventElement) return;
-        
-        const iconElement = eventElement.querySelector(`.event-icon.${type}-icon`);
-        if (!iconElement) return;
-        
-        // Удаляем все классы состояний
-        iconElement.classList.remove('active', 'inactive');
-        
-        // Добавляем соответствующий класс в зависимости от типа и статуса
-        if (type === 'confirmation') {
-            if (status === 'confirmed') {
-                iconElement.classList.add('active');
-            } else if (status === 'not_confirmed') {
-                iconElement.classList.add('inactive');
+
+        document.querySelectorAll('[data-event-id="' + window.currentEventId + '"]').forEach(function(eventElement) {
+            const iconElement = eventElement.querySelector('.event-icon.' + type + '-icon');
+            if (!iconElement) return;
+
+            iconElement.classList.remove('active', 'inactive');
+
+            if (type === 'confirmation') {
+                if (status === 'confirmed') {
+                    iconElement.classList.add('active');
+                } else if (status === 'not_confirmed') {
+                    iconElement.classList.add('inactive');
+                }
+            } else if (type === 'visit') {
+                if (status === 'client_came') {
+                    iconElement.classList.add('active');
+                } else if (status === 'client_did_not_come') {
+                    iconElement.classList.add('inactive');
+                }
             }
-        } else if (type === 'visit') {
-            if (status === 'client_came') {
-                iconElement.classList.add('active');
-            } else if (status === 'client_did_not_come') {
-                iconElement.classList.add('inactive');
-            }
-        }
+        });
     }
 
     // Функции для управления прелоадером боковой панели
@@ -6918,35 +7075,39 @@
      */
     function sortEventsInDay(dayElement) {
         if (!dayElement) return;
-        
+
         const events = Array.from(dayElement.querySelectorAll('.calendar-event'));
-        if (events.length <= 1) return;
-        
-        // Сортируем события по времени начала
-        events.sort((a, b) => {
-            const timeA = a.querySelector('.event-time')?.textContent || '';
-            const timeB = b.querySelector('.event-time')?.textContent || '';
-            
-            // Извлекаем время начала (до "–")
-            const startTimeA = timeA.split('–')[0]?.trim() || '';
-            const startTimeB = timeB.split('–')[0]?.trim() || '';
-            
-            // Преобразуем время в минуты для правильного сравнения
-            const parseTimeToMinutes = (timeStr) => {
-                const [hours, minutes] = timeStr.split(':').map(Number);
-                return (hours || 0) * 60 + (minutes || 0);
-            };
-            
-            const minutesA = parseTimeToMinutes(startTimeA);
-            const minutesB = parseTimeToMinutes(startTimeB);
-            
-            // Сортируем по возрастанию времени (раньше время идет первым)
-            return minutesA - minutesB;
-        });
-        // Переставляем события в отсортированном порядке
-        events.forEach(event => {
-            dayElement.appendChild(event);
-        });
+
+        if (events.length > 1) {
+            events.sort((a, b) => {
+                const timeA = a.querySelector('.event-time')?.textContent || '';
+                const timeB = b.querySelector('.event-time')?.textContent || '';
+
+                const startTimeA = timeA.split('–')[0]?.trim() || '';
+                const startTimeB = timeB.split('–')[0]?.trim() || '';
+
+                const parseTimeToMinutes = (timeStr) => {
+                    const [hours, minutes] = timeStr.split(':').map(Number);
+                    return (hours || 0) * 60 + (minutes || 0);
+                };
+
+                const minutesA = parseTimeToMinutes(startTimeA);
+                const minutesB = parseTimeToMinutes(startTimeB);
+
+                return minutesA - minutesB;
+            });
+            events.forEach(event => {
+                dayElement.appendChild(event);
+            });
+        }
+
+        // appendChild у событий оставляет «Показать все» между day-number и событиями — переносим в конец
+        const showAllBtn = dayElement.querySelector('.calendar-day-show-all');
+        if (showAllBtn) {
+            dayElement.appendChild(showAllBtn);
+        }
+
+        applyDayOverflowLimits(dayElement);
     }
 
     /**
@@ -6970,6 +7131,7 @@
         const eventElement = document.querySelector(`[data-event-id="${eventId}"]`);
         
         if (eventElement) {
+            const dayCell = eventElement.closest('.calendar-day');
             // Анимация удаления
             eventElement.style.transition = 'all 0.3s ease';
             eventElement.style.transform = 'scale(0.8)';
@@ -6978,6 +7140,9 @@
             setTimeout(() => {
                 if (eventElement.parentNode) {
                     eventElement.parentNode.removeChild(eventElement);
+                }
+                if (dayCell) {
+                    applyDayOverflowLimits(dayCell);
                 }
             }, 300);
         }

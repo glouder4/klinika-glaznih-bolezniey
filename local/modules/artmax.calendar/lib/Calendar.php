@@ -8,12 +8,6 @@ use Bitrix\Main\Type\DateTime;
 use Artmax\Calendar\TimezoneManager;
 
 
-// Функция для логирования
-function artmax_log($message) {
-    $logFile = $_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log';
-    $timestamp = date('Y-m-d H:i:s');
-    file_put_contents($logFile, "[$timestamp] $message\n", FILE_APPEND | LOCK_EX);
-}
 class Calendar
 {
     private $connection;
@@ -769,7 +763,6 @@ class Calendar
         try {
             $moduleSettings = new \Artmax\Calendar\ModuleSettings();
             $employeesGroupId = $moduleSettings->getBranchEmployeesGroupId();
-            artmax_log("getAvailableEmployeesForBranch: branchId = " . $branchId . ", employeesGroupId = " . ($employeesGroupId ?? 'null'));
 
             $employees = [];
 
@@ -784,7 +777,6 @@ class Calendar
 
             // Если указана группа, возвращаем пользователей из группы + всех привязанных к филиалу
             if ($employeesGroupId) {
-                artmax_log("getAvailableEmployeesForBranch: Returning users from group " . $employeesGroupId . " + branch employees for branch " . $branchId);
 
                 if ($employeesGroupId > 0) {
                     // Реальная группа Bitrix
@@ -814,13 +806,10 @@ class Calendar
                         ];
                         $groupUserIds[] = $user['ID'];
                         $groupUsersCount++;
-                        artmax_log("getAvailableEmployeesForBranch: Found user from group " . $employeesGroupId . ": ID=" . $user['ID'] . ", NAME=" . $user['NAME'] . ", LAST_NAME=" . $user['LAST_NAME']);
                     }
-                    artmax_log("getAvailableEmployeesForBranch: Total users found in group " . $employeesGroupId . ": " . $groupUsersCount);
                 } else {
                     // Виртуальная группа - нет пользователей из Bitrix группы
                     $groupUserIds = [];
-                    artmax_log("getAvailableEmployeesForBranch: Virtual group, no users from Bitrix group");
                 }
 
                 // Добавляем привязанных сотрудников, которых нет в группе (если они есть)
@@ -851,8 +840,6 @@ class Calendar
                         ];
                     }
                 }
-
-                artmax_log("getAvailableEmployeesForBranch: Returning " . count($employees) . " total employees for branch " . $branchId);
                 return $employees;
             }
 
@@ -899,7 +886,6 @@ class Calendar
             $employeeIds = [];
             
             // Всегда возвращаем привязанных сотрудников филиала (независимо от группы)
-            artmax_log("getBranchEmployees: Getting branch employees for branch " . $branchId);
 
             // Получаем привязанных сотрудников филиала
             $branchEmployeeIds = [];
@@ -908,7 +894,6 @@ class Calendar
 
             while ($row = $result->fetch()) {
                 $branchEmployeeIds[] = (int)$row['EMPLOYEE_ID'];
-                artmax_log("getBranchEmployees: Found branch employee ID = " . $row['EMPLOYEE_ID']);
             }
 
             if (empty($branchEmployeeIds)) {

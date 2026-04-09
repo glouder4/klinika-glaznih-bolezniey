@@ -22,12 +22,6 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
             // Принудительно завершаем выполнение для AJAX запросов
             die();
         } else {
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "\n=== NOT AJAX - NORMAL PAGE LOAD ===\n", 
-                FILE_APPEND | LOCK_EX);
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "Time: " . date('Y-m-d H:i:s') . "\n", 
-                FILE_APPEND | LOCK_EX);
         }
 
         // Проверяем существование модуля
@@ -40,10 +34,6 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
         $branchId = (int)($this->arParams['BRANCH_ID'] ?? 1);
         $eventsCount = (int)($this->arParams['EVENTS_COUNT'] ?? 20);
         $showForm = $this->arParams['SHOW_FORM'] === 'Y';
-        
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-            "Branch ID: " . $branchId . "\n", 
-            FILE_APPEND | LOCK_EX);
 
         try {
             // Получаем информацию о филиале
@@ -62,17 +52,6 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
             $currentDate = isset($_GET['date']) ? new DateTime($_GET['date']) : new DateTime();
             $currentYear = $currentDate->format('Y');
             $currentMonth = $currentDate->format('n');
-            
-            // Отладочная информация о выбранной дате
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
-                "PHP COMPONENT: URL date param = " . ($_GET['date'] ?? 'not set') . "\n", 
-                FILE_APPEND | LOCK_EX);
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
-                "PHP COMPONENT: Using date = " . $currentDate->format('Y-m-d') . "\n", 
-                FILE_APPEND | LOCK_EX);
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
-                "PHP COMPONENT: currentYear = $currentYear, currentMonth = $currentMonth\n", 
-                FILE_APPEND | LOCK_EX);
             
             // Формируем диапазон дат для календарной сетки (включая дни предыдущего и следующего месяца)
             $firstDay = new DateTime("$currentYear-$currentMonth-01");
@@ -133,27 +112,7 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                 }
             }
             
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "\n=== STATIC LOAD USER CHECK ===\n", 
-                FILE_APPEND | LOCK_EX);
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "Current user ID: " . ($USER ? $USER->GetID() : 'none') . "\n", 
-                FILE_APPEND | LOCK_EX);
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "IsAuthorized: " . ($USER && $USER->IsAuthorized() ? 'yes' : 'no') . "\n", 
-                FILE_APPEND | LOCK_EX);
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "IsAdmin: " . ($USER && $USER->IsAdmin() ? 'yes' : 'no') . "\n", 
-                FILE_APPEND | LOCK_EX);
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "Filter employeeId: " . ($employeeId ?? 'null') . "\n", 
-                FILE_APPEND | LOCK_EX);
-            
             $events = $calendarObj->getEventsByBranch($branchId, $dateFrom, $dateTo, null, null, $employeeId);
-            
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "Events loaded: " . count($events) . "\n", 
-                FILE_APPEND | LOCK_EX);
             
             // Загружаем данные контактов для каждого события
             foreach ($events as &$event) {
@@ -166,41 +125,17 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                 }
             }
             unset($event); // Разрываем ссылку после foreach
-            
-            // Отладочная информация
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
-                "=== STATIC LOAD START ===\n", 
-                FILE_APPEND | LOCK_EX);
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
-                "STATIC LOAD: dateFrom=$dateFrom, dateTo=$dateTo, events count=" . count($events) . "\n", 
-                FILE_APPEND | LOCK_EX);
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
-                "STATIC LOAD: currentYear=$currentYear, currentMonth=$currentMonth\n", 
-                FILE_APPEND | LOCK_EX);
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
-                "STATIC LOAD: startDate=" . $startDate->format('Y-m-d') . ", endDate=" . $endDate->format('Y-m-d') . "\n", 
-                FILE_APPEND | LOCK_EX);
 
             // Группируем события по датам для отображения в календаре
             $eventsByDate = [];
             foreach ($events as $event) {
                 $convertedDate = $this->convertRussianDateToStandard($event['DATE_FROM']);
                 $dateKey = date('Y-m-d', strtotime($convertedDate));
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
-                    "STATIC LOAD: event ID={$event['ID']}, original DATE_FROM={$event['DATE_FROM']}, converted={$convertedDate}, dateKey={$dateKey}\n", 
-                    FILE_APPEND | LOCK_EX);
                 if (!isset($eventsByDate[$dateKey])) {
                     $eventsByDate[$dateKey] = [];
                 }
                 $eventsByDate[$dateKey][] = $event;
             }
-            
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
-                "STATIC LOAD: eventsByDate keys=" . implode(', ', array_keys($eventsByDate)) . "\n", 
-                FILE_APPEND | LOCK_EX);
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
-                "=== STATIC LOAD END ===\n", 
-                FILE_APPEND | LOCK_EX);
 
             // Получаем список всех филиалов для навигации
             $allBranches = $branchObj->getBranches();
@@ -256,42 +191,7 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                 $hasManageContactPermission = true;
                 $hasManageDealPermission = true;
                 $hasSetVisitStatusPermission = true;
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
-                    "HAS_VIEW_ALL_PERMISSION: User is admin, setting to true\n", 
-                    FILE_APPEND | LOCK_EX);
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
-                    "HAS_CREATE_PERMISSION: User is admin, setting to true\n", 
-                    FILE_APPEND | LOCK_EX);
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
-                    "HAS_MANAGE_GROUPS_PERMISSION: User is admin, setting to true\n", 
-                    FILE_APPEND | LOCK_EX);
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
-                    "HAS_MANAGE_BRANCHES_PERMISSION: User is admin, setting to true\n", 
-                    FILE_APPEND | LOCK_EX);
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
-                    "HAS_MANAGE_SCHEDULE_PERMISSION: User is admin, setting to true\n", 
-                    FILE_APPEND | LOCK_EX);
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
-                    "HAS_DELETE_OWN_PERMISSION: User is admin, setting to true\n", 
-                    FILE_APPEND | LOCK_EX);
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
-                    "HAS_DELETE_ALL_PERMISSION: User is admin, setting to true\n", 
-                    FILE_APPEND | LOCK_EX);
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
-                    "HAS_CHANGE_EMPLOYEE_PERMISSION: User is admin, setting to true\n", 
-                    FILE_APPEND | LOCK_EX);
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
-                    "HAS_EDIT_OWN_PERMISSION: User is admin, setting to true\n", 
-                    FILE_APPEND | LOCK_EX);
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
-                    "HAS_EDIT_ALL_PERMISSION: User is admin, setting to true\n", 
-                    FILE_APPEND | LOCK_EX);
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
-                    "HAS_MOVE_PERMISSION: User is admin, setting to true\n", 
-                    FILE_APPEND | LOCK_EX);
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
-                    "HAS_CONFIRM_PERMISSION: User is admin, setting to true\n", 
-                    FILE_APPEND | LOCK_EX);
+
             } else {
                 try {
                     $permissionsObj = new \Artmax\Calendar\Permissions();
@@ -317,43 +217,10 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                     $hasManageDealPermission = $permissionsObj->hasPermission($userId, 'calendar.manage_deal');
                     $hasSetVisitStatusPermission = $permissionsObj->hasPermission($userId, 'calendar.set_visit_status');
                     
-                    // Отладочная информация
-                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
-                        "HAS_VIEW_ALL_PERMISSION: User ID = " . $userId . ", hasPermission result = " . ($hasViewAllPermission ? 'true' : 'false') . "\n", 
-                        FILE_APPEND | LOCK_EX);
-                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
-                        "HAS_CREATE_PERMISSION: User ID = " . $userId . ", hasPermission result = " . ($hasCreatePermission ? 'true' : 'false') . "\n", 
-                        FILE_APPEND | LOCK_EX);
-                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
-                        "HAS_MANAGE_GROUPS_PERMISSION: User ID = " . $userId . ", hasPermission result = " . ($hasManageGroupsPermission ? 'true' : 'false') . "\n", 
-                        FILE_APPEND | LOCK_EX);
-                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
-                        "HAS_MANAGE_BRANCHES_PERMISSION: User ID = " . $userId . ", hasPermission result = " . ($hasManageBranchesPermission ? 'true' : 'false') . "\n", 
-                        FILE_APPEND | LOCK_EX);
-                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
-                        "HAS_MANAGE_SCHEDULE_PERMISSION: User ID = " . $userId . ", hasPermission result = " . ($hasManageSchedulePermission ? 'true' : 'false') . "\n", 
-                        FILE_APPEND | LOCK_EX);
-                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
-                        "HAS_DELETE_OWN_PERMISSION: User ID = " . $userId . ", hasPermission result = " . ($hasDeleteOwnPermission ? 'true' : 'false') . "\n", 
-                        FILE_APPEND | LOCK_EX);
-                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
-                        "HAS_DELETE_ALL_PERMISSION: User ID = " . $userId . ", hasPermission result = " . ($hasDeleteAllPermission ? 'true' : 'false') . "\n", 
-                        FILE_APPEND | LOCK_EX);
-                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
-                        "HAS_CHANGE_EMPLOYEE_PERMISSION: User ID = " . $userId . ", hasPermission result = " . ($hasChangeEmployeePermission ? 'true' : 'false') . "\n", 
-                        FILE_APPEND | LOCK_EX);
-                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
-                        "HAS_EDIT_OWN_PERMISSION: User ID = " . $userId . ", hasPermission result = " . ($hasEditOwnPermission ? 'true' : 'false') . "\n", 
-                        FILE_APPEND | LOCK_EX);
-                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
-                        "HAS_EDIT_ALL_PERMISSION: User ID = " . $userId . ", hasPermission result = " . ($hasEditAllPermission ? 'true' : 'false') . "\n", 
-                        FILE_APPEND | LOCK_EX);
+
                     
                     // Дополнительная отладка: проверяем группы пользователя
                     $userGroups = \CUser::GetUserGroup($userId);
-                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
-                        "HAS_VIEW_ALL_PERMISSION: User groups = " . implode(', ', $userGroups) . "\n", 
-                        FILE_APPEND | LOCK_EX);
                 } catch (\Exception $e) {
                     $hasViewAllPermission = false;
                     $hasCreatePermission = false;
@@ -375,81 +242,11 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                     $hasManageContactPermission = false;
                     $hasManageDealPermission = false;
                     $hasSetVisitStatusPermission = false;
-                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
-                        "HAS_VIEW_ALL_PERMISSION: Exception = " . $e->getMessage() . "\n", 
-                        FILE_APPEND | LOCK_EX);
-                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
-                        "HAS_CREATE_PERMISSION: Exception = " . $e->getMessage() . "\n", 
-                        FILE_APPEND | LOCK_EX);
-                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
-                        "HAS_MANAGE_GROUPS_PERMISSION: Exception = " . $e->getMessage() . "\n", 
-                        FILE_APPEND | LOCK_EX);
-                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
-                        "HAS_MANAGE_BRANCHES_PERMISSION: Exception = " . $e->getMessage() . "\n", 
-                        FILE_APPEND | LOCK_EX);
-                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
-                        "HAS_MANAGE_SCHEDULE_PERMISSION: Exception = " . $e->getMessage() . "\n", 
-                        FILE_APPEND | LOCK_EX);
-                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
-                        "HAS_DELETE_OWN_PERMISSION: Exception = " . $e->getMessage() . "\n", 
-                        FILE_APPEND | LOCK_EX);
-                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
-                        "HAS_DELETE_ALL_PERMISSION: Exception = " . $e->getMessage() . "\n", 
-                        FILE_APPEND | LOCK_EX);
-                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
-                        "HAS_CHANGE_EMPLOYEE_PERMISSION: Exception = " . $e->getMessage() . "\n", 
-                        FILE_APPEND | LOCK_EX);
-                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
-                        "HAS_EDIT_OWN_PERMISSION: Exception = " . $e->getMessage() . "\n", 
-                        FILE_APPEND | LOCK_EX);
-                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
-                        "HAS_EDIT_ALL_PERMISSION: Exception = " . $e->getMessage() . "\n", 
-                        FILE_APPEND | LOCK_EX);
-                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
-                        "HAS_MOVE_PERMISSION: Exception = " . $e->getMessage() . "\n", 
-                        FILE_APPEND | LOCK_EX);
-                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
-                        "HAS_CONFIRM_PERMISSION: Exception = " . $e->getMessage() . "\n", 
-                        FILE_APPEND | LOCK_EX);
+
                 }
             }
         } else {
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
-                "HAS_VIEW_ALL_PERMISSION: User not authorized or not set\n", 
-                FILE_APPEND | LOCK_EX);
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
-                "HAS_CREATE_PERMISSION: User not authorized or not set\n", 
-                FILE_APPEND | LOCK_EX);
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
-                "HAS_MANAGE_GROUPS_PERMISSION: User not authorized or not set\n", 
-                FILE_APPEND | LOCK_EX);
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
-                "HAS_MANAGE_BRANCHES_PERMISSION: User not authorized or not set\n", 
-                FILE_APPEND | LOCK_EX);
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
-                "HAS_MANAGE_SCHEDULE_PERMISSION: User not authorized or not set\n", 
-                FILE_APPEND | LOCK_EX);
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
-                "HAS_DELETE_OWN_PERMISSION: User not authorized or not set\n", 
-                FILE_APPEND | LOCK_EX);
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
-                "HAS_DELETE_ALL_PERMISSION: User not authorized or not set\n", 
-                FILE_APPEND | LOCK_EX);
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
-                "HAS_CHANGE_EMPLOYEE_PERMISSION: User not authorized or not set\n", 
-                FILE_APPEND | LOCK_EX);
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
-                "HAS_EDIT_OWN_PERMISSION: User not authorized or not set\n", 
-                FILE_APPEND | LOCK_EX);
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
-                "HAS_EDIT_ALL_PERMISSION: User not authorized or not set\n", 
-                FILE_APPEND | LOCK_EX);
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
-                "HAS_MOVE_PERMISSION: User not authorized or not set\n", 
-                FILE_APPEND | LOCK_EX);
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
-                "HAS_CONFIRM_PERMISSION: User not authorized or not set\n", 
-                FILE_APPEND | LOCK_EX);
+
         }
         
         $this->arResult = [
@@ -1144,10 +941,6 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                 }
             }
             
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
-                "AJAX getEventsAction: Current user ID=" . ($USER ? $USER->GetID() : 'none') . ", IsAdmin=" . ($USER && $USER->IsAdmin() ? 'yes' : 'no') . ", HasViewOthersPermission=" . ($hasViewOthersPermission ? 'yes' : 'no') . ", Filter employeeId=" . ($employeeId ?? 'null') . "\n", 
-                FILE_APPEND | LOCK_EX);
-            
             $calendarObj = new \Artmax\Calendar\Calendar();
             $events = $calendarObj->getEventsByBranch($branchId, $dateFrom, $dateTo, null, null, $employeeId);
             
@@ -1228,11 +1021,6 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
         $excludeWeekends = $params['exclude_weekends'] ?? false;
         $excludeHolidays = $params['exclude_holidays'] ?? false;
         $includeEndDate = $params['include_end_date'] ?? true;
-
-        // Логируем полученные параметры для отладки
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-            "addScheduleAction: repeat = " . ($repeat ? 'true' : 'false') . ", frequency = " . ($frequency ?? 'null') . ", weekdays = " . json_encode($weekdays) . ", repeatCount = " . ($repeatCount ?? 'null') . ", repeatEnd = " . ($repeatEnd ?? 'null') . ", includeEndDate = " . ($includeEndDate ? 'true' : 'false') . ", duration = " . $duration . " minutes\n", 
-            FILE_APPEND | LOCK_EX);
         
         if (!$USER || !$USER->IsAuthorized()) {
             return ['success' => false, 'error' => 'Необходима авторизация'];
@@ -1467,10 +1255,6 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                     $endDate->setTime(0, 0, 0);
                     $daysDiff = $startDate->diff($endDate)->days;
                     
-                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                        "createRecurringEvents: Расчет maxEvents: startDate = " . $startDate->format('Y-m-d') . ", endDate = " . $endDate->format('Y-m-d') . ", daysDiff = $daysDiff, includeEndDate = " . ($includeEndDate ? 'true' : 'false') . "\n", 
-                        FILE_APPEND | LOCK_EX);
-                    
                     // Рассчитываем максимальное количество событий в зависимости от частоты
                     switch ($frequency) {
                         case 'daily':
@@ -1487,10 +1271,6 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                         default:
                             $maxEvents = $includeEndDate ? ($daysDiff + 1) : $daysDiff;
                     }
-                    
-                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                        "createRecurringEvents: Рассчитанный maxEvents = $maxEvents для frequency = $frequency\n", 
-                        FILE_APPEND | LOCK_EX);
                 } elseif ($repeatCount && $repeatCount > 0) {
                     // Если указано количество повторений, используем его
                     $maxEvents = $repeatCount;
@@ -1501,14 +1281,6 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
             }
             
             $endDate = ($repeatEnd === 'date' && $repeatEndDate) ? new \DateTime($repeatEndDate) : null;
-            
-            // Логируем параметры для отладки
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "createRecurringEvents: repeatEnd = $repeatEnd, repeatCount = $repeatCount, maxEvents = $maxEvents\n", 
-                FILE_APPEND | LOCK_EX);
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "createRecurringEvents: frequency = $frequency, weekdays = " . json_encode($weekdays) . ", is_array = " . (is_array($weekdays) ? 'true' : 'false') . ", empty = " . (empty($weekdays) ? 'true' : 'false') . "\n", 
-                FILE_APPEND | LOCK_EX);
 
             if ($frequency === 'weekly' && !empty($weekdays)) {
                 // Специальная обработка для еженедельного повторения с выбранными днями недели
@@ -1518,32 +1290,14 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                 
                 // Проверяем, что maxWeeks определена
                 if (!isset($maxWeeks)) {
-                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                        "createRecurringEvents: ERROR - maxWeeks не определена! Используем значение по умолчанию.\n", 
-                        FILE_APPEND | LOCK_EX);
                     $maxWeeks = $repeatCount ? $repeatCount : 3;
                     $maxEvents = $maxWeeks * count($weekdays);
                 }
-                
-                // Логируем параметры для отладки
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                    "createRecurringEvents: maxWeeks = $maxWeeks, maxEvents = $maxEvents, weekdays = " . implode(',', $weekdays) . "\n", 
-                    FILE_APPEND | LOCK_EX);
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                    "createRecurringEvents: startDate = " . $startDate->format('Y-m-d H:i:s') . "\n", 
-                    FILE_APPEND | LOCK_EX);
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                    "createRecurringEvents: eventDateFrom = " . $eventDateFrom->format('Y-m-d H:i:s') . "\n", 
-                    FILE_APPEND | LOCK_EX);
                 
                 // Используем количество недель из параметров
                 $weekNumber = 0; // Начинаем с недели 0 (первая неделя - та, на которую приходится дата начала)
 
                 while ($weekNumber < $maxWeeks) {
-                    // Логируем текущую неделю
-                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                        "createRecurringEvents: weekNumber = $weekNumber, eventsCreated = $eventsCreated, currentDate = " . $currentDate->format('Y-m-d') . "\n", 
-                        FILE_APPEND | LOCK_EX);
                     
                     // Находим понедельник недели, в которой находится currentDate
                     $dayOfWeek = $currentDate->format('N'); // 1 = понедельник, 7 = воскресенье
@@ -1551,55 +1305,30 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                     $weekStart = clone $currentDate;
                     $weekStart->sub(new \DateInterval('P' . $mondayOffset . 'D'));
                     
-                    // Логируем начало недели
-                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                        "createRecurringEvents: weekStart = " . $weekStart->format('Y-m-d') . " (Monday of week containing " . $currentDate->format('Y-m-d') . ")\n", 
-                        FILE_APPEND | LOCK_EX);
-                    
                     // Создаем события для каждого выбранного дня недели в текущей неделе
                     foreach ($weekdays as $weekday) {
                         $eventDate = clone $weekStart;
                         $eventDate->add(new \DateInterval('P' . ($weekday - 1) . 'D'));
                         
-                        // Логируем проверяемую дату
-                        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                            "createRecurringEvents: Checking weekday $weekday, eventDate = " . $eventDate->format('Y-m-d') . ", startDate = " . $startDate->format('Y-m-d') . "\n", 
-                            FILE_APPEND | LOCK_EX);
-                        
                         // Проверяем, что дата события не раньше даты начала расписания
                         if ($eventDate >= $startDate) {
-                            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                                "createRecurringEvents: Date " . $eventDate->format('Y-m-d') . " >= startDate " . $startDate->format('Y-m-d') . " - proceeding with event creation\n", 
-                                FILE_APPEND | LOCK_EX);
                             // Проверяем ограничение по дате
                             if ($endDate) {
                                 if ($includeEndDate) {
                                     // Если включаем конечную дату, проверяем что не превышаем её
                                     if ($eventDate->format('Y-m-d') > $endDate->format('Y-m-d')) {
-                                        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                                            "createRecurringEvents: Date " . $eventDate->format('Y-m-d') . " exceeds endDate " . $endDate->format('Y-m-d') . " (includeEndDate=true) - breaking\n", 
-                                            FILE_APPEND | LOCK_EX);
                                         break 2; // Выходим из обоих циклов
                                     }
                                 } else {
                                     // Если не включаем конечную дату, проверяем что строго меньше её
                                     if ($eventDate->format('Y-m-d') >= $endDate->format('Y-m-d')) {
-                                        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                                            "createRecurringEvents: Date " . $eventDate->format('Y-m-d') . " >= endDate " . $endDate->format('Y-m-d') . " (includeEndDate=false) - breaking\n", 
-                                            FILE_APPEND | LOCK_EX);
                                         break 2; // Выходим из обоих циклов
                                     }
                                 }
-                                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                                    "createRecurringEvents: Date " . $eventDate->format('Y-m-d') . " passed endDate check (endDate=" . $endDate->format('Y-m-d') . ", includeEndDate=" . ($includeEndDate ? 'true' : 'false') . ")\n", 
-                                    FILE_APPEND | LOCK_EX);
                             }
                             
                             // Дополнительная проверка по количеству событий (защита от переполнения)
                             if ($eventsCreated >= $maxEvents) {
-                                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                                    "createRecurringEvents: Max events reached ($eventsCreated >= $maxEvents) - breaking\n", 
-                                    FILE_APPEND | LOCK_EX);
                                 break 2; // Выходим из обоих циклов
                             }
                             
@@ -1608,28 +1337,14 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                             
                             // Проверяем исключения выходных и праздников
                             if ($excludeWeekends && $this->isWeekend($eventDate)) {
-                                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                                    "createRecurringEvents: Date " . $eventDate->format('Y-m-d') . " is weekend - skipping\n", 
-                                    FILE_APPEND | LOCK_EX);
                                 continue; // Пропускаем выходные
                             }
                             
                             if ($excludeHolidays && $this->isHoliday($eventDate)) {
-                                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                                    "createRecurringEvents: Date " . $eventDate->format('Y-m-d') . " is holiday - skipping\n", 
-                                    FILE_APPEND | LOCK_EX);
                                 continue; // Пропускаем праздники
                             }
-                            
-                            // Проверяем доступность времени для события
-                            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                                "createRecurringEvents: Checking time availability for " . $eventDate->format('Y-m-d H:i:s') . " to " . $eventDateTo->format('Y-m-d H:i:s') . "\n", 
-                                FILE_APPEND | LOCK_EX);
                             if ($calendarObj->isTimeAvailableForDoctor($eventDate->format('Y-m-d H:i:s'), $eventDateTo->format('Y-m-d H:i:s'), $employeeId, null, $branchId)) {
                                 // Создаем событие
-                                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                                    "createRecurringEvents: Creating event for date " . $eventDate->format('Y-m-d H:i:s') . "\n", 
-                                    FILE_APPEND | LOCK_EX);
                                 $recurringEventId = $calendarObj->addEvent(
                                     $title,
                                     '', // Описание пустое для расписания
@@ -1654,20 +1369,11 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                                     
                                     $eventsCreated++;
                                     $createdEventIds[] = $recurringEventId;
-                                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                                        "createRecurringEvents: Event created with ID $recurringEventId, total events: $eventsCreated\n", 
-                                        FILE_APPEND | LOCK_EX);
                                 }
                             } else {
-                                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                                    "createRecurringEvents: Time not available for " . $eventDate->format('Y-m-d H:i:s') . "\n", 
-                                    FILE_APPEND | LOCK_EX);
                             }
                             // Если время занято, просто пропускаем этот день
                         } else {
-                            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                                "createRecurringEvents: Date " . $eventDate->format('Y-m-d') . " < startDate " . $startDate->format('Y-m-d') . " - skipping this date\n", 
-                                FILE_APPEND | LOCK_EX);
                         }
                     }
                     
@@ -1681,13 +1387,6 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                     }
                 }
             } else {
-                // Обычная обработка для других типов повторений
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                    "createRecurringEvents: Начинаем цикл создания событий, maxEvents = $maxEvents, frequency = $frequency\n", 
-                    FILE_APPEND | LOCK_EX);
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                    "createRecurringEvents: startDate = " . $startDate->format('Y-m-d') . ", endDate = " . ($endDate ? $endDate->format('Y-m-d') : 'null') . ", includeEndDate = " . ($includeEndDate ? 'true' : 'false') . "\n", 
-                    FILE_APPEND | LOCK_EX);
                 $i = 0;
                 $eventsCreated = 0;
                 // Цикл идет по количеству повторений (maxEvents), а не по количеству созданных событий
@@ -1714,24 +1413,14 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                             break;
                     }
 
-                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                        "createRecurringEvents: Итерация $i, дата события: " . $newDateFrom->format('Y-m-d') . ", eventsCreated = $eventsCreated, maxEvents = $maxEvents\n", 
-                        FILE_APPEND | LOCK_EX);
-
                     // Проверяем ограничение по дате
                     if ($endDate) {
-                        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                            "createRecurringEvents: Проверяем ограничение по дате, endDate = " . $endDate->format('Y-m-d') . ", includeEndDate = " . ($includeEndDate ? 'true' : 'false') . "\n", 
-                            FILE_APPEND | LOCK_EX);
                         if ($includeEndDate) {
                             // Если включаем конечную дату, проверяем что не превышаем её
                             // Используем сравнение дат без времени для корректной проверки
                             $eventDateOnly = $newDateFrom->format('Y-m-d');
                             $endDateOnly = $endDate->format('Y-m-d');
                             if ($eventDateOnly > $endDateOnly) {
-                                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                                    "createRecurringEvents: Дата события $eventDateOnly превышает конечную дату $endDateOnly - прерываем цикл\n", 
-                                    FILE_APPEND | LOCK_EX);
                                 break;
                             }
                         } else {
@@ -1739,9 +1428,6 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                             $eventDateOnly = $newDateFrom->format('Y-m-d');
                             $endDateOnly = $endDate->format('Y-m-d');
                             if ($eventDateOnly >= $endDateOnly) {
-                                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                                    "createRecurringEvents: Дата события $eventDateOnly больше или равна конечной дате $endDateOnly - прерываем цикл\n", 
-                                    FILE_APPEND | LOCK_EX);
                                 break;
                             }
                         }
@@ -1761,9 +1447,7 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                     
                     // Проверяем доступность времени для повторяющегося события
                     $isAvailable = $calendarObj->isTimeAvailableForDoctor($newDateFrom->format('Y-m-d H:i:s'), $newDateTo->format('Y-m-d H:i:s'), $employeeId, null, $branchId);
-                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                        "createRecurringEvents: Итерация $i, дата " . $newDateFrom->format('Y-m-d') . ", время доступно: " . ($isAvailable ? 'да' : 'нет') . "\n", 
-                        FILE_APPEND | LOCK_EX);
+
                     
                     if ($isAvailable) {
                         // Создаем событие
@@ -1791,18 +1475,9 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                             
                             $eventsCreated++;
                             $createdEventIds[] = $recurringEventId;
-                            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                                "createRecurringEvents: Создано событие ID=$recurringEventId на дату " . $newDateFrom->format('Y-m-d') . ", всего создано: $eventsCreated\n", 
-                                FILE_APPEND | LOCK_EX);
                         } else {
-                            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                                "createRecurringEvents: ОШИБКА - addEvent вернул false для даты " . $newDateFrom->format('Y-m-d') . "\n", 
-                                FILE_APPEND | LOCK_EX);
                         }
                     } else {
-                        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                            "createRecurringEvents: Время занято для даты " . $newDateFrom->format('Y-m-d') . " - пропускаем\n", 
-                            FILE_APPEND | LOCK_EX);
                     }
                     // Если время занято, просто пропускаем этот день
                     $i++;
@@ -1858,39 +1533,17 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                 return ['success' => false, 'error' => 'Нет прав на просмотр'];
             }
 
-            // Загружаем данные контакта для события
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "GET_EVENT_ACTION: Загружаем контакт для события ID=$eventId\n", 
-                FILE_APPEND | LOCK_EX);
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "GET_EVENT_ACTION: CONTACT_ENTITY_ID = " . ($event['CONTACT_ENTITY_ID'] ?? 'null') . "\n", 
-                FILE_APPEND | LOCK_EX);
             
             if (!empty($event['CONTACT_ENTITY_ID'])) {
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                    "GET_EVENT_ACTION: Вызываем getContactFromCRM для ID=" . $event['CONTACT_ENTITY_ID'] . "\n", 
-                    FILE_APPEND | LOCK_EX);
                     
                 $contactData = $this->getContactFromCRM($event['CONTACT_ENTITY_ID']);
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                    "GET_EVENT_ACTION: getContactFromCRM результат: " . print_r($contactData, true) . "\n", 
-                    FILE_APPEND | LOCK_EX);
                     
                 if ($contactData) {
                     $event['CONTACT_NAME'] = $contactData['name'] ?? '';
                     $event['CONTACT_PHONE'] = $contactData['phone'] ?? '';
-                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                        "GET_EVENT_ACTION: Установлены CONTACT_NAME='" . $event['CONTACT_NAME'] . "', CONTACT_PHONE='" . $event['CONTACT_PHONE'] . "'\n", 
-                        FILE_APPEND | LOCK_EX);
                 } else {
-                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                        "GET_EVENT_ACTION: getContactFromCRM вернул null\n", 
-                        FILE_APPEND | LOCK_EX);
                 }
             } else {
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                    "GET_EVENT_ACTION: CONTACT_ENTITY_ID пустой, контакт не загружается\n", 
-                    FILE_APPEND | LOCK_EX);
             }
 
             return ['success' => true, 'event' => $event];
@@ -1910,16 +1563,6 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
         }
 
         try {
-            // Логируем входящие данные
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "UPDATE_EVENT: Входящие данные:\n" .
-                "  eventId: $eventId\n" .
-                "  title: $title\n" .
-                "  dateFrom: $dateFrom\n" .
-                "  dateTo: $dateTo\n" .
-                "  eventColor: $eventColor\n" .
-                "  branchId: $branchId\n", 
-                FILE_APPEND | LOCK_EX);
             
             if (!CModule::IncludeModule('artmax.calendar')) {
                 return ['success' => false, 'error' => 'Модуль artmax.calendar не установлен'];
@@ -1979,22 +1622,11 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                     );
                     
                     if ($activityUpdated) {
-                        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                            "UPDATE_EVENT: Обновлена активность CRM ID={$existingEvent['ACTIVITY_ID']}\n", 
-                            FILE_APPEND | LOCK_EX);
                     }
                 }
                 
-                // Логируем перед проверкой сделки
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                    "UPDATE_EVENT: Проверка наличия сделки. DEAL_ENTITY_ID={$existingEvent['DEAL_ENTITY_ID']}\n", 
-                    FILE_APPEND | LOCK_EX);
-                
                 // Если есть привязанная сделка, обновляем бронирование
                 if (!empty($existingEvent['DEAL_ENTITY_ID']) && \CModule::IncludeModule('crm')) {
-                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                        "UPDATE_EVENT: Условие выполнено, начинаем обновление бронирования\n", 
-                        FILE_APPEND | LOCK_EX);
                     
                     $responsibleId = $existingEvent['EMPLOYEE_ID'] ?? $userId;
                     
@@ -2007,9 +1639,6 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                 $dateToObj = \DateTime::createFromFormat('Y-m-d H:i:s', $dateTo, new \DateTimeZone($branchTimezone));
                 
                 if (!$dateFromObj || !$dateToObj) {
-                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                        "UPDATE_EVENT: Ошибка парсинга дат. dateFrom=$dateFrom, dateTo=$dateTo\n", 
-                        FILE_APPEND | LOCK_EX);
                     // Пробуем другой формат
                     $dateFromObj = \DateTime::createFromFormat('d.m.Y H:i:s', $dateFrom, new \DateTimeZone($branchTimezone));
                     $dateToObj = \DateTime::createFromFormat('d.m.Y H:i:s', $dateTo, new \DateTimeZone($branchTimezone));
@@ -2021,21 +1650,6 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                 // Вычисляем длительность
                 $durationSeconds = $dateToObj->getTimestamp() - $dateFromObj->getTimestamp();
                 $bookingValue = "user|{$responsibleId}|{$bookingDateTime}|{$durationSeconds}|{$title}";
-                
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                    "UPDATE_EVENT: Вычисление бронирования:\n" .
-                    "  dateFrom (вход): $dateFrom\n" .
-                    "  dateTo (вход): $dateTo\n" .
-                    "  branchTimezone: $branchTimezone\n" .
-                    "  bookingDateTime: $bookingDateTime\n" .
-                    "  startDateTime timestamp: {$dateFromObj->getTimestamp()}\n" .
-                    "  endDateTime timestamp: {$dateToObj->getTimestamp()}\n" .
-                    "  durationSeconds: $durationSeconds\n" .
-                    "  EMPLOYEE_ID: {$existingEvent['EMPLOYEE_ID']}\n" .
-                    "  responsibleId: $responsibleId\n" .
-                    "  title: $title\n" .
-                    "  ФИНАЛЬНАЯ СТРОКА: $bookingValue\n", 
-                    FILE_APPEND | LOCK_EX);
                     
                     $bookingFieldCode = \Bitrix\Main\Config\Option::get('artmax.calendar', 'deal_booking_field', 'UF_CRM_CALENDAR_BOOKING');
                     
@@ -2044,10 +1658,6 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                         $bookingFieldCode => [$bookingValue]
                     ];
                     $deal->Update($existingEvent['DEAL_ENTITY_ID'], $updateFields);
-                    
-                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                        "UPDATE_EVENT: Обновлено бронирование в сделке ID={$existingEvent['DEAL_ENTITY_ID']}\n", 
-                        FILE_APPEND | LOCK_EX);
                 }
                 
                 return ['success' => true];
@@ -2188,9 +1798,6 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
             }
             
         } catch (\Exception $e) {
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
-                'Ошибка прямого поиска сделок: ' . $e->getMessage() . "\n", 
-                FILE_APPEND | LOCK_EX);
         }
         
         return $deals;
@@ -2255,9 +1862,6 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
             }
             
         } catch (\Exception $e) {
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
-                'Ошибка fallback поиска контактов: ' . $e->getMessage() . "\n", 
-                FILE_APPEND | LOCK_EX);
         }
         
         return $contacts;
@@ -2331,17 +1935,10 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                 
                 // Создаем или обновляем активность в сделке
                 $dealId = $dealDataArray['id'];
-                
-                // Проверяем, есть ли уже активность у события
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                    "SAVE_DEAL: Проверка активности. ACTIVITY_ID={$event['ACTIVITY_ID']}\n", 
-                    FILE_APPEND | LOCK_EX);
+
                     
                 if (!empty($event['ACTIVITY_ID'])) {
                     // Обновляем существующую активность
-                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                        "SAVE_DEAL: Обновляем существующую активность ID={$event['ACTIVITY_ID']}\n", 
-                        FILE_APPEND | LOCK_EX);
                         
                     $activityUpdated = $calendar->updateCrmActivity(
                         $event['ACTIVITY_ID'],
@@ -2349,15 +1946,7 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                         $event['DATE_FROM'],
                         $event['DATE_TO']
                     );
-                    
-                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                        "SAVE_DEAL: Обновлена активность ID={$event['ACTIVITY_ID']}\n", 
-                        FILE_APPEND | LOCK_EX);
                 } else {
-                    // Создаем новую активность
-                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                        "SAVE_DEAL: Создаем новую активность. DealID=$dealId, Title={$event['TITLE']}, DateFrom={$event['DATE_FROM']}, DateTo={$event['DATE_TO']}, EmployeeID={$event['EMPLOYEE_ID']}\n", 
-                        FILE_APPEND | LOCK_EX);
                         
                     $activityId = $calendar->createCrmActivity(
                         $dealId,
@@ -2367,29 +1956,15 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                         $event['EMPLOYEE_ID'] ?? \CCrmSecurityHelper::GetCurrentUserID()
                     );
                     
-                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                        "SAVE_DEAL: createCrmActivity вернул activityId=$activityId\n", 
-                        FILE_APPEND | LOCK_EX);
-                    
                     if ($activityId) {
                         // Сохраняем ID активности
                         $calendar->saveEventActivityId($eventId, $activityId);
-                        
-                        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                            "SAVE_DEAL: Создана активность ID=$activityId для события ID=$eventId\n", 
-                            FILE_APPEND | LOCK_EX);
                     } else {
-                        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                            "SAVE_DEAL ERROR: Не удалось создать активность!\n", 
-                            FILE_APPEND | LOCK_EX);
                     }
                 }
                 
                 // Обновляем бронирование в сделке
                 if (!\CModule::IncludeModule('crm')) {
-                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                        "SAVE_DEAL: CRM модуль не подключен для обновления бронирования\n", 
-                        FILE_APPEND | LOCK_EX);
                 } else {
                 // Формируем строку бронирования
                 $responsibleId = $event['EMPLOYEE_ID'] ?? \CCrmSecurityHelper::GetCurrentUserID();
@@ -2407,28 +1982,9 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                 $durationSeconds = $endDateTime->getTimestamp() - $startDateTime->getTimestamp();
                 $serviceName = $event['TITLE'];
                 $bookingValue = "user|{$responsibleId}|{$bookingDateTime}|{$durationSeconds}|{$serviceName}";
-                
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                    "SAVE_DEAL: Вычисление бронирования:\n" .
-                    "  DATE_FROM: {$event['DATE_FROM']}\n" .
-                    "  DATE_TO: {$event['DATE_TO']}\n" .
-                    "  branchTimezone: $branchTimezone\n" .
-                    "  bookingDateTime: $bookingDateTime\n" .
-                    "  startDateTime timestamp: {$startDateTime->getTimestamp()}\n" .
-                    "  endDateTime timestamp: {$endDateTime->getTimestamp()}\n" .
-                    "  durationSeconds: $durationSeconds\n" .
-                    "  EMPLOYEE_ID: {$event['EMPLOYEE_ID']}\n" .
-                    "  responsibleId: $responsibleId\n" .
-                    "  serviceName: $serviceName\n" .
-                    "  ФИНАЛЬНАЯ СТРОКА: $bookingValue\n", 
-                    FILE_APPEND | LOCK_EX);
                     
                     // Получаем код поля бронирования из настроек модуля
                     $bookingFieldCode = \Bitrix\Main\Config\Option::get('artmax.calendar', 'deal_booking_field', 'UF_CRM_CALENDAR_BOOKING');
-                    
-                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                        "SAVE_DEAL: Обновляем бронирование в сделке - Field: $bookingFieldCode, Value: $bookingValue\n", 
-                        FILE_APPEND | LOCK_EX);
                     
                     // Обновляем сделку
                     $deal = new \CCrmDeal(false);
@@ -2438,13 +1994,7 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                     $updateResult = $deal->Update($dealId, $updateFields);
                     
                     if ($updateResult) {
-                        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                            "SAVE_DEAL: Бронирование успешно обновлено в сделке ID=$dealId\n", 
-                            FILE_APPEND | LOCK_EX);
                     } else {
-                        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                            "SAVE_DEAL ERROR: Не удалось обновить бронирование в сделке\n", 
-                            FILE_APPEND | LOCK_EX);
                     }
                 }
                 
@@ -2801,55 +2351,20 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
             $calendar = new \Artmax\Calendar\Calendar();
             $event = $calendar->getEvent($eventId);
             
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "\n=== getEventContactsAction ===\n", 
-                FILE_APPEND | LOCK_EX);
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "eventId: " . $eventId . "\n", 
-                FILE_APPEND | LOCK_EX);
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "event found: " . ($event ? 'yes' : 'no') . "\n", 
-                FILE_APPEND | LOCK_EX);
-            
             if (!$event) {
                 return ['success' => false, 'error' => 'Событие не найдено'];
             }
-            
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "event USER_ID: " . ($event['USER_ID'] ?? 'null') . "\n", 
-                FILE_APPEND | LOCK_EX);
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "event EMPLOYEE_ID: " . ($event['EMPLOYEE_ID'] ?? 'null') . "\n", 
-                FILE_APPEND | LOCK_EX);
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "current USER ID: " . $USER->GetID() . "\n", 
-                FILE_APPEND | LOCK_EX);
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "IsAdmin: " . ($USER->IsAdmin() ? 'yes' : 'no') . "\n", 
-                FILE_APPEND | LOCK_EX);
 
             $contact = null;
             if (!empty($event['CONTACT_ENTITY_ID'])) {
                 // Получаем данные контакта из CRM
                 $contact = $this->getContactFromCRM($event['CONTACT_ENTITY_ID']);
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                    "CONTACT_ENTITY_ID: " . $event['CONTACT_ENTITY_ID'] . "\n", 
-                    FILE_APPEND | LOCK_EX);
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                    "contact found: " . ($contact ? 'yes' : 'no') . "\n", 
-                    FILE_APPEND | LOCK_EX);
             } else {
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                    "CONTACT_ENTITY_ID: empty\n", 
-                    FILE_APPEND | LOCK_EX);
             }
 
             return ['success' => true, 'contact' => $contact];
 
         } catch (\Exception $e) {
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "ERROR: " . $e->getMessage() . "\n", 
-                FILE_APPEND | LOCK_EX);
             return ['success' => false, 'error' => $e->getMessage()];
         }
     }
@@ -2874,52 +2389,20 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
             $calendar = new \Artmax\Calendar\Calendar();
             $event = $calendar->getEvent($eventId);
             
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "\n=== getEventDealsAction ===\n", 
-                FILE_APPEND | LOCK_EX);
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "eventId: " . $eventId . "\n", 
-                FILE_APPEND | LOCK_EX);
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "event found: " . ($event ? 'yes' : 'no') . "\n", 
-                FILE_APPEND | LOCK_EX);
-            
             if (!$event) {
                 return ['success' => false, 'error' => 'Событие не найдено'];
             }
-            
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "event USER_ID: " . ($event['USER_ID'] ?? 'null') . "\n", 
-                FILE_APPEND | LOCK_EX);
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "event EMPLOYEE_ID: " . ($event['EMPLOYEE_ID'] ?? 'null') . "\n", 
-                FILE_APPEND | LOCK_EX);
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "current USER ID: " . $USER->GetID() . "\n", 
-                FILE_APPEND | LOCK_EX);
 
             $deal = null;
             if (!empty($event['DEAL_ENTITY_ID'])) {
                 // Получаем данные сделки из CRM
                 $deal = $this->getDealFromCRM($event['DEAL_ENTITY_ID']);
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                    "DEAL_ENTITY_ID: " . $event['DEAL_ENTITY_ID'] . "\n", 
-                    FILE_APPEND | LOCK_EX);
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                    "deal found: " . ($deal ? 'yes' : 'no') . "\n", 
-                    FILE_APPEND | LOCK_EX);
             } else {
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                    "DEAL_ENTITY_ID: empty\n", 
-                    FILE_APPEND | LOCK_EX);
             }
 
             return ['success' => true, 'deal' => $deal];
 
         } catch (\Exception $e) {
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "ERROR: " . $e->getMessage() . "\n", 
-                FILE_APPEND | LOCK_EX);
             return ['success' => false, 'error' => $e->getMessage()];
         }
     }
@@ -2980,27 +2463,8 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
             // Формат для Bitrix resourcebooking: user|ID|дата_время_начала|длительность_в_секундах|название
             $bookingValue = "user|{$responsibleId}|{$bookingDateTime}|{$durationSeconds}|{$serviceName}";
             
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "CREATE_DEAL: Вычисление бронирования:\n" .
-                "  DATE_FROM: {$event['DATE_FROM']}\n" .
-                "  DATE_TO: {$event['DATE_TO']}\n" .
-                "  branchTimezone: $branchTimezone\n" .
-                "  bookingDateTime: $bookingDateTime\n" .
-                "  startDateTime timestamp: {$startDateTime->getTimestamp()}\n" .
-                "  endDateTime timestamp: {$endDateTime->getTimestamp()}\n" .
-                "  durationSeconds: $durationSeconds\n" .
-                "  EMPLOYEE_ID: {$event['EMPLOYEE_ID']}\n" .
-                "  responsibleId: $responsibleId\n" .
-                "  serviceName: $serviceName\n" .
-                "  ФИНАЛЬНАЯ СТРОКА: $bookingValue\n", 
-                FILE_APPEND | LOCK_EX);
-            
             // Получаем код поля бронирования из настроек модуля
             $bookingFieldCode = \Bitrix\Main\Config\Option::get('artmax.calendar', 'deal_booking_field', 'UF_CRM_CALENDAR_BOOKING');
-            
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "CREATE_DEAL: Формируем бронирование - Field: $bookingFieldCode, Value: $bookingValue\n", 
-                FILE_APPEND | LOCK_EX);
             
             // Получаем enum ID филиала для установки в сделку
             $branchEnumId = null;
@@ -3108,10 +2572,6 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                 if ($activityId) {
                     // Сохраняем ID активности к событию
                     $calendar->saveEventActivityId($eventId, $activityId);
-                    
-                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                        "CREATE_DEAL: Создана активность ID=$activityId для события ID=$eventId\n", 
-                        FILE_APPEND | LOCK_EX);
                 }
                 
                 return [
@@ -3617,9 +3077,6 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                         // Дополнительно обновляем конкретную страницу филиала в настраиваемом разделе
                         \Artmax\Calendar\EventHandlers::updateBranchPageTitle($branchId, $updateData['name']);
                     } catch (\Exception $e) {
-                        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
-                            'Ошибка обновления страниц раздела: ' . $e->getMessage() . "\n", 
-                            FILE_APPEND | LOCK_EX);
                     }
                     // Синхронизируем название в CRM enum (для селекта deal-branch)
                     $this->updateBranchInDealFieldEnum($branchId, $updateData['name']);
@@ -3788,10 +3245,6 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                 try {
                     \Artmax\Calendar\EventHandlers::updateSectionPages();
                 } catch (\Exception $e) {
-                    // Логируем ошибку, но не прерываем создание филиала
-                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
-                        'Ошибка обновления страниц раздела: ' . $e->getMessage() . "\n", 
-                        FILE_APPEND | LOCK_EX);
                 }
 
                 return [
@@ -3812,23 +3265,16 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
      */
     public function getAvailableEmployeesForBranchAction($branchId)
     {
-        artmax_log("getAvailableEmployeesForBranchAction: Called with branchId = " . $branchId);
         try {
             if (!CModule::IncludeModule('artmax.calendar')) {
-                artmax_log("getAvailableEmployeesForBranchAction: Module not included");
                 return ['success' => false, 'error' => 'Модуль календаря не установлен'];
             }
 
-            artmax_log("getAvailableEmployeesForBranchAction: Creating Calendar object");
             $calendar = new \Artmax\Calendar\Calendar();
-            artmax_log("getAvailableEmployeesForBranchAction: Calling getAvailableEmployeesForBranch");
             $employees = $calendar->getAvailableEmployeesForBranch($branchId);
-            artmax_log("getAvailableEmployeesForBranchAction: Got " . count($employees) . " employees");
 
             return ['success' => true, 'employees' => $employees];
         } catch (\Exception $e) {
-            artmax_log("getAvailableEmployeesForBranchAction: Exception: " . $e->getMessage());
-            artmax_log("getAvailableEmployeesForBranchAction: Stack trace: " . $e->getTraceAsString());
             return ['success' => false, 'error' => $e->getMessage()];
         }
     }
@@ -3913,26 +3359,6 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
 
             // При переносе с обменом местами не проверяем конфликты заранее - 
             // метод moveEvent сам обрабатывает обмен местами между событиями
-
-            // Логируем параметры для отладки
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "MOVE_EVENT_ACTION: Parameters:\n", 
-                FILE_APPEND | LOCK_EX);
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "  - eventId: " . $eventId . "\n", 
-                FILE_APPEND | LOCK_EX);
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "  - dateFrom: " . $dateFrom . "\n", 
-                FILE_APPEND | LOCK_EX);
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "  - dateTo: " . $dateTo . "\n", 
-                FILE_APPEND | LOCK_EX);
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "  - employeeId: " . ($employeeId ?? (int)$event['EMPLOYEE_ID']) . "\n", 
-                FILE_APPEND | LOCK_EX);
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "  - branchId: " . ($branchId ?? (int)$event['BRANCH_ID']) . "\n", 
-                FILE_APPEND | LOCK_EX);
             
             // Используем специальный метод moveEvent для переноса с обменом местами
             $result = $calendar->moveEvent(
@@ -3943,10 +3369,6 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                 $branchId ?? (int)$event['BRANCH_ID'],
                 $USER->GetID()
             );
-            
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "MOVE_EVENT_ACTION: moveEvent result: " . print_r($result, true) . "\n", 
-                FILE_APPEND | LOCK_EX);
 
             // Проверяем новый формат ответа от moveEvent
             if (is_array($result) && !empty($result['success'])) {
@@ -3968,14 +3390,8 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
      */
     public function getContactFromCRM($contactId)
     {
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-            "getContactFromCRM called with contactId: " . $contactId . "\n", 
-            FILE_APPEND | LOCK_EX);
             
         if (!CModule::IncludeModule('crm')) {
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "CRM module not included\n", 
-                FILE_APPEND | LOCK_EX);
             return null;
         }
 
@@ -3993,10 +3409,6 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
             
             $dbContact = \CCrmContact::GetListEx([], $arFilter, false, false, $arSelect);
             $contact = $dbContact ? $dbContact->Fetch() : null;
-            
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "CCrmContact::GetListEx result: " . ($contact ? 'found' : 'null') . "\n", 
-                FILE_APPEND | LOCK_EX);
             if ($contact) {
                 // Получаем телефоны из мультиполей
                 $phones = [];
@@ -4049,17 +3461,8 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                 ];
             }
         } catch (\Exception $e) {
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "Exception in getContactFromCRM: " . $e->getMessage() . "\n", 
-                FILE_APPEND | LOCK_EX);
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
-                'Ошибка получения контакта из CRM: ' . $e->getMessage() . "\n", 
-                FILE_APPEND | LOCK_EX);
         }
 
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-            "getContactFromCRM returning null\n", 
-            FILE_APPEND | LOCK_EX);
         return null;
     }
     
@@ -4068,14 +3471,8 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
      */
     private function getDealFromCRM($dealId)
     {
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-            "getDealFromCRM called with dealId: " . $dealId . "\n", 
-            FILE_APPEND | LOCK_EX);
             
         if (!CModule::IncludeModule('crm')) {
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "CRM module not included for deal\n", 
-                FILE_APPEND | LOCK_EX);
             return null;
         }
 
@@ -4088,10 +3485,7 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
             
             $dbDeal = \CCrmDeal::GetListEx([], $arFilter, false, false, ['ID', 'TITLE', 'OPPORTUNITY', 'CURRENCY_ID', 'STAGE_ID', 'COMPANY_TITLE']);
             $deal = $dbDeal ? $dbDeal->Fetch() : null;
-            
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "CCrmDeal::GetListEx result: " . ($deal ? 'found' : 'null') . "\n", 
-                FILE_APPEND | LOCK_EX);
+
             if ($deal) {
                 return [
                     'id' => $deal['ID'],
@@ -4103,17 +3497,8 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                 ];
             }
         } catch (\Exception $e) {
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "Exception in getDealFromCRM: " . $e->getMessage() . "\n", 
-                FILE_APPEND | LOCK_EX);
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
-                'Ошибка получения сделки из CRM: ' . $e->getMessage() . "\n", 
-                FILE_APPEND | LOCK_EX);
         }
 
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-            "getDealFromCRM returning null\n", 
-            FILE_APPEND | LOCK_EX);
         return null;
     }
     
@@ -4127,9 +3512,6 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
         try {
             // Подключаем модуль REST API
             if (!CModule::IncludeModule('rest')) {
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
-                    'Модуль REST API не установлен' . "\n", 
-                    FILE_APPEND | LOCK_EX);
                 return $contacts;
             }
             
@@ -4240,9 +3622,6 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
             }
             
         } catch (\Exception $e) {
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
-                'Ошибка поиска контактов через REST API: ' . $e->getMessage() . "\n", 
-                FILE_APPEND | LOCK_EX);
         }
         
         return $contacts;
@@ -4269,9 +3648,6 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                 }
             }
         } catch (\Exception $e) {
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log', 
-                'Ошибка получения UF полей: ' . $e->getMessage() . "\n", 
-                FILE_APPEND | LOCK_EX);
         }
         
         return $ufFields;

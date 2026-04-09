@@ -180,8 +180,11 @@ $startDate->modify('-' . ($firstDayOfWeek - 1) . ' days');
 
 // Количество недель для отображения (максимум 6)
 $totalDays = 42; // 6 недель * 7 дней
+
+$calendarTopMonthName = translateMonthToRussian($firstDay->format('F'));
 ?>
 
+<h2 class="calendar-top-title"><?= htmlspecialchars($calendarTopMonthName) ?>, <span class="calendar-top-title-gray"><?= htmlspecialchars((string)(int)$year) ?></span></h2>
 <div class="artmax-calendar" data-branch-id="<?= $arResult['BRANCH']['ID'] ?>">
   
     <!-- Основной календарь -->
@@ -264,9 +267,13 @@ $totalDays = 42; // 6 недель * 7 дней
 
                         // Отображаем события для этого дня
                         if (isset($arResult['EVENTS_BY_DATE'][$dateKey])) {
+                            $dayEvents = $arResult['EVENTS_BY_DATE'][$dateKey];
+                            $dayEventCount = count($dayEvents);
                             // Отладочная информация
-                            echo '<!-- STATIC LOAD: ' . count($arResult['EVENTS_BY_DATE'][$dateKey]) . ' events for ' . $dateKey . ' -->';
-                            foreach ($arResult['EVENTS_BY_DATE'][$dateKey] as $event) {
+                            echo '<!-- STATIC LOAD: ' . $dayEventCount . ' events for ' . $dateKey . ' -->';
+                            $eventIndex = 0;
+                            foreach ($dayEvents as $event) {
+                                $collapsedClass = ($eventIndex >= 6) ? ' calendar-event--collapsed' : '';
                                 $eventColor = $event['EVENT_COLOR'] ?? '#3498db';
                                 $style = 'border-left: 4px solid ' . $eventColor . '; background-color: ' . $eventColor . '65;';
                                 
@@ -285,7 +292,7 @@ $totalDays = 42; // 6 недель * 7 дней
                                 // Добавляем класс для перенесенных записей
                                 $timeChangedClass = (isset($event['TIME_IS_CHANGED']) && $event['TIME_IS_CHANGED'] == 1) ? ' time-changed' : '';
                                 
-                                echo '<div class="calendar-event ' . $statusClass . $timeChangedClass . '" data-event-id="' . $event['ID'] . '" style="' . $style . '" onclick="event.stopPropagation();">';
+                                echo '<div class="calendar-event ' . $statusClass . $timeChangedClass . $collapsedClass . '" data-event-id="' . $event['ID'] . '" style="' . $style . '" onclick="event.stopPropagation();">';
                                 echo '<div class="event-content">';
                                 
                                 // Формируем заголовок: Название - Имя - Телефон
@@ -333,6 +340,10 @@ $totalDays = 42; // 6 недель * 7 дней
                                 echo '</div>';
                                 echo '<div class="event-arrow" onclick="event.stopPropagation(); showEventSidePanel(' . $event['ID'] . ');">▼</div>';
                                 echo '</div>';
+                                $eventIndex++;
+                            }
+                            if ($dayEventCount > 6) {
+                                echo '<button type="button" class="calendar-day-show-all" data-date="' . htmlspecialchars($dateKey) . '" onclick="event.stopPropagation(); openCalendarDayEventsPopup(this);">Показать все ' . (int)$dayEventCount . ' записей</button>';
                             }
                         }
 
@@ -344,6 +355,18 @@ $totalDays = 42; // 6 недель * 7 дней
                     echo '</div>';
                 }
                 ?>
+            </div>
+        </div>
+
+        <!-- Всплывающее окно: все записи дня -->
+        <div id="calendarDayEventsPopup" class="calendar-day-events-popup" style="display: none;" aria-hidden="true">
+            <div class="calendar-day-events-popup__backdrop" onclick="closeCalendarDayEventsPopup()"></div>
+            <div class="calendar-day-events-popup__panel" role="dialog" aria-labelledby="calendarDayEventsPopupTitle">
+                <div class="calendar-day-events-popup__header">
+                    <span class="calendar-day-events-popup__title" id="calendarDayEventsPopupTitle"></span>
+                    <button type="button" class="calendar-day-events-popup__close" onclick="closeCalendarDayEventsPopup()" aria-label="Закрыть">×</button>
+                </div>
+                <div class="calendar-day-events-popup__body" id="calendarDayEventsPopupBody"></div>
             </div>
         </div>
     </div>

@@ -17,7 +17,6 @@ class Permissions
             $this->connection = Application::getConnection();
             $this->sqlHelper = $this->connection->getSqlHelper();
         } catch (\Exception $e) {
-            artmax_log('Permissions constructor error: ' . $e->getMessage());
             throw $e;
         }
     }
@@ -76,7 +75,6 @@ class Permissions
 
             return $groups;
         } catch (\Exception $e) {
-            artmax_log('Ошибка получения групп календаря: ' . $e->getMessage());
             return [];
         }
     }
@@ -91,7 +89,6 @@ class Permissions
         
         // Проверяем, что объект USER инициализирован
         if (!$USER || !is_object($USER)) {
-            artmax_log('createGroup: USER object not initialized');
             return [
                 'success' => false,
                 'error' => 'Объект пользователя не инициализирован'
@@ -99,11 +96,9 @@ class Permissions
         }
         
         $userId = $USER->GetID();
-        artmax_log('createGroup: Starting creation of group "' . $name . '" by user ' . $userId);
 
         // Проверяем права на создание групп
         if (!$USER->IsAdmin() && !$USER->CanDoOperation('edit_groups')) {
-            artmax_log('createGroup: User does not have permission to create groups');
             return [
                     'success' => false,
                     'error' => 'У вас нет прав на создание групп пользователей'
@@ -122,11 +117,9 @@ class Permissions
         try {
             $existingCalendarGroup = $this->connection->query($sqlCheckCalendar)->fetch();
         } catch (\Exception $e) {
-            artmax_log('createGroup: Error checking calendar groups table: ' . $e->getMessage());
         }
         
         if ($existingCalendarGroup) {
-            artmax_log('createGroup: Group already exists in calendar groups table with ID ' . $existingCalendarGroup['GROUP_ID']);
             return [
                 'success' => false,
                 'error' => 'Группа с таким названием уже существует в календаре'
@@ -147,17 +140,13 @@ class Permissions
             // CGroup::GetList может использовать LIKE поиск, поэтому нужна дополнительная проверка
             $foundGroupName = trim($existingBitrixGroup['NAME'] ?? '');
             $requestedName = trim($name);
-            
-            artmax_log('createGroup: Found Bitrix group with ID ' . $existingBitrixGroup['ID'] . ', name: "' . $foundGroupName . '", requested: "' . $requestedName . '"');
-            
+
             if ($foundGroupName === $requestedName) {
-                artmax_log('createGroup: Group with exact name "' . $name . '" already exists in Bitrix with ID ' . $existingBitrixGroup['ID']);
                 return [
                     'success' => false,
                     'error' => 'Группа с таким названием уже существует в Bitrix. Пожалуйста, выберите другое название для новой группы календаря.'
                 ];
             } else {
-                artmax_log('createGroup: Found group has different name ("' . $foundGroupName . '" != "' . $requestedName . '"), continuing with new group creation');
                 // Имя не совпадает точно - это не та группа, продолжаем создание
             }
         }
@@ -177,8 +166,6 @@ class Permissions
             $stringId = $originalStringId . '_' . $counter;
         }
 
-        artmax_log('createGroup: Generated STRING_ID: ' . $stringId);
-
         // Создаем группу с обязательными полями
         $fields = [
             'ACTIVE' => 'Y',
@@ -188,33 +175,24 @@ class Permissions
             'STRING_ID' => $stringId
         ];
 
-        artmax_log('createGroup: Calling CGroup::Add with fields: ' . json_encode($fields, JSON_UNESCAPED_UNICODE));
-
         try {
             $groupId = $groupObj->Add($fields);
         } catch (\Exception $e) {
-            artmax_log('createGroup: CGroup::Add exception: ' . $e->getMessage());
             return [
                 'success' => false,
                 'error' => 'Ошибка при вызове CGroup::Add: ' . $e->getMessage()
             ];
         }
 
-        artmax_log('createGroup: CGroup::Add returned: ' . var_export($groupId, true));
-
         if (!$groupId) {
             $lastError = $groupObj->LAST_ERROR ?: 'Неизвестная ошибка';
-            artmax_log('createGroup: CGroup::Add failed with error: ' . $lastError);
 
             // Если не можем создать группу в Bitrix, создадим виртуальную группу
             // Используем отрицательный ID для виртуальных групп
             $virtualGroupId = time() * -1; // Отрицательный timestamp
-            artmax_log('createGroup: Creating virtual group with ID: ' . $virtualGroupId);
 
             $groupId = $virtualGroupId;
         }
-
-        artmax_log('createGroup: Group created successfully with ID: ' . $groupId);
         
         // Сохраняем информацию о группе в таблицу
         try {
@@ -230,14 +208,12 @@ class Permissions
                 'groupName' => $name
             ];
         } catch (\Exception $e) {
-            artmax_log('createGroup: Database error: ' . $e->getMessage());
             return [
                 'success' => false,
                 'error' => 'Ошибка сохранения информации о группе: ' . $e->getMessage()
             ];
         }
         } catch (\Exception $e) {
-            artmax_log('createGroup: Fatal error: ' . $e->getMessage() . "\n" . $e->getTraceAsString());
             return [
                 'success' => false,
                 'error' => 'Критическая ошибка при создании группы: ' . $e->getMessage()
@@ -534,7 +510,6 @@ class Permissions
             $rsGroups = \CGroup::GetList($by = 'ID', $order = 'ASC');
             
             if (!$rsGroups) {
-                artmax_log('Ошибка: CGroup::GetList вернул false');
                 return [];
             }
             
@@ -566,7 +541,6 @@ class Permissions
             
             return $groups;
         } catch (\Exception $e) {
-            artmax_log('Ошибка получения групп Bitrix: ' . $e->getMessage());
             return [];
         }
     }

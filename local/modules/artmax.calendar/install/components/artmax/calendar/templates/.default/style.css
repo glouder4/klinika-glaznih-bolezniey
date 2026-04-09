@@ -366,6 +366,20 @@
 
 /* Artmax Calendar Module - Calendar Grid Styles */
 
+.calendar-top-title {
+    margin: 0 0 14px 0;
+    padding: 0 4px;
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: #2c3e50;
+    line-height: 1.3;
+}
+
+.calendar-top-title-gray {
+    color: #95a5a6;
+    font-weight: 500;
+}
+
 .artmax-calendar {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     line-height: 1.6;
@@ -793,6 +807,112 @@ input:checked + .toggle-slider:before {
     font-weight: 600;
     color: #2c3e50;
     margin-bottom: 5px;
+}
+
+/* Скрытые в ячейке записи (7+) — полный список в попапе */
+.calendar-day > .calendar-event--collapsed {
+    display: none !important;
+}
+
+.calendar-day-show-all {
+    display: block;
+    width: 100%;
+    margin-top: 4px;
+    padding: 6px 8px;
+    border: none;
+    background: transparent;
+    color: var(--ui-color-palette-gray-70, #828b95);
+    font-size: var(--ui-font-size-3xs, 11px);
+    font-weight: var(--ui-font-weight-regular, 400);
+    line-height: 12px;
+    text-align: center;
+    cursor: pointer;
+    border-radius: 4px;
+    flex-shrink: 0;
+}
+
+.calendar-day-show-all:hover {
+    background: rgba(33, 150, 243, 0.08);
+    color: #1976d2;
+}
+
+/* Попап «все записи дня» */
+.calendar-day-events-popup {
+    position: fixed;
+    inset: 0;
+    z-index: 10050;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    box-sizing: border-box;
+}
+
+.calendar-day-events-popup__backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.35);
+}
+
+.calendar-day-events-popup__panel {
+    position: relative;
+    width: min(420px, 100%);
+    max-height: min(70vh, 560px);
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.calendar-day-events-popup__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px 16px;
+    border-bottom: 1px solid #e9ecef;
+    flex-shrink: 0;
+}
+
+.calendar-day-events-popup__title {
+    font-size: 15px;
+    font-weight: 600;
+    color: #6c757d;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
+.calendar-day-events-popup__close {
+    border: none;
+    background: none;
+    font-size: 26px;
+    line-height: 1;
+    color: #adb5bd;
+    cursor: pointer;
+    padding: 0 4px;
+    border-radius: 4px;
+}
+
+.calendar-day-events-popup__close:hover {
+    color: #495057;
+    background: #f1f3f5;
+}
+
+.calendar-day-events-popup__body {
+    overflow-y: auto;
+    padding: 10px 12px 14px;
+    flex: 1;
+    min-height: 0;
+}
+
+.calendar-day-events-popup__body .calendar-event {
+    margin-bottom: 8px;
+}
+
+.calendar-day-events-popup__body .calendar-event:last-child {
+    margin-bottom: 0;
 }
 
 .month-label {
@@ -3070,13 +3190,15 @@ input:checked + .toggle-slider:before {
 /* Боковое окно */
 .event-side-panel {
     position: fixed;
-    width: 400px;
-    height: 80vh;
-    max-height: 80vh;
+    --side-panel-scale: 1.2; /* Масштаб панели (1 = 100%, 1.2 = +20%) */
+    width: calc(400px * var(--side-panel-scale));
+    height: calc(80vh * var(--side-panel-scale));
+    max-height: calc(80vh * var(--side-panel-scale));
     background: white;
     box-shadow: 0 8px 32px rgba(0,0,0,0.2);
     border-radius: 16px;
-    z-index: 1001;
+    /* Выше попапа «все записи дня» (10050), чтобы панель была над подложкой */
+    z-index: 10060;
     opacity: 0;
     transform: scale(0.8) translateY(-20px);
     transition: all 0.3s ease;
@@ -3088,6 +3210,15 @@ input:checked + .toggle-slider:before {
     opacity: 1;
     transform: scale(1) translateY(0);
     pointer-events: auto;
+}
+
+/* Внутренняя обёртка: scale вместо zoom — позиция left/top остаётся точной */
+.event-side-panel__scaled {
+    width: 400px;
+    height: 80vh;
+    transform: scale(var(--side-panel-scale));
+    transform-origin: top left;
+    position: relative;
 }
 
 .side-panel-content {
@@ -4075,6 +4206,9 @@ input:checked + .toggle-slider:before {
 /* Для ноутбуков (1200px - 1440px) */
 @media (max-width: 1440px) and (min-width: 1201px) {
     .event-side-panel {
+        width: calc(380px * var(--side-panel-scale));
+    }
+    .event-side-panel__scaled {
         width: 380px;
     }
     
@@ -4094,6 +4228,9 @@ input:checked + .toggle-slider:before {
 /* Для планшетов (768px - 1200px) */
 @media (max-width: 1200px) and (min-width: 769px) {
     .event-side-panel {
+        width: calc(350px * var(--side-panel-scale));
+    }
+    .event-side-panel__scaled {
         width: 350px;
     }
     
@@ -4131,9 +4268,15 @@ input:checked + .toggle-slider:before {
     .event-side-panel {
         width: 100%;
         height: 100vh;
+        max-height: 100vh;
         top: 0 !important;
         left: 0 !important;
         border-radius: 0;
+    }
+    .event-side-panel__scaled {
+        width: 100%;
+        height: 100%;
+        transform: none;
     }
     
     .action-card {

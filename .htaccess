@@ -34,6 +34,8 @@ ErrorDocument 404 /404.php
 </IfModule>
 
 
+
+
 # ArtMax Calendar Rules
 RewriteEngine On
 

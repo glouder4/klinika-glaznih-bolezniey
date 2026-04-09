@@ -5,23 +5,6 @@ use Artmax\Calendar\ModuleSettings;
 use Artmax\Calendar\TimezoneManager;
 use Bitrix\Main\Application;
 
-// Функция для логирования
-function artmax_log($message) {
-    try {
-        $docRoot = $_SERVER['DOCUMENT_ROOT'] ?? dirname(__DIR__, 4);
-        $logFile = $docRoot . '/debug_calendar.log';
-        $timestamp = date('Y-m-d H:i:s');
-        $result = @file_put_contents($logFile, "[$timestamp] $message\n", FILE_APPEND | LOCK_EX);
-        
-        // Если запись не удалась, используем error_log
-        if ($result === false) {
-            error_log('ArtMax Calendar: ' . $message);
-        }
-    } catch (\Exception $e) {
-        // Используем error_log как запасной вариант
-        error_log('ArtMax Calendar: ' . $message);
-    }
-}
 
 // Логируем информацию о запросе ДО проверки AJAX
 try {
@@ -33,7 +16,6 @@ try {
         'HTTP_X_REQUESTED_WITH' => $_SERVER['HTTP_X_REQUESTED_WITH'] ?? 'not set',
         'REQUEST_URI' => $_SERVER['REQUEST_URI'] ?? 'unknown'
     ];
-    artmax_log('Request info: ' . json_encode($requestInfo, JSON_UNESCAPED_UNICODE));
 } catch (\Exception $e) {
     error_log('ArtMax Calendar: Error logging request info: ' . $e->getMessage());
 }
@@ -48,7 +30,6 @@ $isAjaxRequest = (
 
 // Логируем результат проверки AJAX
 try {
-    artmax_log('AJAX check result: ' . ($isAjaxRequest ? 'YES' : 'NO'));
 } catch (\Exception $e) {
     error_log('ArtMax Calendar: AJAX check: ' . ($isAjaxRequest ? 'YES' : 'NO'));
 }
@@ -61,44 +42,35 @@ if (!$isAjaxRequest) {
 
     // Подключаем модуль после прологов
     if (!CModule::IncludeModule('artmax.calendar')) {
-        artmax_log('Failed to include artmax.calendar module');
         ShowError('Модуль artmax.calendar не установлен');
         require($_SERVER['DOCUMENT_ROOT'].'/bitrix/modules/main/include/epilog_admin.php');
         die();
     }
-    artmax_log('artmax.calendar module included successfully');
 }
 
     // Проверка прав доступа (только для обычных запросов)
     if (!$isAjaxRequest) {
         global $USER;
         try {
-            artmax_log('Creating Permissions object...');
 
             // Явно подключаем файл класса
             $permissionsClassFile = $_SERVER['DOCUMENT_ROOT'] . '/local/modules/artmax.calendar/lib/Permissions.php';
             if (!file_exists($permissionsClassFile)) {
-                artmax_log('Permissions class file not found: ' . $permissionsClassFile);
                 throw new \Exception('Permissions class file not found');
             }
-            artmax_log('Permissions class file exists: ' . $permissionsClassFile);
             require_once($permissionsClassFile);
 
             if (!class_exists('Artmax\\Calendar\\Permissions')) {
-                artmax_log('Permissions class not found after require_once');
                 throw new \Exception('Permissions class not found');
             }
-            artmax_log('Permissions class found');
 
             $permissionsObj = new \Artmax\Calendar\Permissions();
-            artmax_log('Permissions object created successfully');
         if (!$permissionsObj->hasPermission($USER->GetID(), 'calendar.manage_groups') && !$USER->IsAdmin()) {
             ShowError('У вас нет прав для управления настройками модуля');
             require($_SERVER['DOCUMENT_ROOT'].'/bitrix/modules/main/include/epilog_admin.php');
             die();
         }
     } catch (\Exception $e) {
-        artmax_log('Error creating Permissions object: ' . $e->getMessage() . "\nStack trace: " . $e->getTraceAsString());
         ShowError('Ошибка создания объекта Permissions: ' . $e->getMessage());
         require($_SERVER['DOCUMENT_ROOT'].'/bitrix/modules/main/include/epilog_admin.php');
         die();
@@ -107,7 +79,6 @@ if (!$isAjaxRequest) {
     try {
         $moduleSettings = new ModuleSettings();
     } catch (\Exception $e) {
-        artmax_log('Error creating ModuleSettings: ' . $e->getMessage());
         ShowError('Ошибка создания объекта ModuleSettings: ' . $e->getMessage());
         require($_SERVER['DOCUMENT_ROOT'].'/bitrix/modules/main/include/epilog_admin.php');
         die();
@@ -118,36 +89,26 @@ if (!$isAjaxRequest) {
 
 // Тестовое логирование (только для обычных запросов)
 if (!$isAjaxRequest) {
-    artmax_log('ArtMax Calendar Settings: Page loaded at ' . date('Y-m-d H:i:s'));
 
     try {
-        artmax_log('Creating ModuleSettings...');
         $moduleSettings = new ModuleSettings();
-        artmax_log('ModuleSettings created successfully');
     } catch (\Exception $e) {
-        artmax_log('Error creating ModuleSettings: ' . $e->getMessage() . "\nStack trace: " . $e->getTraceAsString());
         ShowError('Ошибка создания ModuleSettings: ' . $e->getMessage());
         require($_SERVER['DOCUMENT_ROOT'].'/bitrix/modules/main/include/epilog_admin.php');
         die();
     }
 
     try {
-        artmax_log('Creating TimezoneManager...');
         $timezoneManager = new TimezoneManager();
-        artmax_log('TimezoneManager created successfully');
     } catch (\Exception $e) {
-        artmax_log('Error creating TimezoneManager: ' . $e->getMessage() . "\nStack trace: " . $e->getTraceAsString());
         ShowError('Ошибка создания TimezoneManager: ' . $e->getMessage());
         require($_SERVER['DOCUMENT_ROOT'].'/bitrix/modules/main/include/epilog_admin.php');
         die();
     }
 
     try {
-        artmax_log('Getting database connection...');
         $connection = Application::getConnection();
-        artmax_log('Database connection established successfully');
     } catch (\Exception $e) {
-        artmax_log('Error getting database connection: ' . $e->getMessage() . "\nStack trace: " . $e->getTraceAsString());
         ShowError('Ошибка подключения к базе данных: ' . $e->getMessage());
         require($_SERVER['DOCUMENT_ROOT'].'/bitrix/modules/main/include/epilog_admin.php');
         die();
@@ -162,14 +123,7 @@ if ($isAjaxRequest) {
         if ($error && in_array($error['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR])) {
             $errorMsg = 'Fatal error: ' . $error['message'] . ' in ' . $error['file'] . ' on line ' . $error['line'];
             error_log('ArtMax Calendar AJAX FATAL: ' . $errorMsg);
-            
-            // Пытаемся записать в наш лог
-            try {
-                $logFile = $_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log';
-                file_put_contents($logFile, '[' . date('Y-m-d H:i:s') . '] AJAX FATAL ERROR: ' . $errorMsg . "\n", FILE_APPEND | LOCK_EX);
-            } catch (\Exception $e) {
-                // Игнорируем ошибки логирования
-            }
+
             
             // Выводим JSON ответ об ошибке
             if (!headers_sent()) {
@@ -180,8 +134,6 @@ if ($isAjaxRequest) {
     });
     
     try {
-        artmax_log('AJAX REQUEST DETECTED: ' . $_SERVER['REQUEST_METHOD'] . ' ' . $_SERVER['REQUEST_URI']);
-        artmax_log('POST data: ' . json_encode($_POST, JSON_UNESCAPED_UNICODE));
     } catch (\Exception $e) {
         error_log('ArtMax Calendar AJAX: REQUEST DETECTED');
     }
@@ -220,7 +172,6 @@ if ($isAjaxRequest) {
     }
 
     if (!CModule::IncludeModule('artmax.calendar')) {
-        artmax_log('AJAX ERROR: Module not loaded');
         echo json_encode(['success' => false, 'error' => 'Модуль artmax.calendar не установлен'], JSON_UNESCAPED_UNICODE);
         die();
     }
@@ -228,43 +179,24 @@ if ($isAjaxRequest) {
     // Загружаем необходимые модули Bitrix
     CModule::IncludeModule('main');
     
-    artmax_log('AJAX: Module loaded successfully');
-    
     // Инициализируем глобальные переменные Bitrix
     global $USER, $APPLICATION;
     
     // Инициализируем объекты для работы с настройками и правами
     try {
-        artmax_log('AJAX: Starting to initialize ModuleSettings...');
         $moduleSettings = new \Artmax\Calendar\ModuleSettings();
-        artmax_log('AJAX: ModuleSettings initialized successfully');
-        
-        artmax_log('AJAX: Starting to initialize Permissions...');
+
         $permissionsObj = new \Artmax\Calendar\Permissions();
-        artmax_log('AJAX: Permissions initialized successfully');
-        
-        artmax_log('AJAX: Starting to initialize TimezoneManager...');
         $timezoneManager = new \Artmax\Calendar\TimezoneManager();
-        artmax_log('AJAX: TimezoneManager initialized successfully');
-        
-        artmax_log('AJAX: All objects initialized successfully');
-        artmax_log('AJAX: User ID: ' . (isset($USER) && is_object($USER) ? $USER->GetID() : 'not initialized'));
     } catch (\Exception $e) {
-        artmax_log('AJAX ERROR: Failed to initialize objects: ' . $e->getMessage());
-        artmax_log('AJAX ERROR: Error in file: ' . $e->getFile() . ' at line: ' . $e->getLine());
-        artmax_log('AJAX ERROR: Stack trace: ' . $e->getTraceAsString());
         echo json_encode(['success' => false, 'error' => 'Ошибка инициализации: ' . $e->getMessage()], JSON_UNESCAPED_UNICODE);
         die();
     } catch (\Error $e) {
-        artmax_log('AJAX FATAL ERROR: Fatal error during initialization: ' . $e->getMessage());
-        artmax_log('AJAX FATAL ERROR: Error in file: ' . $e->getFile() . ' at line: ' . $e->getLine());
-        artmax_log('AJAX FATAL ERROR: Stack trace: ' . $e->getTraceAsString());
         echo json_encode(['success' => false, 'error' => 'Критическая ошибка инициализации: ' . $e->getMessage()], JSON_UNESCAPED_UNICODE);
         die();
     }
     
     $action = $_POST['ajax_action'] ?? $_GET['ajax_action'] ?? '';
-    artmax_log('AJAX ACTION: ' . $action);
     $response = ['success' => false, 'error' => ''];
 
     try {
@@ -294,28 +226,20 @@ if ($isAjaxRequest) {
             
         // Обработка действий для управления группами (перенесено из artmax_calendar_permissions.php)
         case 'create_group':
-            artmax_log('AJAX create_group: Started processing');
             // Проверяем права доступа
             global $USER;
-            $hasPermission = $permissionsObj->hasPermission($USER->GetID(), 'calendar.manage_groups') || $USER->IsAdmin();
-            artmax_log('AJAX create_group: User permission check: ' . ($hasPermission ? 'YES' : 'NO'));
             if (!$hasPermission) {
-                artmax_log('AJAX create_group: Access denied');
                 $response['error'] = 'У вас нет прав для создания групп';
                 break;
             }
 
             $name = trim($_POST['name'] ?? '');
             $description = trim($_POST['description'] ?? '');
-            artmax_log('AJAX create_group: Name="' . $name . '", Description="' . $description . '"');
-
-            artmax_log('AJAX create_group: Attempting to create group "' . $name . '"');
 
             if (empty($name)) {
                 $response['error'] = 'Название группы обязательно';
             } else {
                 $result = $permissionsObj->createGroup($name, $description);
-                artmax_log('AJAX create_group: Result: ' . json_encode($result, JSON_UNESCAPED_UNICODE));
                 $response = $result;
             }
             break;
@@ -333,7 +257,6 @@ if ($isAjaxRequest) {
             // Возвращает HTML со списком групп для обновления вкладки
             try {
                 $calendarGroups = $permissionsObj->getCalendarGroups();
-                artmax_log('get_groups_list: Found ' . count($calendarGroups) . ' calendar groups');
                 $allPermissions = $permissionsObj->getAllPermissions();
 
                 // Генерируем HTML
@@ -343,7 +266,6 @@ if ($isAjaxRequest) {
                 <?php else: ?>
                     <?php
                     foreach ($calendarGroups as $group):
-                        artmax_log('get_groups_list: Processing group ' . $group['GROUP_ID'] . ': ' . $group['GROUP_NAME']);
                         $group['LINKED_GROUPS'] = $permissionsObj->getLinkedBitrixGroups($group['GROUP_ID']);
                         $groupPermissions = $permissionsObj->getGroupPermissions($group['GROUP_ID']);
                         $groupUsers = $permissionsObj->getGroupUsers($group['GROUP_ID']);
@@ -397,13 +319,11 @@ if ($isAjaxRequest) {
                 <?php endif;
 
                 $html = ob_get_clean();
-                artmax_log('get_groups_list: Generated HTML length: ' . strlen($html));
                 $response = [
                     'success' => true,
                     'html' => $html
                 ];
             } catch (\Exception $e) {
-                artmax_log('get_groups_list error: ' . $e->getMessage());
                 $response['error'] = 'Ошибка получения списка групп: ' . $e->getMessage();
             }
             break;
@@ -581,7 +501,6 @@ if ($isAjaxRequest) {
                         $branchesList[] = $row;
                     }
                 } catch (\Exception $e) {
-                    artmax_log('Error getting branches for AJAX: ' . $e->getMessage());
                     $branchesList = [];
                 }
 
@@ -638,15 +557,11 @@ if ($isAjaxRequest) {
             $response['error'] = 'Неизвестное действие';
         }
     } catch (\Exception $e) {
-        artmax_log('AJAX ERROR: Unhandled exception in action "' . $action . '": ' . $e->getMessage());
-        artmax_log('AJAX ERROR: Stack trace: ' . $e->getTraceAsString());
         $response = [
             'success' => false,
             'error' => 'Ошибка при выполнении действия: ' . $e->getMessage()
         ];
     } catch (\Error $e) {
-        artmax_log('AJAX FATAL ERROR: Fatal error in action "' . $action . '": ' . $e->getMessage());
-        artmax_log('AJAX FATAL ERROR: Stack trace: ' . $e->getTraceAsString());
         $response = [
             'success' => false,
             'error' => 'Критическая ошибка при выполнении действия: ' . $e->getMessage()
@@ -680,21 +595,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $groupId = (int)$_POST['branch_employees_group_id'];
             $oldGroupId = $moduleSettings->getBranchEmployeesGroupId();
 
-            artmax_log("Saving branch_employees_group_id: oldGroupId = " . ($oldGroupId ?? 'null') . ", newGroupId = " . $groupId);
-
             if ($groupId > 0) {
                 $moduleSettings->setBranchEmployeesGroupId($groupId);
                 $successMessage = 'Настройки успешно сохранены.';
                 
                 // Проверяем, что настройка сохранилась
                 $savedGroupId = $moduleSettings->getBranchEmployeesGroupId();
-                artmax_log("branch_employees_group_id saved: savedGroupId = " . ($savedGroupId ?? 'null'));
             } else {
                 // Если выбрано "Не использовать группу", удаляем настройку
                 // Привязки сотрудников сохраняются для возможного возврата к групповому режиму
                 $moduleSettings->delete('branch_employees_group_id');
                 $successMessage = 'Настройки успешно сохранены. Режим переключен на индивидуальную настройку.';
-                artmax_log("branch_employees_group_id deleted");
             }
         }
     }
@@ -717,14 +628,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 try {
     $branchEmployeesGroupId = $moduleSettings->getBranchEmployeesGroupId();
 } catch (\Exception $e) {
-    artmax_log('Error getting branch employees group ID: ' . $e->getMessage());
     $branchEmployeesGroupId = null;
 }
 
 try {
     $allBitrixGroups = $permissionsObj->getAllBitrixGroups();
 } catch (\Exception $e) {
-    artmax_log('Error getting Bitrix groups: ' . $e->getMessage());
     $allBitrixGroups = [];
 }
 

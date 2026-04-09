@@ -10,16 +10,6 @@ require($_SERVER['DOCUMENT_ROOT'].'/bitrix/modules/main/include/prolog_before.ph
 // Подключаем класс компонента
 require_once($_SERVER['DOCUMENT_ROOT'].'/local/components/artmax/calendar/class.php');
 
-// Определяем функцию artmax_log, если она не определена
-if (!function_exists('artmax_log')) {
-    function artmax_log($message) {
-        $logFile = $_SERVER['DOCUMENT_ROOT'] . '/debug_calendar.log';
-        $timestamp = date('Y-m-d H:i:s');
-        $logMessage = "[{$timestamp}] {$message}\n";
-        @file_put_contents($logFile, $logMessage, FILE_APPEND | LOCK_EX);
-    }
-}
-
 /**
  * Конвертирует дату из российского формата в стандартный для SQL
  */
@@ -102,30 +92,11 @@ if (!CModule::IncludeModule('artmax.calendar')) {
 // Получаем действие из POST или GET (для совместимости)
 $action = $_POST['action'] ?? $_GET['action'] ?? '';
 
-// Логируем входящий запрос
-file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-    "=== INCOMING AJAX REQUEST ===\n", 
-    FILE_APPEND | LOCK_EX);
-file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-    "Action: {$action}\n", 
-    FILE_APPEND | LOCK_EX);
-file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-    "POST data: " . json_encode($_POST) . "\n", 
-    FILE_APPEND | LOCK_EX);
-file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-    "Raw input: " . file_get_contents('php://input') . "\n", 
-    FILE_APPEND | LOCK_EX);
 
 // Создаем объект календаря
 try {
     $calendarObj = new \Artmax\Calendar\Calendar();
-    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-        "Calendar object created successfully\n", 
-        FILE_APPEND | LOCK_EX);
 } catch (Exception $e) {
-    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-        "Error creating calendar object: " . $e->getMessage() . "\n", 
-        FILE_APPEND | LOCK_EX);
     http_response_code(500);
     die(json_encode(['success' => false, 'error' => 'Ошибка инициализации календаря: ' . $e->getMessage()]));
 }
@@ -149,14 +120,6 @@ switch ($action) {
         }
         $eventColor = $_POST['eventColor'] ?? '#3498db';
         $employeeId = $_POST['employee_id'] ?? null;
-        
-        // Логируем полученные данные для отладки
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-            "AJAX addEvent: POST data - branchId=" . ($_POST['branchId'] ?? 'not set') . ", branch_id=" . ($_POST['branch_id'] ?? 'not set') . ", final branchId=$branchId\n", 
-            FILE_APPEND | LOCK_EX);
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-            "AJAX addEvent: employee_id from POST=" . ($_POST['employee_id'] ?? 'not set') . ", employeeId variable=" . var_export($employeeId, true) . ", type=" . gettype($employeeId) . "\n", 
-            FILE_APPEND | LOCK_EX);
 
         if (empty($title) || empty($dateFrom) || empty($dateTo)) {
             http_response_code(400);
@@ -344,25 +307,12 @@ switch ($action) {
         // Проверяем доступность времени для врача при изменении времени
         $timeChanged = ($oldDateFromNormalized != $dateFrom || $oldDateToNormalized != $dateTo);
         $doctorChanged = ((int)$event['EMPLOYEE_ID'] != (int)$employeeId);
-        
-        // Логируем для отладки
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-            "UPDATE_EVENT_DEBUG: timeChanged=" . ($timeChanged ? 'true' : 'false') . ", doctorChanged=" . ($doctorChanged ? 'true' : 'false') . "\n", 
-            FILE_APPEND | LOCK_EX);
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-            "UPDATE_EVENT_DEBUG: oldTime=" . $event['DATE_FROM'] . " (" . $oldDateFromNormalized . ") - " . $event['DATE_TO'] . " (" . $oldDateToNormalized . "), newTime=" . $dateFrom . " - " . $dateTo . "\n", 
-            FILE_APPEND | LOCK_EX);
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-            "UPDATE_EVENT_DEBUG: oldDoctor=" . $event['EMPLOYEE_ID'] . ", newDoctor=" . $employeeId . "\n", 
-            FILE_APPEND | LOCK_EX);
+
         
         if ($timeChanged || $doctorChanged) {
             // Проверяем конфликты с текущим врачом события (не с новым)
             $doctorToCheck = $event['EMPLOYEE_ID'] ? $event['EMPLOYEE_ID'] : null;
-            
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "UPDATE_EVENT_DEBUG: Checking conflicts with doctorToCheck=" . $doctorToCheck . "\n", 
-                FILE_APPEND | LOCK_EX);
+
             
             if (!$calendarObj->isTimeAvailableForDoctor($dateFrom, $dateTo, $doctorToCheck, $eventId, $branchId)) {
                 die(json_encode(['success' => false, 'error' => 'Время уже занято для выбранного врача в этом филиале']));
@@ -488,17 +438,11 @@ switch ($action) {
                     );
                     
                     if ($activityUpdated) {
-                        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                            "UPDATE_EVENT: Обновлена активность CRM ID={$event['ACTIVITY_ID']}\n", 
-                            FILE_APPEND | LOCK_EX);
                     }
                 }
                 
                 // Обновляем бронирование в сделке если есть
                 if (!empty($event['DEAL_ENTITY_ID']) && \CModule::IncludeModule('crm')) {
-                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                        "UPDATE_EVENT (ajax.php): Начинаем обновление бронирования для сделки ID={$event['DEAL_ENTITY_ID']}\n", 
-                        FILE_APPEND | LOCK_EX);
                     
                     $responsibleId = $event['EMPLOYEE_ID'] ?? $GLOBALS['USER']->GetID();
                     $branchTimezone = $calendarObj->getBranchTimezone($event['BRANCH_ID']);
@@ -508,9 +452,6 @@ switch ($action) {
                     $dateToObj = \DateTime::createFromFormat('Y-m-d H:i:s', $dateTo, new \DateTimeZone($branchTimezone));
                     
                     if (!$dateFromObj || !$dateToObj) {
-                        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                            "UPDATE_EVENT (ajax.php): Ошибка парсинга дат. dateFrom=$dateFrom, dateTo=$dateTo\n", 
-                            FILE_APPEND | LOCK_EX);
                         // Пробуем другой формат
                         $dateFromObj = \DateTime::createFromFormat('d.m.Y H:i:s', $dateFrom, new \DateTimeZone($branchTimezone));
                         $dateToObj = \DateTime::createFromFormat('d.m.Y H:i:s', $dateTo, new \DateTimeZone($branchTimezone));
@@ -523,21 +464,7 @@ switch ($action) {
                         // Вычисляем длительность
                         $durationSeconds = $dateToObj->getTimestamp() - $dateFromObj->getTimestamp();
                         $bookingValue = "user|{$responsibleId}|{$bookingDateTime}|{$durationSeconds}|{$title}";
-                        
-                        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                            "UPDATE_EVENT (ajax.php): Вычисление бронирования:\n" .
-                            "  dateFrom (вход): $dateFrom\n" .
-                            "  dateTo (вход): $dateTo\n" .
-                            "  branchTimezone: $branchTimezone\n" .
-                            "  bookingDateTime: $bookingDateTime\n" .
-                            "  startDateTime timestamp: {$dateFromObj->getTimestamp()}\n" .
-                            "  endDateTime timestamp: {$dateToObj->getTimestamp()}\n" .
-                            "  durationSeconds: $durationSeconds\n" .
-                            "  EMPLOYEE_ID: {$event['EMPLOYEE_ID']}\n" .
-                            "  responsibleId: $responsibleId\n" .
-                            "  title: $title\n" .
-                            "  ФИНАЛЬНАЯ СТРОКА: $bookingValue\n", 
-                            FILE_APPEND | LOCK_EX);
+
                         
                         $bookingFieldCode = \Bitrix\Main\Config\Option::get('artmax.calendar', 'deal_booking_field', 'UF_CRM_CALENDAR_BOOKING');
                         
@@ -546,10 +473,7 @@ switch ($action) {
                             $bookingFieldCode => [$bookingValue]
                         ];
                         $deal->Update($event['DEAL_ENTITY_ID'], $updateFields);
-                        
-                        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                            "UPDATE_EVENT (ajax.php): Обновлено бронирование в сделке ID={$event['DEAL_ENTITY_ID']}\n", 
-                            FILE_APPEND | LOCK_EX);
+
                     }
                 }
                 
@@ -710,15 +634,6 @@ switch ($action) {
         $newDateFrom = $_POST['dateFrom'] ?? '';
         $newDateTo = $_POST['dateTo'] ?? '';
 
-        // Логируем входящие параметры
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-            "MOVE_EVENT_ACTION: Parameters:\n" .
-            "  - eventId: $eventId\n" .
-            "  - dateFrom: $newDateFrom\n" .
-            "  - dateTo: $newDateTo\n" .
-            "  - employeeId: $employeeId\n" .
-            "  - branchId: $branchId\n\n", 
-            FILE_APPEND | LOCK_EX);
 
         // Проверяем на NaN в dateTo
         if (strpos($newDateTo, 'NaN') !== false) {
@@ -889,16 +804,8 @@ switch ($action) {
             }
         }
 
-        // Отладочная информация
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-            "DYNAMIC LOAD: dateFrom=$dateFrom, dateTo=$dateTo, branchId=$branchId, employeeId=" . ($employeeId ?? 'null') . "\n", 
-            FILE_APPEND | LOCK_EX);
-
         try {
             $events = $calendarObj->getEventsByBranch($branchId, $dateFrom, $dateTo, null, null, $employeeId);
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "DYNAMIC LOAD: actual events count=" . count($events) . "\n", 
-                FILE_APPEND | LOCK_EX);
             
             // Создаем экземпляр компонента для загрузки данных контактов
             $component = new ArtmaxCalendarComponent();
@@ -917,16 +824,10 @@ switch ($action) {
             
             // Логируем первые несколько событий для отладки
             if (count($events) > 0) {
-                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                    "DYNAMIC LOAD: first event sample: " . json_encode($events[0]) . "\n", 
-                    FILE_APPEND | LOCK_EX);
             }
             
             die(json_encode(['success' => true, 'events' => $events]));
         } catch (Exception $e) {
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "DYNAMIC LOAD ERROR: " . $e->getMessage() . "\n", 
-                FILE_APPEND | LOCK_EX);
             die(json_encode(['success' => false, 'error' => $e->getMessage()]));
         }
         break;
@@ -934,18 +835,7 @@ switch ($action) {
     case 'getEvent':
         $eventId = (int)($_POST['eventId'] ?? 0);
 
-        // Логируем запрос
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-            "=== AJAX GET_EVENT ===\n",
-            FILE_APPEND | LOCK_EX);
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-            "AJAX: Requesting event ID: {$eventId}\n",
-            FILE_APPEND | LOCK_EX);
-
         if (!$eventId) {
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-                "AJAX: Error - ID события не указан\n",
-                FILE_APPEND | LOCK_EX);
             http_response_code(400);
             die(json_encode(['success' => false, 'error' => 'ID события не указан']));
         }
@@ -954,22 +844,12 @@ switch ($action) {
             // Используем компонент для получения события с контактом
             $component = new ArtmaxCalendarComponent();
             $result = $component->getEventAction($eventId);
-            
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-                "AJAX: getEventAction result: " . json_encode($result) . "\n",
-                FILE_APPEND | LOCK_EX);
+
             
             die(json_encode($result));
         } catch (Exception $e) {
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-                "AJAX: Exception: " . $e->getMessage() . "\n",
-                FILE_APPEND | LOCK_EX);
             die(json_encode(['success' => false, 'error' => $e->getMessage()]));
         }
-
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-            "=== END AJAX GET_EVENT ===\n",
-            FILE_APPEND | LOCK_EX);
         break;
 
     case 'addSchedule':
@@ -981,23 +861,6 @@ switch ($action) {
             // Если weekdays приходит как строка "1,2", разбиваем её на массив
             $weekdays = array_map('intval', explode(',', $_POST['weekdays']));
         }
-
-        // Логируем полученные данные
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-            "=== ADD_SCHEDULE AJAX DEBUG ===\n",
-            FILE_APPEND | LOCK_EX);
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-            "POST data: " . json_encode($_POST) . "\n",
-            FILE_APPEND | LOCK_EX);
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-            "eventColor from POST: " . ($_POST['eventColor'] ?? 'NOT SET') . "\n",
-            FILE_APPEND | LOCK_EX);
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-            "excludeWeekends from POST: " . ($_POST['excludeWeekends'] ?? 'NOT SET') . "\n",
-            FILE_APPEND | LOCK_EX);
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-            "excludeHolidays from POST: " . ($_POST['excludeHolidays'] ?? 'NOT SET') . "\n",
-            FILE_APPEND | LOCK_EX);
 
         // Создаем экземпляр компонента для вызова метода
         $component = new ArtmaxCalendarComponent();
@@ -1024,27 +887,12 @@ switch ($action) {
         
         $result = $component->addScheduleAction($params);
 
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-            "Result: " . json_encode($result) . "\n",
-            FILE_APPEND | LOCK_EX);
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-            "=== END ADD_SCHEDULE AJAX DEBUG ===\n",
-            FILE_APPEND | LOCK_EX);
-
         die(json_encode($result));
         break;
 
     case 'searchClients':
         $query = $_POST['query'] ?? '';
         $type = $_POST['type'] ?? 'contact';
-
-        // Логируем запрос поиска
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-            "=== AJAX SEARCH_CLIENTS ===\n",
-            FILE_APPEND | LOCK_EX);
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-            "Query: {$query}, Type: {$type}\n",
-            FILE_APPEND | LOCK_EX);
 
         if (empty($query)) {
             die(json_encode(['success' => false, 'error' => 'Запрос не может быть пустым']));
@@ -1055,18 +903,8 @@ switch ($action) {
             $component = new ArtmaxCalendarComponent();
             $result = $component->searchClientsAction($query, $type);
 
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-                "Search result: " . json_encode($result) . "\n",
-                FILE_APPEND | LOCK_EX);
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-                "=== END AJAX SEARCH_CLIENTS ===\n",
-                FILE_APPEND | LOCK_EX);
-
             die(json_encode($result));
         } catch (Exception $e) {
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-                "Search error: " . $e->getMessage() . "\n",
-                FILE_APPEND | LOCK_EX);
             die(json_encode(['success' => false, 'error' => 'Ошибка поиска: ' . $e->getMessage()]));
         }
         break;
@@ -1086,9 +924,6 @@ switch ($action) {
 
             die(json_encode($result));
         } catch (Exception $e) {
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-                "Get contacts error: " . $e->getMessage() . "\n",
-                FILE_APPEND | LOCK_EX);
             die(json_encode(['success' => false, 'error' => 'Ошибка получения контактов: ' . $e->getMessage()]));
         }
         break;
@@ -1106,9 +941,6 @@ switch ($action) {
 
             die(json_encode($result));
         } catch (Exception $e) {
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-                "Get deals error: " . $e->getMessage() . "\n",
-                FILE_APPEND | LOCK_EX);
             die(json_encode(['success' => false, 'error' => 'Ошибка получения сделок: ' . $e->getMessage()]));
         }
         break;
@@ -1139,9 +971,6 @@ switch ($action) {
 
             die(json_encode($result));
         } catch (Exception $e) {
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-                "Create deal error: " . $e->getMessage() . "\n",
-                FILE_APPEND | LOCK_EX);
             die(json_encode(['success' => false, 'error' => 'Ошибка создания сделки: ' . $e->getMessage()]));
         }
         break;
@@ -1314,16 +1143,6 @@ switch ($action) {
     case 'getAvailableEmployeesForBranch':
         $branchId = $_POST['branchId'] ?? $_POST['branch_id'] ?? 0;
 
-        // Отладочная информация
-        artmax_log("AJAX getAvailableEmployeesForBranch: branchId = " . $branchId);
-        artmax_log("AJAX getAvailableEmployeesForBranch: POST data = " . json_encode($_POST));
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-            "AJAX getAvailableEmployeesForBranch: branchId = " . $branchId . "\n", 
-            FILE_APPEND | LOCK_EX);
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-            "AJAX getAvailableEmployeesForBranch: POST data = " . json_encode($_POST) . "\n", 
-            FILE_APPEND | LOCK_EX);
-
         try {
             $component = new ArtmaxCalendarComponent();
             $result = $component->getAvailableEmployeesForBranchAction($branchId);
@@ -1336,25 +1155,11 @@ switch ($action) {
     case 'getBranchEmployees':
         $branchId = $_POST['branchId'] ?? $_POST['branch_id'] ?? 0;
 
-        // Отладочная информация
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-            "AJAX getBranchEmployees: branchId = " . $branchId . "\n", 
-            FILE_APPEND | LOCK_EX);
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-            "AJAX getBranchEmployees: POST data = " . json_encode($_POST) . "\n", 
-            FILE_APPEND | LOCK_EX);
-
         try {
             $component = new ArtmaxCalendarComponent();
             $result = $component->getBranchEmployeesAction($branchId);
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "AJAX getBranchEmployees: result = " . json_encode($result) . "\n", 
-                FILE_APPEND | LOCK_EX);
             die(json_encode($result));
         } catch (Exception $e) {
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log', 
-                "AJAX getBranchEmployees: error = " . $e->getMessage() . "\n", 
-                FILE_APPEND | LOCK_EX);
             die(json_encode(['success' => false, 'error' => 'Ошибка получения сотрудников: ' . $e->getMessage()]));
         }
         break;
@@ -1376,14 +1181,6 @@ switch ($action) {
             }
         }
 
-        // Логируем запрос
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-            "=== AJAX SAVE_EVENT_DEAL ===\n",
-            FILE_APPEND | LOCK_EX);
-        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-            "EventId: {$eventId}, DealData: " . json_encode($dealData) . "\n",
-            FILE_APPEND | LOCK_EX);
-
         if (empty($eventId) || empty($dealData)) {
             die(json_encode(['success' => false, 'error' => 'Недостаточно данных для сохранения']));
         }
@@ -1392,18 +1189,8 @@ switch ($action) {
             $component = new ArtmaxCalendarComponent();
             $result = $component->saveEventDealAction($eventId, $dealData);
 
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-                "Save result: " . json_encode($result) . "\n",
-                FILE_APPEND | LOCK_EX);
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-                "=== END AJAX SAVE_EVENT_DEAL ===\n",
-                FILE_APPEND | LOCK_EX);
-
             die(json_encode($result));
         } catch (Exception $e) {
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-                "Save error: " . $e->getMessage() . "\n",
-                FILE_APPEND | LOCK_EX);
             die(json_encode(['success' => false, 'error' => 'Ошибка сохранения: ' . $e->getMessage()]));
         }
         break;
@@ -1446,9 +1233,6 @@ switch ($action) {
             $result = $component->saveDealCustomFieldsAction($dealId, $fields);
             die(json_encode($result));
         } catch (\Throwable $e) {
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/debug_calendar_ajax.log',
-                "Save deal custom fields error: " . $e->getMessage() . "\n",
-                FILE_APPEND | LOCK_EX);
             die(json_encode(['success' => false, 'error' => 'Ошибка сохранения: ' . $e->getMessage()]));
         }
         break;
