@@ -207,10 +207,9 @@ $calendarTopMonthName = translateMonthToRussian($firstDay->format('F'));
                         $hasViewOthers = $arResult['HAS_VIEW_OTHERS_PERMISSION'] ?? false;
                         $currentUserId = $arResult['CURRENT_USER_ID'] ?? 0;
                         
-                        // Определяем выбранное значение: если в URL нет employee_id, для врачей с правом view_others по умолчанию "Мои записи"
+                        // Определяем выбранное значение: если в URL нет employee_id, по умолчанию "Все записи"
                         if ($currentEmployeeId === null) {
-                            // Если параметра нет: для врачей с правом view_others "Мои записи", для админов "Все записи"
-                            $selectedValue = (!$isAdmin && $hasViewOthers) ? $currentUserId : 0;
+                            $selectedValue = 0;
                         } else {
                             $selectedValue = $currentEmployeeId;
                         }
@@ -420,27 +419,10 @@ $calendarTopMonthName = translateMonthToRussian($firstDay->format('F'));
                         <label for="event-time">ВРЕМЯ *</label>
                         <select id="event-time" name="time" required>
                             <option value="">Выберите время</option>
-                            <option value="08:00">08:00</option>
-                            <option value="08:30">08:30</option>
-                            <option value="09:00">09:00</option>
-                            <option value="09:30">09:30</option>
-                            <option value="10:00">10:00</option>
-                            <option value="10:30">10:30</option>
-                            <option value="11:00">11:00</option>
-                            <option value="11:30">11:30</option>
-                            <option value="12:00">12:00</option>
-                            <option value="12:30">12:30</option>
-                            <option value="13:00">13:00</option>
-                            <option value="13:30">13:30</option>
-                            <option value="14:00">14:00</option>
-                            <option value="14:30">14:30</option>
-                            <option value="15:00">15:00</option>
-                            <option value="15:30">15:30</option>
-                            <option value="16:00">16:00</option>
-                            <option value="16:30">16:30</option>
-                            <option value="17:00">17:00</option>
-                            <option value="17:30">17:30</option>
-                            <option value="18:00">18:00</option>
+                            <?php for ($t = 0; $t <= (23 * 60 + 59); $t++): ?>
+                                <?php $h = floor($t / 60); $m = $t % 60; $timeValue = sprintf('%02d:%02d', $h, $m); ?>
+                                <option value="<?= $timeValue ?>"><?= $timeValue ?></option>
+                            <?php endfor; ?>
                         </select>
                         <div class="error-message" style="display: none;">
                             <span class="error-icon">⚠️</span>
@@ -654,6 +636,30 @@ $calendarTopMonthName = translateMonthToRussian($firstDay->format('F'));
                 </div>
             </div>
         </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно печати расписания -->
+    <div id="printScheduleModal" class="note-modal print-schedule-modal" style="display: none;">
+        <div class="note-modal-content print-schedule-modal-content">
+            <div class="note-modal-header">
+                <h3>Список приема на день</h3>
+                <button class="close-note-modal" onclick="closePrintScheduleModal()">×</button>
+            </div>
+            <div class="note-modal-body">
+                <div class="form-group">
+                    <label for="print-schedule-date">Дата</label>
+                    <input type="date" id="print-schedule-date" class="print-schedule-input">
+                </div>
+                <div class="form-group">
+                    <label for="print-schedule-employee">Врач</label>
+                    <select id="print-schedule-employee" class="print-schedule-input"></select>
+                </div>
+                <div class="note-modal-actions">
+                    <button type="button" class="btn btn-primary" onclick="printScheduleForDay()">РАСПЕЧАТАТЬ</button>
+                    <button type="button" class="btn btn-secondary" onclick="closePrintScheduleModal()">ОТМЕНИТЬ</button>
+                </div>
+            </div>
         </div>
     </div>
 

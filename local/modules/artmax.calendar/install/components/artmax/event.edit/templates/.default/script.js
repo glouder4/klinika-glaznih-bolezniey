@@ -6,6 +6,32 @@
 function initializeEventEditForm() {
     let eventId = window.eventEditData ? window.eventEditData.eventId : null;
     let eventData = window.eventEditData ? window.eventEditData.event : null;
+    const INFO_EVENT_MARKER = '[INFO_EVENT]';
+
+    function isInfoEventMode() {
+        return document.getElementById('edit-event-is-info')?.value === 'Y';
+    }
+
+    function applyEditInfoEventMode() {
+        const infoMode = isInfoEventMode();
+        const employeeGroup = document.getElementById('edit-event-employee-group');
+        const durationGroup = document.getElementById('edit-event-duration-group');
+        const employeeField = document.getElementById('edit-event-employee');
+        const durationField = document.getElementById('edit-event-duration');
+
+        if (employeeGroup) {
+            employeeGroup.classList.toggle('artmax-form-field--hidden', infoMode);
+        }
+        if (durationGroup) {
+            durationGroup.classList.toggle('artmax-form-field--hidden', infoMode);
+        }
+        if (employeeField) {
+            employeeField.required = !infoMode;
+        }
+        if (durationField) {
+            durationField.required = !infoMode;
+        }
+    }
     
     // Функции для работы с цветами
     window.selectEditPresetColor = function(color) {
@@ -128,13 +154,17 @@ function initializeEventEditForm() {
             field.classList.remove('error');
         });
         
+        const infoMode = isInfoEventMode();
+
         // Проверяем обязательные поля
         const requiredFields = [
             { id: 'edit-event-title', errorId: 'title-error', message: 'Заполните это поле' },
-            { id: 'edit-event-employee', errorId: 'employee-error', message: 'Выберите ответственного сотрудника' },
             { id: 'edit-event-date', errorId: 'date-error', message: 'Заполните это поле' },
             { id: 'edit-event-time', errorId: 'time-error', message: 'Заполните это поле' },
-            { id: 'edit-event-duration', errorId: 'duration-error', message: 'Заполните это поле' }
+            ...(infoMode ? [] : [
+                { id: 'edit-event-employee', errorId: 'employee-error', message: 'Выберите ответственного сотрудника' },
+                { id: 'edit-event-duration', errorId: 'duration-error', message: 'Заполните это поле' }
+            ])
         ];
         
         requiredFields.forEach(field => {
@@ -176,7 +206,11 @@ function initializeEventEditForm() {
         formData.append('action', 'updateEvent');
         formData.append('eventId', eventId);
         formData.append('title', document.getElementById('edit-event-title').value.trim());
-        formData.append('description', document.getElementById('edit-event-description').value.trim());
+        const rawDescription = document.getElementById('edit-event-description').value.trim();
+        const finalDescription = infoMode && rawDescription.indexOf(INFO_EVENT_MARKER) !== 0
+            ? (INFO_EVENT_MARKER + ' ' + rawDescription).trim()
+            : rawDescription;
+        formData.append('description', finalDescription);
         formData.append('employee_id', document.getElementById('edit-event-employee').value);
         formData.append('branchId', form.querySelector('[name="branch_id"]').value);
         formData.append('eventColor', document.getElementById('edit-selected-color').value || '#2fc6f6');
@@ -184,7 +218,8 @@ function initializeEventEditForm() {
         // Формируем дату и время начала
         const date = document.getElementById('edit-event-date').value;
         const time = document.getElementById('edit-event-time').value;
-        const duration = parseInt(document.getElementById('edit-event-duration').value);
+        const durationRaw = document.getElementById('edit-event-duration').value;
+        const duration = infoMode ? (parseInt(durationRaw, 10) || 5) : parseInt(durationRaw, 10);
         
         // Формируем дату точно как указал пользователь
         const dateFrom = date + ' ' + time + ':00';
@@ -192,7 +227,7 @@ function initializeEventEditForm() {
         // Вычисляем время окончания
         const [hours, minutes] = time.split(':');
         const startMinutes = parseInt(hours) * 60 + parseInt(minutes);
-        const endMinutes = startMinutes + duration;
+        const endMinutes = startMinutes + (Number.isFinite(duration) ? duration : 5);
         const endHours = Math.floor(endMinutes / 60);
         const endMins = endMinutes % 60;
         const endTime = String(endHours).padStart(2, '0') + ':' + String(endMins).padStart(2, '0');
@@ -314,6 +349,8 @@ function initializeEventEditForm() {
             showNotification('Ошибка при удалении события', 'error');
         });
     };
+
+    applyEditInfoEventMode();
 
     // Добавляем обработчик изменения даты для обновления занятых слотов (если нужно)
     const dateInput = document.getElementById('edit-event-date');

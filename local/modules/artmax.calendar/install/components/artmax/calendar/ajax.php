@@ -10,6 +10,10 @@ require($_SERVER['DOCUMENT_ROOT'].'/bitrix/modules/main/include/prolog_before.ph
 // Подключаем класс компонента
 require_once($_SERVER['DOCUMENT_ROOT'].'/local/components/artmax/calendar/class.php');
 
+if (!defined('ARTMAX_INFO_EVENT_MARKER')) {
+    define('ARTMAX_INFO_EVENT_MARKER', '[INFO_EVENT]');
+}
+
 /**
  * Конвертирует дату из российского формата в стандартный для SQL
  */
@@ -106,6 +110,10 @@ switch ($action) {
     case 'addEvent':
         $title = $_POST['title'] ?? '';
         $description = $_POST['description'] ?? '';
+        $isInfoEvent = isset($_POST['info_event']) && in_array($_POST['info_event'], ['Y', '1', 1, true], true);
+        if ($isInfoEvent && strpos($description, ARTMAX_INFO_EVENT_MARKER) !== 0) {
+            $description = ARTMAX_INFO_EVENT_MARKER . ' ' . $description;
+        }
         $dateFrom = $_POST['dateFrom'] ?? '';
         $dateTo = $_POST['dateTo'] ?? '';
         // Поддерживаем оба варианта: branchId (camelCase) и branch_id (snake_case)
@@ -774,7 +782,11 @@ switch ($action) {
             } else {
                 try {
                     $permissionsObj = new \Artmax\Calendar\Permissions();
-                    $hasViewOthersPermission = $permissionsObj->hasPermission($GLOBALS['USER']->GetID(), 'calendar.view_others');
+                    // Поддерживаем новую модель прав (calendar.view_all)
+                    // и старую (calendar.view_others) для обратной совместимости.
+                    $hasViewOthersPermission =
+                        $permissionsObj->hasPermission($GLOBALS['USER']->GetID(), 'calendar.view_all') ||
+                        $permissionsObj->hasPermission($GLOBALS['USER']->GetID(), 'calendar.view_others');
                 } catch (\Exception $e) {
                     $hasViewOthersPermission = false;
                 }
@@ -791,12 +803,8 @@ switch ($action) {
                         $employeeId = (int)$employeeIdParam;
                     }
                 } else {
-                    // Если параметра нет: для админов "Все записи", для врачей с правом view_others "Мои записи"
-                    if ($GLOBALS['USER']->IsAdmin()) {
-                        $employeeId = null; // Админы видят все записи по умолчанию
-                    } else {
-                        $employeeId = $GLOBALS['USER']->GetID(); // Врачи с правом view_others видят свои записи по умолчанию
-                    }
+                    // Если параметра нет — по умолчанию «Все записи» (как employee_id=0)
+                    $employeeId = null;
                 }
             } else {
                 // Без права на просмотр чужих - показываем только свои записи

@@ -158,6 +158,10 @@
     color: #9ca3af;
 }
 
+.artmax-form-field--hidden {
+    display: none !important;
+}
+
 /* Color Picker - Compact */
 .artmax-color-picker {
     display: flex;

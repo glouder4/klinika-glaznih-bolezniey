@@ -185,6 +185,29 @@
     color: #9ca3af;
 }
 
+.artmax-form-field-info-event {
+    align-items: center !important;
+}
+
+.artmax-checkbox-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: #525c69;
+    cursor: pointer;
+    user-select: none;
+}
+
+#event-is-info {
+    width: 16px;
+    height: 16px;
+}
+
+.artmax-form-field--hidden {
+    display: none !important;
+}
+
 /* Color Picker - Compact */
 .artmax-color-picker {
     display: flex;

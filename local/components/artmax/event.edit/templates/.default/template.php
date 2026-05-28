@@ -19,6 +19,10 @@ $event = $arResult['EVENT'];
 $eventDate = '';
 $eventTime = '';
 $eventDuration = 30;
+$infoEventMarker = '[INFO_EVENT]';
+$rawDescription = (string)($event['DESCRIPTION'] ?? '');
+$isInfoEvent = (strpos($rawDescription, $infoEventMarker) === 0);
+$descriptionForEdit = $isInfoEvent ? ltrim(substr($rawDescription, strlen($infoEventMarker))) : $rawDescription;
 
 if (!empty($event['DATE_FROM'])) {
     // Парсим дату из формата "2025-08-04 12:00:00" или "04.08.2025 12:00:00"
@@ -29,6 +33,14 @@ if (!empty($event['DATE_FROM'])) {
     } elseif (preg_match('/^(\d{1,2})\.(\d{1,2})\.(\d{4})\s+(\d{1,2}):(\d{1,2}):/', $dateFrom, $matches)) {
         $eventDate = sprintf('%04d-%02d-%02d', $matches[3], $matches[2], $matches[1]);
         $eventTime = sprintf('%02d:%02d', $matches[4], $matches[5]);
+    } else {
+        // Fallback для ISO и любых строк с датой/временем
+        if (preg_match('/(\d{4})-(\d{2})-(\d{2})/', $dateFrom, $dateMatches)) {
+            $eventDate = sprintf('%04d-%02d-%02d', $dateMatches[1], $dateMatches[2], $dateMatches[3]);
+        }
+        if (preg_match('/(\d{1,2}):(\d{2})/', $dateFrom, $timeMatches)) {
+            $eventTime = sprintf('%02d:%02d', $timeMatches[1], $timeMatches[2]);
+        }
     }
     
     // Рассчитываем длительность
@@ -67,12 +79,13 @@ $eventColor = $event['EVENT_COLOR'] ?? '#2fc6f6';
             <div class="artmax-form-field">
                 <label for="edit-event-description" class="artmax-field-label">Описание</label>
                 <div class="artmax-field-content">
-                    <textarea id="edit-event-description" name="description" class="artmax-textarea" rows="2" placeholder="Дополнительная информация о событии"><?= htmlspecialchars($event['DESCRIPTION'] ?? '') ?></textarea>
+                    <textarea id="edit-event-description" name="description" class="artmax-textarea" rows="2" placeholder="Дополнительная информация о событии"><?= htmlspecialchars($descriptionForEdit) ?></textarea>
                 </div>
             </div>
+            <input type="hidden" id="edit-event-is-info" value="<?= $isInfoEvent ? 'Y' : 'N' ?>">
         
         <!-- Ответственный сотрудник -->
-        <div class="artmax-form-field">
+        <div class="artmax-form-field" id="edit-event-employee-group">
             <label for="edit-event-employee" class="artmax-field-label">
                 Ответственный сотрудник
                 <span class="artmax-required">*</span>
@@ -119,7 +132,7 @@ $eventColor = $event['EVENT_COLOR'] ?? '#2fc6f6';
                         <option value="">Выберите время</option>
                         <?php
                         // Слоты с шагом 1 минута (08:00 … 18:00), как в расписании клиники
-                        for ($t = 8 * 60; $t <= 18 * 60; $t++) {
+                        for ($t = 0; $t <= (23 * 60 + 59); $t++) {
                             $h = (int)floor($t / 60);
                             $m = $t % 60;
                             $time = sprintf('%02d:%02d', $h, $m);
@@ -137,7 +150,7 @@ $eventColor = $event['EVENT_COLOR'] ?? '#2fc6f6';
         </div>
         
         <!-- Длительность приема -->
-        <div class="artmax-form-field">
+        <div class="artmax-form-field" id="edit-event-duration-group">
             <label for="edit-event-duration" class="artmax-field-label">
                 Длительность приема
                 <span class="artmax-required">*</span>

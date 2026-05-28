@@ -39,9 +39,19 @@ CJSCore::Init(['ui.buttons']);
                     <textarea id="event-description" name="description" class="artmax-textarea" rows="2" placeholder="Дополнительная информация о событии"></textarea>
                 </div>
             </div>
+
+            <div class="artmax-form-field artmax-form-field-info-event">
+                <label for="event-is-info" class="artmax-field-label">Тип записи</label>
+                <div class="artmax-field-content">
+                    <label class="artmax-checkbox-label" for="event-is-info">
+                        <input type="checkbox" id="event-is-info" name="is_info_event" value="Y">
+                        <span>Информационное событие</span>
+                    </label>
+                </div>
+            </div>
         
         <!-- Ответственный сотрудник -->
-        <div class="artmax-form-field">
+        <div class="artmax-form-field" id="event-employee-group">
             <label for="event-employee" class="artmax-field-label">
                 Ответственный сотрудник
                 <span class="artmax-required">*</span>
@@ -77,27 +87,10 @@ CJSCore::Init(['ui.buttons']);
                 <div class="artmax-field-half">
                     <select id="event-time" name="time" class="artmax-select" required>
                         <option value="">Выберите время</option>
-                        <option value="08:00">08:00</option>
-                        <option value="08:30">08:30</option>
-                        <option value="09:00">09:00</option>
-                        <option value="09:30">09:30</option>
-                        <option value="10:00">10:00</option>
-                        <option value="10:30">10:30</option>
-                        <option value="11:00">11:00</option>
-                        <option value="11:30">11:30</option>
-                        <option value="12:00">12:00</option>
-                        <option value="12:30">12:30</option>
-                        <option value="13:00">13:00</option>
-                        <option value="13:30">13:30</option>
-                        <option value="14:00">14:00</option>
-                        <option value="14:30">14:30</option>
-                        <option value="15:00">15:00</option>
-                        <option value="15:30">15:30</option>
-                        <option value="16:00">16:00</option>
-                        <option value="16:30">16:30</option>
-                        <option value="17:00">17:00</option>
-                        <option value="17:30">17:30</option>
-                        <option value="18:00">18:00</option>
+                        <?php for ($t = 0; $t <= (23 * 60 + 59); $t++): ?>
+                            <?php $h = floor($t / 60); $m = $t % 60; $timeValue = sprintf('%02d:%02d', $h, $m); ?>
+                            <option value="<?= $timeValue ?>"><?= $timeValue ?></option>
+                        <?php endfor; ?>
                     </select>
                     <div class="artmax-field-error" id="time-error" style="display: none;">
                         Заполните это поле
@@ -107,7 +100,7 @@ CJSCore::Init(['ui.buttons']);
         </div>
         
         <!-- Длительность приема -->
-        <div class="artmax-form-field">
+        <div class="artmax-form-field" id="event-duration-group">
             <label for="event-duration" class="artmax-field-label">
                 Длительность приема
                 <span class="artmax-required">*</span>
@@ -145,7 +138,7 @@ CJSCore::Init(['ui.buttons']);
                     </div>
                     <div class="artmax-custom-color">
                         <label for="custom-color-input" class="artmax-custom-color-label">Свой цвет:</label>
-                        <input type="color" id="custom-color-input" name="custom-color" value="#2fc6f6">
+                        <input type="color" id="custom-color-input" name="custom-color" value="#2fc6f6" oninput="selectCustomColor(this.value)" onchange="selectCustomColor(this.value)">
                     </div>
                     <input type="hidden" id="selected-color" name="event-color" value="#2fc6f6">
                 </div>

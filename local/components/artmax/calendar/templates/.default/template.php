@@ -135,6 +135,38 @@ function translateShortMonthToRussian($monthName)
     return $months[$monthName] ?? $monthName;
 }
 
+if (!defined('ARTMAX_INFO_EVENT_MARKER')) {
+    define('ARTMAX_INFO_EVENT_MARKER', '[INFO_EVENT]');
+}
+
+function isInformationEventByDescription($description)
+{
+    if (!is_string($description) || $description === '') {
+        return false;
+    }
+    return strpos($description, ARTMAX_INFO_EVENT_MARKER) === 0;
+}
+
+function stripInformationEventMarker($description)
+{
+    if (!is_string($description) || $description === '') {
+        return '';
+    }
+    if (strpos($description, ARTMAX_INFO_EVENT_MARKER) === 0) {
+        return ltrim(substr($description, strlen(ARTMAX_INFO_EVENT_MARKER)));
+    }
+    return $description;
+}
+
+function eventTimeToMinutes($dateString)
+{
+    $time = extractTimeFromDate($dateString);
+    if (!preg_match('/^(\d{2}):(\d{2})$/', $time, $m)) {
+        return 0;
+    }
+    return ((int)$m[1]) * 60 + (int)$m[2];
+}
+
 /**
  * Извлекает время из даты в формате "2025-08-04 09:00:00" без учета часового пояса
  * @param string $dateString Дата в формате "2025-08-04 09:00:00"
@@ -207,10 +239,9 @@ $calendarTopMonthName = translateMonthToRussian($firstDay->format('F'));
                         $hasViewOthers = $arResult['HAS_VIEW_OTHERS_PERMISSION'] ?? false;
                         $currentUserId = $arResult['CURRENT_USER_ID'] ?? 0;
                         
-                        // Определяем выбранное значение: если в URL нет employee_id, для врачей с правом view_others по умолчанию "Мои записи"
+                        // Определяем выбранное значение: если в URL нет employee_id, по умолчанию "Все записи"
                         if ($currentEmployeeId === null) {
-                            // Если параметра нет: для врачей с правом view_others "Мои записи", для админов "Все записи"
-                            $selectedValue = (!$isAdmin && $hasViewOthers) ? $currentUserId : 0;
+                            $selectedValue = 0;
                         } else {
                             $selectedValue = $currentEmployeeId;
                         }
@@ -268,11 +299,20 @@ $calendarTopMonthName = translateMonthToRussian($firstDay->format('F'));
                         // Отображаем события для этого дня
                         if (isset($arResult['EVENTS_BY_DATE'][$dateKey])) {
                             $dayEvents = $arResult['EVENTS_BY_DATE'][$dateKey];
+                            usort($dayEvents, function($a, $b) {
+                                $aIsInfo = isInformationEventByDescription($a['DESCRIPTION'] ?? '');
+                                $bIsInfo = isInformationEventByDescription($b['DESCRIPTION'] ?? '');
+                                if ($aIsInfo !== $bIsInfo) {
+                                    return $aIsInfo ? -1 : 1; // Инфо-события всегда сверху
+                                }
+                                return eventTimeToMinutes($a['DATE_FROM'] ?? '') <=> eventTimeToMinutes($b['DATE_FROM'] ?? '');
+                            });
                             $dayEventCount = count($dayEvents);
                             // Отладочная информация
                             echo '<!-- STATIC LOAD: ' . $dayEventCount . ' events for ' . $dateKey . ' -->';
                             $eventIndex = 0;
                             foreach ($dayEvents as $event) {
+                                $isInfoEvent = isInformationEventByDescription($event['DESCRIPTION'] ?? '');
                                 $collapsedClass = ($eventIndex >= 6) ? ' calendar-event--collapsed' : '';
                                 $eventColor = $event['EVENT_COLOR'] ?? '#3498db';
                                 $style = 'border-left: 4px solid ' . $eventColor . '; background-color: ' . $eventColor . '65;';
@@ -292,7 +332,7 @@ $calendarTopMonthName = translateMonthToRussian($firstDay->format('F'));
                                 // Добавляем класс для перенесенных записей
                                 $timeChangedClass = (isset($event['TIME_IS_CHANGED']) && $event['TIME_IS_CHANGED'] == 1) ? ' time-changed' : '';
                                 
-                                echo '<div class="calendar-event ' . $statusClass . $timeChangedClass . $collapsedClass . '" data-event-id="' . $event['ID'] . '" style="' . $style . '" onclick="event.stopPropagation();">';
+                                echo '<div class="calendar-event ' . $statusClass . $timeChangedClass . ($isInfoEvent ? ' calendar-event--info' : '') . $collapsedClass . '" data-event-id="' . $event['ID'] . '" data-info-event="' . ($isInfoEvent ? 'Y' : 'N') . '" style="' . $style . '" onclick="event.stopPropagation();">';
                                 echo '<div class="event-content">';
                                 
                                 // Формируем заголовок: Название - Имя - Телефон
@@ -309,33 +349,34 @@ $calendarTopMonthName = translateMonthToRussian($firstDay->format('F'));
                                 echo '<span>';
                                 echo $eventTime . ' – ' . $eventEndTime;
                                 echo '</span>';
-                                echo '<div class="event-icons">';
-                                echo '<span class="event-icon contact-icon ' . ($event['CONTACT_ENTITY_ID'] ? 'active' : '') . '" title="Контакт">👤</span>';
-                                echo '<span class="event-icon deal-icon ' . ($event['DEAL_ENTITY_ID'] ? 'active' : '') . '" title="Сделка">💼</span>';
+                                if (!$isInfoEvent) {
+                                    echo '<div class="event-icons">';
+                                    echo '<span class="event-icon contact-icon ' . ($event['CONTACT_ENTITY_ID'] ? 'active' : '') . '" title="Контакт">👤</span>';
+                                    echo '<span class="event-icon deal-icon ' . ($event['DEAL_ENTITY_ID'] ? 'active' : '') . '" title="Сделка">💼</span>';
 
-                                // Логика для иконки подтверждения
-                                $confirmationActive = '';
-                                if (isset($event['CONFIRMATION_STATUS'])) {
-                                    if ($event['CONFIRMATION_STATUS'] === 'confirmed') {
-                                        $confirmationActive = 'active';
-                                    } elseif ($event['CONFIRMATION_STATUS'] === 'not_confirmed') {
-                                        $confirmationActive = 'inactive';
+                                    // Логика для иконки подтверждения
+                                    $confirmationActive = '';
+                                    if (isset($event['CONFIRMATION_STATUS'])) {
+                                        if ($event['CONFIRMATION_STATUS'] === 'confirmed') {
+                                            $confirmationActive = 'active';
+                                        } elseif ($event['CONFIRMATION_STATUS'] === 'not_confirmed') {
+                                            $confirmationActive = 'inactive';
+                                        }
                                     }
-                                }
-                                echo '<span class="event-icon confirmation-icon ' . $confirmationActive . '" title="Подтверждение">✅</span>';
-                                
-                                // Логика для иконки визита
-                                $visitActive = '';
-                                if (isset($event['VISIT_STATUS'])) {
-                                    if ($event['VISIT_STATUS'] === 'client_came') {
-                                        $visitActive = 'active';
-                                    } elseif ($event['VISIT_STATUS'] === 'client_did_not_come') {
-                                        $visitActive = 'inactive';
+                                    echo '<span class="event-icon confirmation-icon ' . $confirmationActive . '" title="Подтверждение">✅</span>';
+                                    
+                                    // Логика для иконки визита
+                                    $visitActive = '';
+                                    if (isset($event['VISIT_STATUS'])) {
+                                        if ($event['VISIT_STATUS'] === 'client_came') {
+                                            $visitActive = 'active';
+                                        } elseif ($event['VISIT_STATUS'] === 'client_did_not_come') {
+                                            $visitActive = 'inactive';
+                                        }
                                     }
+                                    echo '<span class="event-icon visit-icon ' . $visitActive . '" title="Визит">🏥</span>';
+                                    echo '</div>';
                                 }
-                                echo '<span class="event-icon visit-icon ' . $visitActive . '" title="Визит">🏥</span>';
-
-                                echo '</div>';
                                 echo '</div>';
                                 echo '</div>';
                                 echo '<div class="event-arrow" onclick="event.stopPropagation(); showEventSidePanel(' . $event['ID'] . ');">▼</div>';
@@ -394,6 +435,12 @@ $calendarTopMonthName = translateMonthToRussian($firstDay->format('F'));
                         <label for="event-description">Описание</label>
                         <textarea id="event-description" name="description" rows="3"></textarea>
                     </div>
+                    <div class="form-group" id="info-event-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="event-is-info" name="is_info_event" value="Y">
+                            Информационное событие
+                        </label>
+                    </div>
                     
                     <div class="form-group" id="employee-group">
                         <label for="event-employee">Ответственный сотрудник *</label>
@@ -420,27 +467,10 @@ $calendarTopMonthName = translateMonthToRussian($firstDay->format('F'));
                         <label for="event-time">ВРЕМЯ *</label>
                         <select id="event-time" name="time" required>
                             <option value="">Выберите время</option>
-                            <option value="08:00">08:00</option>
-                            <option value="08:30">08:30</option>
-                            <option value="09:00">09:00</option>
-                            <option value="09:30">09:30</option>
-                            <option value="10:00">10:00</option>
-                            <option value="10:30">10:30</option>
-                            <option value="11:00">11:00</option>
-                            <option value="11:30">11:30</option>
-                            <option value="12:00">12:00</option>
-                            <option value="12:30">12:30</option>
-                            <option value="13:00">13:00</option>
-                            <option value="13:30">13:30</option>
-                            <option value="14:00">14:00</option>
-                            <option value="14:30">14:30</option>
-                            <option value="15:00">15:00</option>
-                            <option value="15:30">15:30</option>
-                            <option value="16:00">16:00</option>
-                            <option value="16:30">16:30</option>
-                            <option value="17:00">17:00</option>
-                            <option value="17:30">17:30</option>
-                            <option value="18:00">18:00</option>
+                            <?php for ($t = 0; $t <= (23 * 60 + 59); $t++): ?>
+                                <?php $h = floor($t / 60); $m = $t % 60; $timeValue = sprintf('%02d:%02d', $h, $m); ?>
+                                <option value="<?= $timeValue ?>"><?= $timeValue ?></option>
+                            <?php endfor; ?>
                         </select>
                         <div class="error-message" style="display: none;">
                             <span class="error-icon">⚠️</span>
@@ -514,6 +544,10 @@ $calendarTopMonthName = translateMonthToRussian($firstDay->format('F'));
             </div>
             
             <div class="side-panel-body">
+                <div class="info-event-details" id="infoEventDetails">
+                    <div class="info-event-details__label">Описание</div>
+                    <div class="info-event-details__content"><span id="infoEventDescription"></span></div>
+                </div>
                 <!-- Информация о клиенте -->
                 <div class="client-section" onclick="openContactDetails()">
                     <div class="client-info">
@@ -654,6 +688,30 @@ $calendarTopMonthName = translateMonthToRussian($firstDay->format('F'));
                 </div>
             </div>
         </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно печати расписания -->
+    <div id="printScheduleModal" class="note-modal print-schedule-modal" style="display: none;">
+        <div class="note-modal-content print-schedule-modal-content">
+            <div class="note-modal-header">
+                <h3>Список приема на день</h3>
+                <button class="close-note-modal" onclick="closePrintScheduleModal()">×</button>
+            </div>
+            <div class="note-modal-body">
+                <div class="form-group">
+                    <label for="print-schedule-date">Дата</label>
+                    <input type="date" id="print-schedule-date" class="print-schedule-input">
+                </div>
+                <div class="form-group">
+                    <label for="print-schedule-employee">Врач</label>
+                    <select id="print-schedule-employee" class="print-schedule-input"></select>
+                </div>
+                <div class="note-modal-actions">
+                    <button type="button" class="btn btn-primary" onclick="printScheduleForDay()">РАСПЕЧАТАТЬ</button>
+                    <button type="button" class="btn btn-secondary" onclick="closePrintScheduleModal()">ОТМЕНИТЬ</button>
+                </div>
+            </div>
         </div>
     </div>
 

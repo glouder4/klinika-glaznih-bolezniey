@@ -16,6 +16,46 @@
         return 400;
     }
 
+    /** Отступ панели от левого/правого края окна после clamp (px) */
+    const SIDE_PANEL_SCREEN_MARGIN_X = 12;
+
+    /**
+     * left/top/height для #eventSidePanel по getBoundingClientRect карточки.
+     * Без ограничения по X панель могла уезжать влево за экран: при «не помещается справа» ставили
+     * left = eventRect.left - panelWidth, что отрицательно у широкой карточки в попапе дня.
+     */
+    function computeEventSidePanelLayout(eventRect) {
+        const baseHeight = window.innerHeight * 0.8;
+        const baseWidth = getSidePanelBaseWidth();
+        const panelWidth = baseWidth <= window.innerWidth ? baseWidth * SIDE_PANEL_SCALE : baseWidth;
+        const panelHeight = baseHeight * SIDE_PANEL_SCALE;
+        const viewportWidth = window.innerWidth;
+        const viewportHeight = window.innerHeight;
+        const vm = 20;
+        const mx = SIDE_PANEL_SCREEN_MARGIN_X;
+        const gap = 4;
+
+        let left = eventRect.right + gap;
+        let top = Math.max(vm, eventRect.top - 50);
+
+        if (left + panelWidth > viewportWidth - mx) {
+            left = eventRect.left - panelWidth - gap;
+        }
+
+        left = Math.max(mx, Math.min(left, viewportWidth - panelWidth - mx));
+
+        if (top + panelHeight > viewportHeight) {
+            top = viewportHeight - panelHeight - vm;
+        }
+        if (top < vm) {
+            top = vm;
+        }
+        top = Math.max(vm, Math.min(top, viewportHeight - panelHeight - vm));
+
+        const heightStr = baseWidth >= window.innerWidth ? '100vh' : (baseHeight * SIDE_PANEL_SCALE) + 'px';
+        return { left, top, heightStr };
+    }
+
     /**
      * Карточка события для позиционирования боковой панели: при открытом попапе дня — элемент внутри него,
      * иначе первая видимая карточка (в ячейке скрытые --collapsed дают нулевой rect).
@@ -44,6 +84,25 @@
             }
         }
         return all.length ? all[0] : null;
+    }
+
+    /**
+     * Прямоугольник для позиции панели: по возможности у `.event-arrow`, иначе вся карточка.
+     * Так панель при нехватке места справа встаёт слева именно от стрелки, а не от левого края широкой полосы.
+     */
+    function getCalendarEventAnchorRect(eventId) {
+        const eventEl = getCalendarEventElementForPositioning(eventId);
+        if (!eventEl) {
+            return null;
+        }
+        const arrow = eventEl.querySelector('.event-arrow');
+        if (arrow) {
+            const r = arrow.getBoundingClientRect();
+            if (r.width >= 1 && r.height >= 1) {
+                return r;
+            }
+        }
+        return eventEl.getBoundingClientRect();
     }
 
     const CALENDAR_DAY_MAX_VISIBLE_EVENTS = 6;
@@ -121,6 +180,7 @@
             }
         });
         titleEl.textContent = formatCalendarDayPopupTitle(dateKey);
+        popup.setAttribute('data-date', dateKey);
         popup.style.display = 'flex';
         popup.setAttribute('aria-hidden', 'false');
         document.body.style.overflow = 'hidden';
@@ -132,6 +192,7 @@
         if (popup) {
             popup.style.display = 'none';
             popup.setAttribute('aria-hidden', 'true');
+            popup.removeAttribute('data-date');
         }
         if (body) {
             body.innerHTML = '';
@@ -308,6 +369,12 @@
     // Глобальный флаг для предотвращения множественных обновлений календаря
     let isRefreshingCalendar = false;
 
+    function setDayEventsPopupBelowSidePanel(enabled) {
+        const popup = document.getElementById('calendarDayEventsPopup');
+        if (!popup) return;
+        popup.classList.toggle('calendar-day-events-popup--below-sidepanel', !!enabled);
+    }
+
     function tryWrapBitrixSidePanelOpen() {
         if (typeof BX === 'undefined' || !BX.SidePanel || !BX.SidePanel.Instance || typeof BX.SidePanel.Instance.open !== 'function') {
             return false;
@@ -319,6 +386,7 @@
         const originalOpen = spInstance.open.bind(spInstance);
         spInstance.open = function(url, options) {
             hideCalendarEventSidePanelKeepContext();
+            setDayEventsPopupBelowSidePanel(true);
             return originalOpen(url, options);
         };
         spInstance._artmaxOpenWrapped = true;
@@ -338,6 +406,7 @@
             // Используем глобальный флаг, чтобы избежать множественных вызовов
             BX.addCustomEvent('SidePanel.Slider:onClose', function(event) {
                 console.log('SidePanel closed, refreshing calendar...');
+                setDayEventsPopupBelowSidePanel(false);
                 // Обновляем календарь после закрытия SidePanel
                 // Увеличиваем задержку, чтобы страница успела вернуться в нормальное состояние
                 setTimeout(() => {
@@ -687,6 +756,11 @@
             if (event.target === editModal) {
                 closeEditEventModal();
             }
+
+            const printModal = document.getElementById('printScheduleModal');
+            if (event.target === printModal) {
+                closePrintScheduleModal();
+            }
             
             // Убираем автоматическое закрытие бокового окна при клике вне его
             // Боковое окно теперь закрывается только по кнопке крестика
@@ -697,6 +771,7 @@
             if (e.key === 'Escape') {
                 closeEventForm();
                 closeEditEventModal();
+                closePrintScheduleModal();
                 closeEventSidePanel();
             }
         });
@@ -757,6 +832,14 @@
             if (employeeSelect) {
                 employeeSelect.addEventListener('change', () => clearFieldError('employee-group'));
             }
+
+            const infoEventCheckbox = document.getElementById('event-is-info');
+            if (infoEventCheckbox) {
+                infoEventCheckbox.addEventListener('change', function() {
+                    applyInfoEventFormMode(this.checked);
+                });
+                applyInfoEventFormMode(infoEventCheckbox.checked);
+            }
         }
 
         // Инициализация формы редактирования
@@ -789,6 +872,33 @@
             if (editEmployeeSelect) {
                 editEmployeeSelect.addEventListener('change', () => clearFieldError('edit-employee-group'));
             }
+        }
+    }
+
+    function applyInfoEventFormMode(isInfoMode) {
+        const employeeGroup = document.getElementById('employee-group');
+        const durationGroup = document.getElementById('duration-group');
+        const employeeField = document.getElementById('event-employee');
+        const durationField = document.getElementById('event-duration');
+
+        if (employeeGroup) {
+            employeeGroup.classList.toggle('form-group--hidden', !!isInfoMode);
+            if (isInfoMode) {
+                clearFieldError('employee-group');
+            }
+        }
+        if (durationGroup) {
+            durationGroup.classList.toggle('form-group--hidden', !!isInfoMode);
+            if (isInfoMode) {
+                clearFieldError('duration-group');
+            }
+        }
+
+        if (employeeField) {
+            employeeField.required = !isInfoMode;
+        }
+        if (durationField) {
+            durationField.required = !isInfoMode;
         }
     }
 
@@ -871,6 +981,7 @@
         const timeSelect = document.getElementById('event-time');
         const duration = document.getElementById('event-duration');
         const employee = document.getElementById('event-employee');
+        const isInfoEvent = !!document.getElementById('event-is-info')?.checked;
 
         let isValid = true;
 
@@ -893,13 +1004,13 @@
         }
 
         // Проверка длительности
-        if (!duration.value) {
+        if (!isInfoEvent && !duration.value) {
             isValid = false;
             showFieldError('duration-group', 'Выберите длительность приема.');
         }
 
         // Проверка врача
-        if (!employee.value) {
+        if (!isInfoEvent && !employee.value) {
             isValid = false;
             showFieldError('employee-group', 'Выберите ответственного сотрудника.');
         }
@@ -1432,40 +1543,12 @@
                     return;
                 }
                 
-                const eventElement = getCalendarEventElementForPositioning(eventId);
-                if (eventElement) {
-                    const eventRect = eventElement.getBoundingClientRect();
-                    
-                    // Вычисляем позицию бокового окна
-                    const baseHeight = window.innerHeight * 0.8;
-                    const baseWidth = getSidePanelBaseWidth();
-                    const panelWidth = baseWidth <= window.innerWidth ? baseWidth * SIDE_PANEL_SCALE : baseWidth;
-                    const panelHeight = baseHeight * SIDE_PANEL_SCALE;
-                    const viewportWidth = window.innerWidth;
-                    const viewportHeight = window.innerHeight;
-                    
-                    let left = eventRect.right + 4; // Справа от события (минимальный зазор)
-                    let top = Math.max(20, eventRect.top - 50); // Поднимаем выше события
-                    
-                    // Если не помещается справа, показываем слева
-                    if (left + panelWidth > viewportWidth) {
-                        left = eventRect.left - panelWidth - 4;
-                    }
-                    
-                    // Если не помещается снизу, корректируем по вертикали
-                    if (top + panelHeight > viewportHeight) {
-                        top = viewportHeight - panelHeight - 20;
-                    }
-                    
-                    // Если не помещается сверху, показываем от верха экрана
-                    if (top < 20) {
-                        top = 20;
-                    }
-                    
-                    // Устанавливаем позицию (внешняя панель имеет финальные размеры)
-                    sidePanel.style.left = left + 'px';
-                    sidePanel.style.top = top + 'px';
-                    sidePanel.style.height = baseWidth >= window.innerWidth ? '100vh' : (baseHeight * SIDE_PANEL_SCALE) + 'px';
+                const anchorRect = getCalendarEventAnchorRect(eventId);
+                if (anchorRect) {
+                    const pos = computeEventSidePanelLayout(anchorRect);
+                    sidePanel.style.left = pos.left + 'px';
+                    sidePanel.style.top = pos.top + 'px';
+                    sidePanel.style.height = pos.heightStr;
                 }
                 
                 // Показываем боковое окно
@@ -1597,44 +1680,16 @@
     function updateSidePanelPosition() {
         const eventId = window.currentEventId;
         if (!eventId) return;
-        const eventElement = getCalendarEventElementForPositioning(eventId);
-        if (!eventElement) return;
+        const anchorRect = getCalendarEventAnchorRect(eventId);
+        if (!anchorRect) return;
 
         const sidePanel = document.getElementById('eventSidePanel');
         if (!sidePanel || !sidePanel.classList.contains('open')) return;
 
-        const eventRect = eventElement.getBoundingClientRect();
-        
-        // Вычисляем позицию бокового окна
-        const baseHeight = window.innerHeight * 0.8;
-        const baseWidth = getSidePanelBaseWidth();
-        const panelWidth = baseWidth <= window.innerWidth ? baseWidth * SIDE_PANEL_SCALE : baseWidth;
-        const panelHeight = baseHeight * SIDE_PANEL_SCALE;
-        const viewportWidth = window.innerWidth;
-        const viewportHeight = window.innerHeight;
-        
-        let left = eventRect.right + 4; // Справа от события (минимальный зазор)
-        let top = Math.max(20, eventRect.top - 50); // Поднимаем выше события
-        
-        // Если не помещается справа, показываем слева
-        if (left + panelWidth > viewportWidth) {
-            left = eventRect.left - panelWidth - 4;
-        }
-        
-        // Если не помещается снизу, корректируем по вертикали
-        if (top + panelHeight > viewportHeight) {
-            top = viewportHeight - panelHeight - 20;
-        }
-        
-        // Если не помещается сверху, показываем от верха экрана
-        if (top < 20) {
-            top = 20;
-        }
-        
-        // Применяем позицию (внешняя панель имеет финальные размеры)
-        sidePanel.style.left = left + 'px';
-        sidePanel.style.top = top + 'px';
-        sidePanel.style.height = baseWidth >= window.innerWidth ? '100vh' : (baseHeight * SIDE_PANEL_SCALE) + 'px';
+        const pos = computeEventSidePanelLayout(anchorRect);
+        sidePanel.style.left = pos.left + 'px';
+        sidePanel.style.top = pos.top + 'px';
+        sidePanel.style.height = pos.heightStr;
     }
 
     // Функция для редактирования названия записи
@@ -4375,6 +4430,261 @@
         }
     }
 
+    /** Пока открыта модалка заметки — скрываем попап «все записи дня» (иначе лезет поверх из-за порядка в DOM) */
+    let calendarDayEventsPopupWasVisibleBeforeNote = false;
+
+    function hideCalendarDayEventsPopupForNoteModal() {
+        const popup = document.getElementById('calendarDayEventsPopup');
+        if (!popup) {
+            return;
+        }
+        calendarDayEventsPopupWasVisibleBeforeNote = popup.getAttribute('aria-hidden') === 'false';
+        if (calendarDayEventsPopupWasVisibleBeforeNote) {
+            popup.style.display = 'none';
+            popup.setAttribute('aria-hidden', 'true');
+        }
+    }
+
+    function restoreCalendarDayEventsPopupAfterNoteModal() {
+        const popup = document.getElementById('calendarDayEventsPopup');
+        if (!popup) {
+            calendarDayEventsPopupWasVisibleBeforeNote = false;
+            return;
+        }
+        if (calendarDayEventsPopupWasVisibleBeforeNote) {
+            popup.style.display = 'flex';
+            popup.setAttribute('aria-hidden', 'false');
+            document.body.style.overflow = 'hidden';
+        }
+        calendarDayEventsPopupWasVisibleBeforeNote = false;
+    }
+
+    function formatDateForInput(date) {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    }
+
+    function extractTimeFromEventDate(dateString) {
+        if (typeof dateString !== 'string') {
+            return '??:??';
+        }
+        const timeMatch = dateString.match(/(\d{2}):(\d{2})/);
+        if (timeMatch) {
+            return `${timeMatch[1]}:${timeMatch[2]}`;
+        }
+        return '??:??';
+    }
+
+    function formatPatientNameForPrint(rawName) {
+        const name = (rawName || '').trim();
+        if (!name) {
+            return 'Без имени';
+        }
+        const parts = name.split(/\s+/).filter(Boolean);
+        if (parts.length === 1) {
+            return parts[0];
+        }
+        const surname = parts[0];
+        const initials = parts
+            .slice(1)
+            .map(part => part.charAt(0).toUpperCase() + '.')
+            .join('');
+        return `${surname} ${initials}`.trim();
+    }
+
+    async function loadEmployeesForPrintSchedule() {
+        const select = document.getElementById('print-schedule-employee');
+        if (!select) {
+            return;
+        }
+
+        const branchId = getBranchId() || 1;
+        const csrfToken = getCSRFToken();
+        const selectedFromFilter = document.getElementById('employee-filter-select')?.value || '0';
+
+        select.innerHTML = '';
+        select.appendChild(new Option('Все врачи', '0'));
+
+        try {
+            const response = await fetch('/local/components/artmax/calendar/ajax.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-Bitrix-Csrf-Token': csrfToken
+                },
+                body: new URLSearchParams({
+                    action: 'getAvailableEmployeesForBranch',
+                    branchId: branchId,
+                    sessid: csrfToken
+                })
+            });
+
+            const data = await response.json();
+            if (data.success && Array.isArray(data.employees)) {
+                data.employees.forEach(employee => {
+                    const id = String(employee.ID);
+                    const label = `${employee.NAME || ''} ${employee.LAST_NAME || ''}`.trim() || employee.LOGIN || `ID ${id}`;
+                    select.appendChild(new Option(label, id));
+                });
+            }
+        } catch (error) {
+            console.error('loadEmployeesForPrintSchedule: Ошибка загрузки врачей', error);
+        }
+
+        if (select.querySelector(`option[value="${selectedFromFilter}"]`)) {
+            select.value = selectedFromFilter;
+        } else {
+            select.value = '0';
+        }
+    }
+
+    async function openPrintScheduleModal() {
+        const modal = document.getElementById('printScheduleModal');
+        const dateInput = document.getElementById('print-schedule-date');
+        if (!modal || !dateInput) {
+            showNotification('Не удалось открыть форму печати', 'error');
+            return;
+        }
+
+        const dateFromUrl = new URLSearchParams(window.location.search).get('date');
+        dateInput.value = dateFromUrl || formatDateForInput(new Date());
+        await loadEmployeesForPrintSchedule();
+
+        modal.style.display = 'flex';
+        setTimeout(() => {
+            modal.classList.add('show');
+        }, 10);
+    }
+
+    function closePrintScheduleModal() {
+        const modal = document.getElementById('printScheduleModal');
+        if (!modal) {
+            return;
+        }
+        modal.classList.remove('show');
+        setTimeout(() => {
+            modal.style.display = 'none';
+        }, 300);
+    }
+
+    async function printScheduleForDay() {
+        const dateInput = document.getElementById('print-schedule-date');
+        const employeeSelect = document.getElementById('print-schedule-employee');
+        if (!dateInput || !employeeSelect) {
+            showNotification('Форма печати заполнена некорректно', 'error');
+            return;
+        }
+
+        const selectedDate = dateInput.value;
+        if (!selectedDate) {
+            showNotification('Выберите дату для печати', 'warning');
+            return;
+        }
+
+        const csrfToken = getCSRFToken();
+        const branchId = getBranchId() || 1;
+        const employeeId = employeeSelect.value || '0';
+        const employeeLabel = employeeSelect.options[employeeSelect.selectedIndex]?.text || 'Все врачи';
+
+        const requestParams = {
+            action: 'getEvents',
+            branchId: branchId,
+            dateFrom: selectedDate,
+            dateTo: selectedDate,
+            sessid: csrfToken,
+            employee_id: employeeId
+        };
+
+        try {
+            const response = await fetch('/local/components/artmax/calendar/ajax.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-Bitrix-Csrf-Token': csrfToken
+                },
+                body: new URLSearchParams(requestParams)
+            });
+            const data = await response.json();
+
+            if (!data.success) {
+                showNotification('Ошибка формирования списка: ' + (data.error || 'Неизвестная ошибка'), 'error');
+                return;
+            }
+
+            const events = Array.isArray(data.events) ? data.events : [];
+            const eventsWithClient = events
+                .filter(event => !!event.CONTACT_ENTITY_ID)
+                .sort((a, b) => extractTimeFromEventDate(a.DATE_FROM).localeCompare(extractTimeFromEventDate(b.DATE_FROM)));
+            const isAllDoctorsMode = employeeId === '0';
+            const employeeNameById = {};
+            Array.from(employeeSelect.options).forEach(option => {
+                employeeNameById[String(option.value)] = option.textContent || option.text || '';
+            });
+
+            const rowsHtml = eventsWithClient.length
+                ? eventsWithClient.map(event => {
+                    const patientName = formatPatientNameForPrint(event.CONTACT_NAME || event.TITLE || 'Без имени');
+                    const time = extractTimeFromEventDate(event.DATE_FROM);
+                    if (isAllDoctorsMode) {
+                        const doctorName = employeeNameById[String(event.EMPLOYEE_ID)] || `ID ${event.EMPLOYEE_ID || '—'}`;
+                        return `<tr><td>${patientName}</td><td>${doctorName}</td><td>${time}</td></tr>`;
+                    }
+                    return `<tr><td>${patientName}</td><td>${time}</td></tr>`;
+                }).join('')
+                : `<tr><td colspan="${isAllDoctorsMode ? 3 : 2}">Записей с заполненным клиентом на выбранный день нет</td></tr>`;
+
+            const printWindow = window.open('', '_blank', 'width=900,height=700');
+            if (!printWindow) {
+                showNotification('Браузер заблокировал окно печати', 'warning');
+                return;
+            }
+
+            printWindow.document.write(`<!doctype html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Список приема на день</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 24px; color: #222; }
+        h1 { margin: 0 0 8px; font-size: 22px; }
+        .meta { margin: 0 0 20px; color: #555; font-size: 14px; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { border: 1px solid #ccc; padding: 8px 10px; text-align: left; }
+        th { background: #f4f6f8; }
+    </style>
+</head>
+<body>
+    <h1>Список приема на день</h1>
+    <p class="meta">Дата: ${selectedDate} | Врач: ${employeeLabel}</p>
+    <table>
+        <thead>
+            <tr>
+                <th>Фамилия И.О.</th>
+                ${isAllDoctorsMode ? '<th>Врач</th>' : ''}
+                <th>Время</th>
+            </tr>
+        </thead>
+        <tbody>${rowsHtml}</tbody>
+    </table>
+</body>
+</html>`);
+            printWindow.document.close();
+            printWindow.focus();
+            setTimeout(() => {
+                printWindow.print();
+            }, 200);
+
+            closePrintScheduleModal();
+        } catch (error) {
+            console.error('printScheduleForDay: Ошибка запроса', error);
+            showNotification('Ошибка при формировании списка приема', 'error');
+        }
+    }
+
     // Функции для работы с модальным окном заметок
     function openNoteModal() {
         // Проверяем права на редактирование заметок (своя запись или есть право)
@@ -4394,19 +4704,22 @@
         }
         
         const modal = document.getElementById('noteModal');
-        if (modal) {
-            modal.style.display = 'flex';
+        if (!modal) {
+            return;
+        }
+
+        hideCalendarDayEventsPopupForNoteModal();
+        modal.style.display = 'flex';
+        setTimeout(() => {
+            modal.classList.add('show');
+        }, 10);
+
+        // Фокусируемся на textarea
+        const textarea = document.getElementById('note-text');
+        if (textarea) {
             setTimeout(() => {
-                modal.classList.add('show');
-            }, 10);
-            
-            // Фокусируемся на textarea
-            const textarea = document.getElementById('note-text');
-            if (textarea) {
-                setTimeout(() => {
-                    textarea.focus();
-                }, 300);
-            }
+                textarea.focus();
+            }, 300);
         }
     }
 
@@ -4421,7 +4734,10 @@
                 if (textarea) {
                     textarea.value = '';
                 }
+                restoreCalendarDayEventsPopupAfterNoteModal();
             }, 300);
+        } else {
+            restoreCalendarDayEventsPopupAfterNoteModal();
         }
     }
 
@@ -4831,20 +5147,67 @@
         // Устанавливаем текущее значение из URL параметра
         const urlParams = new URLSearchParams(window.location.search);
         const employeeIdParam = urlParams.get('employee_id');
-        if (employeeIdParam) {
+        if (employeeIdParam !== null && employeeIdParam !== '') {
             filterSelect.value = employeeIdParam;
         } else {
-            // Для врачей с правом view_others по умолчанию "Мои записи", для остальных "Все записи"
-            if (window.HAS_VIEW_OTHERS_PERMISSION && !window.IS_ADMIN && window.CURRENT_USER_ID) {
-                // Устанавливаем "Мои записи" и добавляем параметр в URL для корректной фильтрации
-                filterSelect.value = window.CURRENT_USER_ID;
-                urlParams.set('employee_id', window.CURRENT_USER_ID);
-                const newUrl = window.location.pathname + '?' + urlParams.toString();
-                // Обновляем URL без перезагрузки страницы, чтобы сохранить состояние
-                window.history.replaceState({}, '', newUrl);
-            } else {
-                filterSelect.value = '0'; // "Все записи" по умолчанию для админов
-            }
+            // По умолчанию «Все записи» и явный параметр в URL (как ?employee_id=0)
+            filterSelect.value = '0';
+            urlParams.set('employee_id', '0');
+            const newQuery = urlParams.toString();
+            const newUrl = newQuery ? `${window.location.pathname}?${newQuery}` : window.location.pathname;
+            window.history.replaceState({}, '', newUrl);
+        }
+    }
+
+    function getEmployeeFilterValueForRequest() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const employeeIdFromUrl = urlParams.get('employee_id');
+        if (employeeIdFromUrl !== null) {
+            return String(employeeIdFromUrl);
+        }
+
+        const filterSelect = document.getElementById('employee-filter-select');
+        if (filterSelect && filterSelect.value !== '') {
+            return String(filterSelect.value);
+        }
+        
+        return null;
+    }
+
+    function syncEmployeeFilterInUrl(employeeIdValue) {
+        if (employeeIdValue === null || typeof employeeIdValue === 'undefined') {
+            return;
+        }
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const currentUrlValue = urlParams.get('employee_id');
+        const normalizedValue = String(employeeIdValue);
+
+        if (currentUrlValue === normalizedValue) {
+            return;
+        }
+
+        urlParams.set('employee_id', normalizedValue);
+        const newQuery = urlParams.toString();
+        const newUrl = newQuery ? `${window.location.pathname}?${newQuery}` : window.location.pathname;
+        window.history.replaceState({}, '', newUrl);
+    }
+
+    function syncEmployeeFilterSelectFromUrl() {
+        const filterSelect = document.getElementById('employee-filter-select');
+        if (!filterSelect) {
+            return;
+        }
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const employeeIdFromUrl = urlParams.get('employee_id');
+        if (employeeIdFromUrl === null) {
+            return;
+        }
+
+        // Если опция уже есть, восстанавливаем UI-селект из URL.
+        if (filterSelect.querySelector(`option[value="${employeeIdFromUrl}"]`)) {
+            filterSelect.value = employeeIdFromUrl;
         }
     }
 
@@ -5836,6 +6199,9 @@
     window.refreshCalendarEvents = refreshCalendarEvents;
     window.deleteEventAjax = deleteEventAjax;
     window.clearAllEvents = clearAllEvents;
+    window.openPrintScheduleModal = openPrintScheduleModal;
+    window.closePrintScheduleModal = closePrintScheduleModal;
+    window.printScheduleForDay = printScheduleForDay;
     window.showEventSidePanel = showEventSidePanel;
     window.closeEventSidePanel = closeEventSidePanel;
     window.editEventTitle = editEventTitle;
@@ -6588,6 +6954,13 @@
      * Обновляет события календаря по AJAX
      */
     function refreshCalendarEvents() {
+        syncEmployeeFilterSelectFromUrl();
+
+        const popup = document.getElementById('calendarDayEventsPopup');
+        const openedPopupDate = (popup && popup.style.display !== 'none' && popup.getAttribute('aria-hidden') === 'false')
+            ? popup.getAttribute('data-date')
+            : '';
+
         // Проверяем флаг, чтобы избежать множественных одновременных вызовов
         if (isRefreshingCalendar) {
             console.log('refreshCalendarEvents: Уже идет обновление, пропускаем вызов');
@@ -6633,9 +7006,9 @@
             return;
         }
         
-        // Получаем employee_id из URL параметров для фильтрации
-        const urlParams = new URLSearchParams(window.location.search);
-        const employeeIdParam = urlParams.get('employee_id');
+        // Берем employee_id из текущего UI фильтра, fallback - из URL
+        const employeeIdParam = getEmployeeFilterValueForRequest();
+        syncEmployeeFilterInUrl(employeeIdParam);
         
         const requestParams = {
             action: 'getEvents',
@@ -6645,7 +7018,7 @@
             sessid: csrfToken
         };
         
-        // Добавляем employee_id в запрос, если он есть в URL (включая '0' для "Все записи")
+        // Добавляем employee_id в запрос, если он определен (включая '0' для "Все записи")
         if (employeeIdParam !== null) {
             requestParams.employee_id = employeeIdParam;
         }
@@ -6676,6 +7049,25 @@
             if (data.success && data.events) {
                 console.log('DYNAMIC LOAD: Events received:', data.events.length);
                 updateCalendarEvents(data.events);
+                if (openedPopupDate) {
+                    const reopenToggle = document.querySelector('.calendar-day-show-all[data-date="' + openedPopupDate + '"]');
+                    if (reopenToggle) {
+                        openCalendarDayEventsPopup(reopenToggle);
+                    } else {
+                        const fallbackDay = document.querySelector('.calendar-day[data-date="' + openedPopupDate + '"]');
+                        if (fallbackDay) {
+                            const virtualAnchor = {
+                                getAttribute: function(name) {
+                                    return name === 'data-date' ? openedPopupDate : '';
+                                },
+                                closest: function(selector) {
+                                    return selector === '.calendar-day' ? fallbackDay : null;
+                                }
+                            };
+                            openCalendarDayEventsPopup(virtualAnchor);
+                        }
+                    }
+                }
             } else {
                 console.error('DYNAMIC LOAD: Error in response:', data);
             }
@@ -7124,24 +7516,29 @@
      * Удаляет событие из календаря
      */
     function deleteEvent(eventId) {
-        const eventElement = document.querySelector(`[data-event-id="${eventId}"]`);
-        
-        if (eventElement) {
+        const eventElements = Array.from(document.querySelectorAll(`[data-event-id="${eventId}"]`));
+        if (!eventElements.length) return;
+
+        const affectedDays = new Set();
+        eventElements.forEach(eventElement => {
             const dayCell = eventElement.closest('.calendar-day');
-            // Анимация удаления
+            if (dayCell) {
+                affectedDays.add(dayCell);
+            }
+            // Анимация удаления для всех копий (ячейка + popup)
             eventElement.style.transition = 'all 0.3s ease';
             eventElement.style.transform = 'scale(0.8)';
             eventElement.style.opacity = '0';
-            
-            setTimeout(() => {
+        });
+
+        setTimeout(() => {
+            eventElements.forEach(eventElement => {
                 if (eventElement.parentNode) {
                     eventElement.parentNode.removeChild(eventElement);
                 }
-                if (dayCell) {
-                    applyDayOverflowLimits(dayCell);
-                }
-            }, 300);
-        }
+            });
+            affectedDays.forEach(dayCell => applyDayOverflowLimits(dayCell));
+        }, 300);
     }
 
     /**

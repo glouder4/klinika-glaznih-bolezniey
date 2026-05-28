@@ -99,12 +99,8 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                             $employeeId = (int)$employeeIdParam;
                         }
                     } else {
-                        // Если параметра нет: для админов "Все записи", для пользователей с правом view_all "Мои записи"
-                        if ($USER->IsAdmin()) {
-                            $employeeId = null; // Админы видят все записи по умолчанию
-                        } else {
-                            $employeeId = $USER->GetID(); // Пользователи с правом view_all видят свои записи по умолчанию
-                        }
+                        // Если параметра нет — по умолчанию «Все записи» (как ?employee_id=0)
+                        $employeeId = null;
                     }
                 } else {
                     // Без права на просмотр всех - показываем только свои записи
@@ -541,7 +537,30 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                 </button>
                 </div>
                 
-                <div class="nav-right" style="display: flex; align-items: center;">' . 
+                <div class="nav-right" style="display: flex; align-items: center; gap: 8px;">
+                    <button class="ui-btn ui-btn-empty nav-btn print-schedule-btn"
+                            onclick="openPrintScheduleModal()"
+                            title="Распечатать список приёма"
+                            style="
+                                background: rgba(40, 167, 69, 0.15);
+                                border: 1px solid rgba(40, 167, 69, 0.35);
+                                border-radius: 3px;
+                                padding: 4px 8px;
+                                color: white;
+                                cursor: pointer;
+                                font-size: 10px;
+                                transition: all 0.3s ease;
+                                backdrop-filter: blur(10px);
+                                display: inline-flex;
+                                align-items: center;
+                                justify-content: center;
+                                min-width: 95px;
+                                height: 20px;
+                            "
+                            onmouseover="this.style.background=\'rgba(40, 167, 69, 0.3)\'"
+                            onmouseout="this.style.background=\'rgba(40, 167, 69, 0.15)\'">
+                        🖨️ Печать
+                    </button>' .
                 (($this->arResult['HAS_CLEAR_ALL_PERMISSION'] ?? false) ? '
                     <button class="ui-btn ui-btn-empty nav-btn clear-all-btn" 
                             onclick="clearAllEvents()"
@@ -910,7 +929,11 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                 } else {
                     try {
                         $permissionsObj = new \Artmax\Calendar\Permissions();
-                        $hasViewOthersPermission = $permissionsObj->hasPermission($USER->GetID(), 'calendar.view_others');
+                        // Поддерживаем новую модель прав (calendar.view_all)
+                        // и старую (calendar.view_others) для обратной совместимости.
+                        $hasViewOthersPermission =
+                            $permissionsObj->hasPermission($USER->GetID(), 'calendar.view_all') ||
+                            $permissionsObj->hasPermission($USER->GetID(), 'calendar.view_others');
                     } catch (\Exception $e) {
                         // Если ошибка проверки прав, используем безопасный вариант - только свои записи
                         $hasViewOthersPermission = false;
@@ -928,12 +951,8 @@ class ArtmaxCalendarComponent extends CBitrixComponent{
                             $employeeId = (int)$employeeIdParam;
                         }
                     } else {
-                        // Если параметра нет: для админов "Все записи", для врачей с правом view_others "Мои записи"
-                        if ($USER->IsAdmin()) {
-                            $employeeId = null; // Админы видят все записи по умолчанию
-                        } else {
-                            $employeeId = $USER->GetID(); // Врачи с правом view_others видят свои записи по умолчанию
-                        }
+                        // Если параметра нет — по умолчанию «Все записи» (как ?employee_id=0)
+                        $employeeId = null;
                     }
                 } else {
                     // Без права на просмотр чужих - показываем только свои записи

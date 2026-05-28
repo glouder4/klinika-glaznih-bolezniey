@@ -4,6 +4,27 @@
 
 // Функция инициализации после загрузки BX или сразу если BX недоступен
 function initializeEventForm() {
+    function applyInfoEventMode() {
+        const isInfoEvent = !!document.getElementById('event-is-info')?.checked;
+        const employeeGroup = document.getElementById('event-employee-group');
+        const durationGroup = document.getElementById('event-duration-group');
+        const employeeField = document.getElementById('event-employee');
+        const durationField = document.getElementById('event-duration');
+
+        if (employeeGroup) {
+            employeeGroup.classList.toggle('artmax-form-field--hidden', isInfoEvent);
+        }
+        if (durationGroup) {
+            durationGroup.classList.toggle('artmax-form-field--hidden', isInfoEvent);
+        }
+        if (employeeField) {
+            employeeField.required = !isInfoEvent;
+        }
+        if (durationField) {
+            durationField.required = !isInfoEvent;
+        }
+    }
+
     // Функции для работы с цветами
     window.selectPresetColor = function(color) {
         document.querySelectorAll('.artmax-color-preset').forEach(preset => {
@@ -15,10 +36,20 @@ function initializeEventForm() {
     };
 
     window.selectCustomColor = function(color) {
+        if (!color) return;
         document.querySelectorAll('.artmax-color-preset').forEach(preset => {
             preset.classList.remove('active');
         });
-        document.getElementById('selected-color').value = color;
+        const hidden = document.getElementById('selected-color');
+        const native = document.getElementById('custom-color-input');
+        if (hidden) {
+            hidden.value = color;
+        }
+        if (native && native.value !== color) {
+            try {
+                native.value = color;
+            } catch (e) { /* невалидный формат для type=color */ }
+        }
     };
 
     // Функция закрытия SidePanel
@@ -52,13 +83,17 @@ function initializeEventForm() {
             field.classList.remove('error');
         });
         
+        const isInfoEvent = !!document.getElementById('event-is-info')?.checked;
+
         // Проверяем обязательные поля
         const requiredFields = [
             { id: 'event-title', errorId: 'title-error', message: 'Заполните это поле' },
-            { id: 'event-employee', errorId: 'employee-error', message: 'Выберите ответственного сотрудника' },
             { id: 'event-date', errorId: 'date-error', message: 'Заполните это поле' },
             { id: 'event-time', errorId: 'time-error', message: 'Заполните это поле' },
-            { id: 'event-duration', errorId: 'duration-error', message: 'Заполните это поле' }
+            ...(isInfoEvent ? [] : [
+                { id: 'event-employee', errorId: 'employee-error', message: 'Выберите ответственного сотрудника' },
+                { id: 'event-duration', errorId: 'duration-error', message: 'Заполните это поле' }
+            ])
         ];
         
         requiredFields.forEach(field => {
@@ -93,12 +128,18 @@ function initializeEventForm() {
         formData.append('description', document.getElementById('event-description').value);
         formData.append('employee_id', document.getElementById('event-employee').value);
         formData.append('branch_id', form.querySelector('[name="branch_id"]').value);
+        const customColorPeek = document.getElementById('custom-color-input');
+        if (customColorPeek && customColorPeek.value) {
+            window.selectCustomColor(customColorPeek.value);
+        }
         formData.append('eventColor', document.getElementById('selected-color').value);
+        formData.append('info_event', document.getElementById('event-is-info')?.checked ? 'Y' : 'N');
         
         // Формируем дату и время начала
         const date = document.getElementById('event-date').value;
         const time = document.getElementById('event-time').value;
-        const duration = parseInt(document.getElementById('event-duration').value);
+        const durationRaw = document.getElementById('event-duration').value;
+        const duration = isInfoEvent ? (parseInt(durationRaw, 10) || 5) : parseInt(durationRaw, 10);
         
         // Формируем дату точно как указал пользователь
         const dateFrom = date + ' ' + time + ':00';
@@ -106,7 +147,7 @@ function initializeEventForm() {
         // Вычисляем время окончания
         const [hours, minutes] = time.split(':');
         const startMinutes = parseInt(hours) * 60 + parseInt(minutes);
-        const endMinutes = startMinutes + duration;
+        const endMinutes = startMinutes + (Number.isFinite(duration) ? duration : 5);
         const endHours = Math.floor(endMinutes / 60);
         const endMins = endMinutes % 60;
         const endTime = String(endHours).padStart(2, '0') + ':' + String(endMins).padStart(2, '0');
@@ -167,11 +208,26 @@ function initializeEventForm() {
     // Предотвращаем стандартную отправку формы
     const eventForm = document.getElementById('add-event-form');
     if (eventForm) {
+        const infoCheckbox = document.getElementById('event-is-info');
+        if (infoCheckbox) {
+            infoCheckbox.addEventListener('change', applyInfoEventMode);
+        }
+        applyInfoEventMode();
+
         eventForm.addEventListener('submit', function(e) {
             e.preventDefault();
             e.stopPropagation();
             return false;
         });
+
+        const customColorInput = document.getElementById('custom-color-input');
+        if (customColorInput) {
+            const syncCustomColorToHidden = function() {
+                window.selectCustomColor(customColorInput.value);
+            };
+            customColorInput.addEventListener('input', syncCustomColorToHidden);
+            customColorInput.addEventListener('change', syncCustomColorToHidden);
+        }
     }
 }
 
